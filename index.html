@@ -10,17 +10,22 @@
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #111; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
   </style>
 </head>
 <body class="min-h-screen bg-[#0f0f0f] text-white font-sans flex justify-center selection:bg-red-500/30">
   
   <div class="w-full max-w-[480px] bg-[#111111] min-h-screen relative shadow-2xl overflow-x-hidden border-x border-neutral-800/50 flex flex-col">
     
+    <!-- Header -->
     <header class="px-4 py-4 sticky top-0 bg-[#111111] z-40 border-b border-neutral-800 shrink-0">
       <div class="flex justify-between items-center mb-4">
-        <h1 class="text-red-600 font-black text-2xl tracking-tighter cursor-pointer" onclick="if(state.isAdminMode) toggleAdminMode();">HQ ARCHIVE</h1>
+        <h1 class="text-red-600 font-black text-2xl tracking-tighter cursor-pointer" onclick="location.reload()">HQ ARCHIVE</h1>
         <div class="flex items-center gap-3">
           
+          <!-- Language Selector -->
           <div id="lang-btn-container" class="relative custom-dropdown-container">
             <i data-lucide="globe" onclick="toggleLangDropdown(event)" class="w-[18px] h-[18px] text-gray-400 cursor-pointer hover:text-white transition-colors"></i>
             <div id="lang-dropdown" class="hidden absolute right-0 top-full mt-3 w-28 bg-[#1a1a1a] border border-neutral-700 rounded-xl shadow-xl z-50 py-1 flex-col animate-in fade-in slide-in-from-top-2 duration-200">
@@ -29,17 +34,20 @@
             </div>
           </div>
 
+          <!-- Profile -->
           <div class="flex items-center gap-1 cursor-pointer group">
             <div class="w-8 h-8 rounded-full bg-neutral-700 overflow-hidden border border-neutral-600 group-hover:border-neutral-400 transition-colors">
-              <img src="https://pbs.twimg.com/media/HB6pDDka8AA0v-3?format=jpg&name=large" alt="Profile" class="w-full h-full object-cover"/>
+              <img src="https://pbs.twimg.com/media/HB6pDDka8AA0v-3?format=jpg&name=large" alt="Profile" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'"/>
             </div>
             <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 group-hover:text-white transition-colors"></i>
           </div>
           
+          <!-- Admin Lock -->
           <div id="admin-toggle-btn" onclick="toggleAdminMode()" class="cursor-pointer transition-colors"></div>
         </div>
       </div>
 
+      <!-- Search Bar -->
       <div id="search-container" class="relative mb-2 transition-all">
         <div class="relative">
           <i data-lucide="search" class="w-[18px] h-[18px] absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
@@ -47,7 +55,7 @@
             id="search-input"
             type="text" 
             placeholder="검색어를 입력하세요" 
-            onkeyup="handleSearch(event)"
+            oninput="handleSearch(event)"
             class="w-full bg-[#1e1e1e] border border-neutral-800 text-white pl-10 pr-4 py-2.5 rounded-full text-sm focus:outline-none focus:border-neutral-600 transition-colors"
           />
         </div>
@@ -55,21 +63,24 @@
       </div>
     </header>
 
+    <!-- Navigation Tabs -->
     <nav id="main-tabs" class="flex px-4 overflow-x-auto scrollbar-hide border-b border-neutral-800 bg-[#111111] shrink-0"></nav>
+    
+    <!-- Main Content Area -->
     <main id="content-area" class="p-4 pb-20 flex-1 overflow-y-auto custom-scrollbar relative"></main>
 
   </div>
 
   <script>
-    // --- 1. Google Sheets 설정 ---
+    // --- Configuration & Data ---
     const SHEET_ID = '1U0KnY-M4xdpmNqbPudPqndy1c8_Y3ROq-x163_Uueb8';
-    // 시트10 데이터를 가져옵니다. (필요 시 특정 gid로 변경 가능)
     const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
+    // 카테고리 구성 (UI 필터용)
     const CATEGORIES = {
       '연말결산': ['연말결산'],
       '무대영상': ['공항', '대학축제', '목격담', '버스킹', '쇼케이스', '음악방송', '직캠', '콘서트', '킹덤', '퇴근길', '팬미팅', '팬싸', '페스티벌', '해외투어'],
-      '라이브': ['개인 라이브', '단체 라이브', '승구리당당숭당당', '승협이', '우리 얘기 좀 합시다', '하루의 마무리'],
+      '라이브': ['개인 라이브', '단체 라이브', '승구리당당숭당당', '승협이', '우리 얘기 좀 합시다', '하루의 마무리', '라이브'],
       '유튜브': ['레코딩로그', '만년썰전', '메이킹', '뮤비', '버킷리스트', '비하인드', '쇼츠', '스페셜클립', '승캠', '엔킷리스트', '엔피아 모집', '커버', '하얀 크리스마스잖아요', '합주일지'],
       'SNS': ['개인 인스타그램', '공식 인스타그램', '공식 트위터', '공식 블로그', '공식 카페', '릴스'],
       '메시지': ['버블', '프롬'],
@@ -77,13 +88,6 @@
       '기타': ['기타'],
       '백업': ['백업']
     };
-
-    // 소분류 -> 대분류 자동 매핑 객체 생성
-    const TYPE_TO_MAIN_MAP = {};
-    for (const [main, subs] of Object.entries(CATEGORIES)) {
-      subs.forEach(sub => { TYPE_TO_MAIN_MAP[sub] = main; });
-      if(!TYPE_TO_MAIN_MAP[main]) TYPE_TO_MAIN_MAP[main] = main;
-    }
 
     const MAIN_TABS_LIST = ['전체 보기', ...Object.keys(CATEGORIES)];
     const KEYWORDS = ['모음집', '이마키스', '질투', '친지마'];
@@ -98,7 +102,10 @@
         sortOldest: "과거순",
         tabs: { keyword: "키워드", archive: "아카이브", calendar: "캘린더" },
         keyword: { title: "카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개" },
-        archive: { subCategoryTitle: "상세 카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개", categories: { "전체 보기": "전체 보기", "연말결산": "연말결산", "무대영상": "무대영상", "라이브": "라이브", "유튜브": "유튜브", "SNS": "SNS", "메시지": "메시지", "미디어": "미디어", "기타": "기타", "백업": "백업" } },
+        archive: { 
+          subCategoryTitle: "상세 카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개", 
+          categories: { "전체 보기": "전체 보기", "연말결산": "연말결산", "무대영상": "무대영상", "라이브": "라이브", "유튜브": "유튜브", "SNS": "SNS", "메시지": "메시지", "미디어": "미디어", "기타": "기타", "백업": "백업" }
+        },
         calendar: { archiveTitleSuffix: " 아카이브", countPrefix: "(", countSuffix: "개)", yearSuffix: "년", monthSuffix: "월" },
         admin: { title: "데이터 관리 모드", addBtn: "+ 데이터 추가", edit: "수정", delete: "삭제", save: "저장", cancel: "취소", addTitle: "새 데이터 추가", editTitle: "데이터 수정", mainType: "대분류", subType: "소분류", date: "날짜", contentTitle: "제목", imgUrl: "썸네일 URL", confirmDel: "정말 삭제하시겠습니까?" }
       },
@@ -108,7 +115,7 @@
         sortLatest: "Latest",
         sortOldest: "Oldest",
         tabs: { keyword: "Keywords", archive: "Archive", calendar: "Calendar" },
-        keyword: { title: "Category", all: "All", totalPrefix: "Total ", totalSuffix: " items", items: { '모음집': 'Compilation', '이마키스': 'Forehead Kiss', '질투': 'Jealousy', '친지마': 'Chin Ji Ma', '커플셀카': 'Couple Selfie', '커플템': 'Couple Items', '투샷': 'Two Shots' } },
+        keyword: { title: "Category", all: "All", totalPrefix: "Total ", totalSuffix: " items", items: { '모음집': 'Compilation', '이마키스': 'Forehead Kiss', '질투': 'Jealousy', '친지마': 'Chin Ji Ma' } },
         archive: {
           subCategoryTitle: "Sub Category", all: "All", totalPrefix: "Total ", totalSuffix: " items",
           categories: { "전체 보기": "View All", "연말결산": "Year-End", "무대영상": "Stage", "라이브": "Live", "유튜브": "YouTube", "SNS": "SNS", "메시지": "Message", "미디어": "Media", "기타": "Etc", "백업": "Backup" },
@@ -116,31 +123,32 @@
             '연말결산': 'Year-End', '목격담': 'Sightings', '버스킹': 'Busking', '쇼케이스': 'Showcase', '음악방송': 'Music Shows', '직캠': 'Fancam', '콘서트': 'Concert', '킹덤': 'Kingdom', '퇴근길': 'Get off', '팬미팅': 'Fan Meeting', '팬싸': 'Fansign Event', '페스티벌': 'Festival', '해외투어': 'World Tour',
             '개인 라이브': 'Solo Live', '단체 라이브': 'Group Live', '승구리당당숭당당': 'Seungguri Dangdang', '승협이': 'Seunghyub', '우얘합': "Let's Talk", '하루의마무리': 'End of the Day',
             '레코딩로그': 'Recording Log', '만년썰전': 'Mannyeon Sseoljeon', '메이킹': 'Making', '뮤비': 'MV', '버킷리스트': 'Bucket List', '비하인드': 'Behind', '쇼츠': 'Shorts', '스페셜클립': 'Special Clip', '승캠': 'Seung Cam', '엔킷리스트': 'N-Kit List', '엔피아 모집': 'N.Fia Recruitment', '커버': 'Cover', '합주일지': 'Practice Log',
-            '개인 인스타그램': 'Personal IG', '공식 SNS': 'Official SNS', '공식 블로그': 'Official Blog', '공식카페': 'Fancafe', '커플릴스': 'Couple Reels',
+            '개인 인스타그램': 'Personal IG', '공식 SNS': 'Official SNS', '공식 블로그': 'Official Blog', '공식카페': 'Fancafe', '릴스': 'Reels',
             '버블': 'Bubble', '프롬': 'FROMM', '라디오': 'Radio', '방송': 'Broadcast', '유튜브 컨텐츠': 'YT Contents', '인터뷰': 'Interview', '기타': 'Etc', '백업': 'Backup'
-          
-        ,
+          }
+        },
         calendar: { archiveTitleSuffix: " Archive", countPrefix: "(", countSuffix: " items)", yearSuffix: "", monthSuffix: "" },
         admin: { title: "Data Admin Mode", addBtn: "+ Add Data", edit: "Edit", delete: "Delete", save: "Save", cancel: "Cancel", addTitle: "Add New Data", editTitle: "Edit Data", mainType: "Main Cat.", subType: "Sub Cat.", date: "Date", contentTitle: "Title", imgUrl: "Thumbnail URL", confirmDel: "Are you sure you want to delete?" }
       }
     };
 
     const state = {
-      isLoading: true, 
-      language: 'ko', 
-      sortOrder: 'desc', // desc: 최신순, asc: 과거순
+      isLoading: true,
+      language: 'ko',
+      sortOrder: 'desc',
       activeMainTab: 'keyword',
       activeSubTab: '무대영상',
       activeCategory: '전체',
       selectedDate: null,
       activeKeyword: '전체',
-      viewYear: 2026,
-      viewMonth: 1,
-      searchTerm: '', // 검색어
+      viewYear: new Date().getFullYear(),
+      viewMonth: new Date().getMonth() + 1,
+      searchTerm: '',
       isYearDropdownOpen: false, isMonthDropdownOpen: false, isLangDropdownOpen: false,
       isAdminMode: false, isEditModalOpen: false, adminEditingId: null, adminTempMainType: '무대영상'
     };
 
+    // --- Actions ---
     window.setMainTab = (tabId) => { state.activeMainTab = tabId; render(); };
     window.setSubTab = (tab) => { state.activeSubTab = tab; state.activeCategory = '전체'; render(); };
     window.setCategory = (cat) => { state.activeCategory = cat; render(); };
@@ -150,13 +158,13 @@
     window.handleSearch = (e) => { state.searchTerm = e.target.value; render(); };
     window.toggleSort = () => { state.sortOrder = state.sortOrder === 'desc' ? 'asc' : 'desc'; render(); };
 
-    window.toggleLangDropdown = (e) => { if(e) e.stopPropagation(); state.isLangDropdownOpen = !state.isLangDropdownOpen; state.isYearDropdownOpen = false; state.isMonthDropdownOpen = false; render(); };
-    window.toggleYearDropdown = (e) => { if(e) e.stopPropagation(); state.isYearDropdownOpen = !state.isYearDropdownOpen; state.isMonthDropdownOpen = false; state.isLangDropdownOpen = false; render(); };
-    window.toggleMonthDropdown = (e) => { if(e) e.stopPropagation(); state.isMonthDropdownOpen = !state.isMonthDropdownOpen; state.isYearDropdownOpen = false; state.isLangDropdownOpen = false; render(); };
+    window.toggleLangDropdown = (e) => { e.stopPropagation(); state.isLangDropdownOpen = !state.isLangDropdownOpen; render(); };
+    window.toggleYearDropdown = (e) => { e.stopPropagation(); state.isYearDropdownOpen = !state.isYearDropdownOpen; render(); };
+    window.toggleMonthDropdown = (e) => { e.stopPropagation(); state.isMonthDropdownOpen = !state.isMonthDropdownOpen; render(); };
     
     window.changeViewYear = (year) => { state.viewYear = parseInt(year); state.isYearDropdownOpen = false; render(); };
     window.changeViewMonth = (month) => { state.viewMonth = parseInt(month); state.isMonthDropdownOpen = false; render(); };
-    window.prevMonth = () => { if (state.viewMonth === 1) { if (state.viewYear > 2017) { state.viewMonth = 12; state.viewYear--; } } else { state.viewMonth--; } render(); };
+    window.prevMonth = () => { if (state.viewMonth === 1) { state.viewMonth = 12; state.viewYear--; } else { state.viewMonth--; } render(); };
     window.nextMonth = () => { if (state.viewMonth === 12) { state.viewMonth = 1; state.viewYear++; } else { state.viewMonth++; } render(); };
 
     window.toggleAdminMode = () => { state.isAdminMode = !state.isAdminMode; render(); };
@@ -169,10 +177,7 @@
     window.closeAdminModal = () => { state.isEditModalOpen = false; render(); };
     window.adminMainTypeChange = (val) => { state.adminTempMainType = val; render(); };
     
-    window.deleteData = (id) => {
-      const t = i18n[state.language].admin;
-      if(confirm(t.confirmDel)) { MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== id); render(); }
-    };
+    window.deleteData = (id) => { if(confirm(i18n[state.language].admin.confirmDel)) { MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== id); render(); } };
     window.saveData = (e) => {
       e.preventDefault();
       const mainType = document.getElementById('form-mainType').value;
@@ -180,89 +185,84 @@
       const date = document.getElementById('form-date').value;
       const title = document.getElementById('form-title').value;
       const img = document.getElementById('form-img').value;
+      const rawKeywords = document.getElementById('form-keywords')?.value || '';
+      const searchData = `${title} ${type} ${mainType} ${rawKeywords}`;
 
       if(state.adminEditingId) {
         const idx = MOCK_ARCHIVE_DATA.findIndex(d => d.id === state.adminEditingId);
-        if(idx > -1) MOCK_ARCHIVE_DATA[idx] = { ...MOCK_ARCHIVE_DATA[idx], mainType, type, date, title, img };
+        if(idx > -1) MOCK_ARCHIVE_DATA[idx] = { ...MOCK_ARCHIVE_DATA[idx], mainType, type, date, title, img, searchData, rawKeywords };
       } else {
-        MOCK_ARCHIVE_DATA.unshift({ id: new Date().getTime(), mainType, type, date, title, img, link: '' });
+        MOCK_ARCHIVE_DATA.unshift({ id: Date.now(), mainType, type, date, title, img, link: '', searchData, rawKeywords });
       }
       state.isEditModalOpen = false; render();
-      alert("✅ 수정된 내용은 임시 반영되었습니다.");
     };
 
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.custom-dropdown-container')) {
-        if (state.isYearDropdownOpen || state.isMonthDropdownOpen || state.isLangDropdownOpen) {
-          state.isYearDropdownOpen = false; state.isMonthDropdownOpen = false; state.isLangDropdownOpen = false; render();
-        }
+    document.addEventListener('click', () => {
+      if (state.isYearDropdownOpen || state.isMonthDropdownOpen || state.isLangDropdownOpen) {
+        state.isYearDropdownOpen = false; state.isMonthDropdownOpen = false; state.isLangDropdownOpen = false; render();
       }
     });
 
-    // --- 시트 데이터 로드 함수 (이미지 기준 A, B, C, I, L 열 파싱) ---
+    // --- Data Load (Updated with Column I, K, L, N Indices) ---
     async function loadSheetData() {
       try {
         const res = await fetch(SHEET_URL);
         const text = await res.text();
         const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\)/);
-        if(!jsonMatch) throw new Error("데이터 포맷 오류");
+        if(!jsonMatch) throw new Error("Format error");
         
         const data = JSON.parse(jsonMatch[1]);
         const rows = data.table.rows;
 
         MOCK_ARCHIVE_DATA = rows.map((row, index) => {
-          // A열(0): 제목, B열(1): 날짜, C열(2): 링크, D열(3): 검색키워드, K열(10): 키워드
-          // I열(8): 카테고리 (소분류), L열(11): 썸네일
-          const title = row.c[0]?.v || '';
+          if (!row.c) return null;
           
+          // Column Mapping based on User Request
+          // A(0): 제목, B(1): 날짜, C(2): 링크, D(3): 서치 키워드
+          // I(8): 메인 카테고리, K(10): 서브 카테고리, L(11): 썸네일, N(13): 키워드
+          
+          const title = row.c[0]?.v || '';
           let dateStr = row.c[1]?.f || row.c[1]?.v || '';
           if (dateStr && dateStr.includes('/')) dateStr = dateStr.replace(/\//g, '-');
           
           const link = row.c[2]?.v || '';
+          const mainType = row.c[8]?.v || '기타'; // I열: 메인 카테고리
+          const type = row.c[10]?.v || '기타';   // K열: 서브 카테고리
+          const img = row.c[11]?.v || '';       // L열: 썸네일
+          const rawKeywords = row.c[13]?.v || ''; // N열: 키워드
           
-          // I열 (카테고리) 처리 - 만약 "인터뷰, 질투" 처럼 콤마가 있다면 첫 번째 값을 소분류로 사용
-          let rawCategory = row.c[8]?.v || '';
-          let type = rawCategory.split(',')[0].trim() || '기타';
-          
-          // 대분류 자동 매칭
-          let mainType = TYPE_TO_MAIN_MAP[type] || '기타';
+          const searchKeywordsField = row.c[3]?.v || '';
+          const searchData = `${title} ${searchKeywordsField} ${rawKeywords}`.toLowerCase();
 
-          const img = row.c[11]?.v || '';
-          
-          // D열(검색용) + K열(키워드) 합쳐서 검색 효율성 확보
-          const searchData = (row.c[3]?.v || '') + ' ' + (row.c[10]?.v || '');
-
-          return { id: index + 1, mainType, type, date: dateStr, title, img, link, searchData };
-        }).filter(item => item.title && item.date); // 제목과 날짜가 정상적으로 있는 행만 살림
+          return { id: index + 1, mainType, type, date: dateStr, title, img, link, searchData, rawKeywords };
+        }).filter(item => item && item.title && item.date);
 
         state.isLoading = false;
         if (MOCK_ARCHIVE_DATA.length > 0) {
-          const firstDateStr = MOCK_ARCHIVE_DATA[0].date;
-          state.selectedDate = firstDateStr;
-          state.viewYear = parseInt(firstDateStr.split('-')[0]) || new Date().getFullYear();
-          state.viewMonth = parseInt(firstDateStr.split('-')[1]) || new Date().getMonth() + 1;
+          const latest = [...MOCK_ARCHIVE_DATA].sort((a,b) => b.date.localeCompare(a.date))[0];
+          state.selectedDate = latest.date;
+          state.viewYear = parseInt(latest.date.split('-')[0]);
+          state.viewMonth = parseInt(latest.date.split('-')[1]);
         }
         render();
       } catch (error) {
-        console.error("데이터 로드 실패", error);
+        console.error("Load failed", error);
         state.isLoading = false;
-        document.getElementById('content-area').innerHTML = `<div class="text-center text-red-500 mt-20">⚠️ 구글 시트 데이터를 불러올 수 없습니다.<br>시트 공유 설정이 '링크가 있는 모든 사용자'로 되어있는지 확인해주세요.</div>`;
+        render();
       }
     }
 
-    // --- 렌더링 함수 ---
+    // --- UI Helpers ---
     function createCardHTML(item, t) {
       const displayType = t.archive?.subCategories?.[item.type] || item.type;
       const imgUrl = item.img || 'https://via.placeholder.com/600x337/1a1a1a/ffffff?text=No+Image';
-      
-      // 링크가 있으면 a 태그 사용, 없으면 div
       const WrapperTag = item.link ? 'a' : 'div';
-      const hrefAttr = item.link ? `href="${item.link}" target="_blank" rel="noopener noreferrer"` : '';
+      const hrefAttr = item.link ? `href="${item.link}" target="_blank"` : '';
 
       return `
         <${WrapperTag} ${hrefAttr} class="flex flex-col gap-2 group cursor-pointer block">
           <div class="relative aspect-video rounded-xl overflow-hidden bg-neutral-800 border border-neutral-800 group-hover:border-neutral-600 transition-colors">
-            <img src="${imgUrl}" alt="${item.title.replace(/"/g, '&quot;')}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+            <img src="${imgUrl}" alt="Thumb" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
             ${item.link ? `<div class="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center"><i data-lucide="external-link" class="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity"></i></div>` : ''}
           </div>
           <div class="flex flex-col gap-1 px-0.5">
@@ -276,72 +276,46 @@
       `;
     }
 
-    function updateHeader(t) {
-      const searchInput = document.getElementById('search-input');
-      const searchContainer = document.getElementById('search-container');
-      const searchHint = document.getElementById('search-hint');
-      const adminBtn = document.getElementById('admin-toggle-btn');
-      const langBtn = document.getElementById('lang-btn-container');
-      
-      if(searchInput) searchInput.placeholder = t.searchPlaceholder;
-      if(searchHint) searchHint.innerText = t.searchHint;
-      if(state.isAdminMode) {
-        searchContainer.classList.add('hidden');
-        if(langBtn) langBtn.classList.add('hidden'); 
-        adminBtn.innerHTML = `<i data-lucide="unlock" class="w-[18px] h-[18px] text-red-500 hover:text-red-400"></i>`;
-      } else {
-        searchContainer.classList.remove('hidden');
-        if(langBtn) langBtn.classList.remove('hidden'); 
-        adminBtn.innerHTML = `<i data-lucide="lock" class="w-[18px] h-[18px] text-gray-400 hover:text-white"></i>`;
-      }
-
-      const langDropdown = document.getElementById('lang-dropdown');
-      if (state.isLangDropdownOpen) { langDropdown.classList.remove('hidden'); langDropdown.classList.add('flex'); } 
-      else { langDropdown.classList.add('hidden'); langDropdown.classList.remove('flex'); }
-
-      const koBtn = document.getElementById('lang-ko'); const enBtn = document.getElementById('lang-en');
-      const activeClass = ['text-red-500', 'font-bold', 'bg-neutral-800/80']; const inactiveClass = ['text-gray-300'];
-
-      if(state.language === 'ko') {
-        koBtn.classList.add(...activeClass); koBtn.classList.remove(...inactiveClass);
-        enBtn.classList.remove(...activeClass); enBtn.classList.add(...inactiveClass);
-      } else {
-        enBtn.classList.add(...activeClass); enBtn.classList.remove(...inactiveClass);
-        koBtn.classList.remove(...activeClass); koBtn.classList.add(...inactiveClass);
-      }
-    }
-
-    // 데이터를 검색어로 필터링하는 헬퍼 함수
     function getSearchFilteredData(dataArray) {
       if(!state.searchTerm) return dataArray;
       const lowerSearch = state.searchTerm.toLowerCase();
       return dataArray.filter(item => 
         item.title.toLowerCase().includes(lowerSearch) || 
-        item.searchData.toLowerCase().includes(lowerSearch)
+        item.searchData.includes(lowerSearch)
       );
     }
 
-    // 날짜를 기준으로 정렬하는 헬퍼 함수 (최신순 / 과거순)
     function getSortedData(dataArray) {
-      return dataArray.sort((a, b) => {
-        if (state.sortOrder === 'desc') {
-          return b.date.localeCompare(a.date) || b.id - a.id;
-        } else {
-          return a.date.localeCompare(b.date) || a.id - b.id;
-        }
+      return [...dataArray].sort((a, b) => {
+        const dateComp = state.sortOrder === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+        return dateComp || (state.sortOrder === 'desc' ? b.id - a.id : a.id - b.id);
       });
     }
 
+    // --- Render ---
     function render() {
       const t = i18n[state.language]; 
-      updateHeader(t);
+      
+      const searchInput = document.getElementById('search-input');
+      if(searchInput) searchInput.placeholder = t.searchPlaceholder;
+      document.getElementById('search-hint').innerText = t.searchHint;
+      
+      const adminBtn = document.getElementById('admin-toggle-btn');
+      adminBtn.innerHTML = state.isAdminMode 
+        ? `<i data-lucide="unlock" class="w-[18px] h-[18px] text-red-500"></i>` 
+        : `<i data-lucide="lock" class="w-[18px] h-[18px] text-gray-400"></i>`;
+      
+      document.getElementById('search-container').style.display = state.isAdminMode ? 'none' : 'block';
+      document.getElementById('lang-btn-container').style.display = state.isAdminMode ? 'none' : 'block';
+
+      const langDropdown = document.getElementById('lang-dropdown');
+      langDropdown.style.display = state.isLangDropdownOpen ? 'flex' : 'none';
 
       const mainTabsContainer = document.getElementById('main-tabs');
       const contentArea = document.getElementById('content-area');
       
       if (state.isLoading) {
-        mainTabsContainer.innerHTML = '';
-        contentArea.innerHTML = `<div class="flex flex-col items-center justify-center mt-32"><i data-lucide="loader-2" class="w-8 h-8 text-red-500 animate-spin mb-4"></i><p class="text-gray-500 text-sm">스프레드시트에서 데이터를 불러오는 중입니다...</p></div>`;
+        contentArea.innerHTML = `<div class="flex flex-col items-center justify-center mt-32"><i data-lucide="loader-2" class="w-8 h-8 text-red-500 animate-spin mb-4"></i></div>`;
         lucide.createIcons();
         return;
       }
@@ -349,151 +323,134 @@
       let contentHTML = '';
 
       if (state.isAdminMode) {
-        mainTabsContainer.innerHTML = ''; mainTabsContainer.classList.add('hidden');
-        const adminT = i18n.ko.admin; const archiveT = i18n.ko.archive;
-
+        mainTabsContainer.innerHTML = '';
         contentHTML = `
           <div class="animate-in fade-in duration-300">
-            <div class="flex justify-between items-center mb-6 px-1"><h2 class="text-xl font-bold text-white flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-red-500"></i> ${adminT.title}</h2><button onclick="openAdminModal()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-lg">${adminT.addBtn}</button></div>
+            <div class="flex justify-between items-center mb-6 px-1">
+              <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-red-500"></i> ${t.admin.title}</h2>
+              <button onclick="openAdminModal()" class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">${t.admin.addBtn}</button>
+            </div>
             <div class="flex flex-col gap-3">
-              ${MOCK_ARCHIVE_DATA.map(item => {
-                const displayMain = archiveT.categories[item.mainType] || item.mainType; const displayType = archiveT.subCategories[item.type] || item.type;
-                const imgUrl = item.img || 'https://via.placeholder.com/100x100/1a1a1a/ffffff?text=No+Img';
-                return `
-                <div class="bg-[#1a1a1a] p-3.5 rounded-2xl border border-neutral-800/80 flex gap-4 hover:border-neutral-600 transition-colors">
-                  <div class="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-neutral-800"><img src="${imgUrl}" class="w-full h-full object-cover"></div>
-                  <div class="flex-1 flex flex-col justify-center min-w-0">
-                    <div class="text-[10px] font-medium text-red-400 mb-1 truncate">${displayMain} > ${displayType} <span class="text-gray-600 mx-1">|</span> <span class="text-gray-400">${item.date}</span></div>
-                    <div class="text-sm font-medium text-white line-clamp-2 leading-snug mb-2">${item.title}</div>
-                    <div class="flex gap-2 mt-auto">
-                      <button onclick="openAdminModal(${item.id})" class="text-[11px] font-bold bg-neutral-800 hover:bg-neutral-700 text-gray-300 px-3 py-1.5 rounded-md transition-colors">${adminT.edit}</button>
-                      <button onclick="deleteData(${item.id})" class="text-[11px] font-bold bg-red-900/30 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-md transition-colors">${adminT.delete}</button>
+              ${MOCK_ARCHIVE_DATA.map(item => `
+                <div class="bg-[#1a1a1a] p-3 rounded-xl border border-neutral-800 flex gap-4">
+                  <img src="${item.img || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-lg object-cover">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-[10px] text-red-400 mb-1">${item.mainType} > ${item.type} | ${item.date}</div>
+                    <div class="text-xs font-medium line-clamp-1 mb-2">${item.title}</div>
+                    <div class="flex gap-2">
+                      <button onclick="openAdminModal(${item.id})" class="text-[10px] bg-neutral-800 px-2 py-1 rounded">${t.admin.edit}</button>
+                      <button onclick="deleteData(${item.id})" class="text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded">${t.admin.delete}</button>
                     </div>
                   </div>
                 </div>
-              `}).join('')}
+              `).join('')}
             </div>
           </div>
         `;
-
         if (state.isEditModalOpen) {
           const isEdit = state.adminEditingId !== null;
-          const item = isEdit ? MOCK_ARCHIVE_DATA.find(d => d.id === state.adminEditingId) : { mainType: '무대영상', type: '콘서트', date: new Date().toISOString().split('T')[0], title: '', img: '' };
-          const currentMainType = state.adminTempMainType;
-
+          const item = isEdit ? MOCK_ARCHIVE_DATA.find(d => d.id === state.adminEditingId) : { mainType: state.adminTempMainType, type: '', date: '', title: '', img: '', rawKeywords: '' };
           contentHTML += `
-            <div class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm"><form onsubmit="saveData(event)" class="bg-[#1a1a1a] w-full max-w-md rounded-2xl p-6 border border-neutral-800 flex flex-col gap-5 animate-in zoom-in-95 duration-200"><h3 class="text-lg font-bold text-white flex items-center gap-2"><i data-lucide="${isEdit ? 'edit' : 'plus-circle'}" class="w-5 h-5 text-red-500"></i> ${isEdit ? adminT.editTitle : adminT.addTitle}</h3><div class="grid grid-cols-2 gap-4"><div class="flex flex-col gap-1.5"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">${adminT.mainType}</label><select id="form-mainType" onchange="adminMainTypeChange(this.value)" class="bg-[#111] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500">${Object.keys(CATEGORIES).map(k => `<option value="${k}" ${k === currentMainType ? 'selected' : ''}>${archiveT.categories[k] || k}</option>`).join('')}</select></div><div class="flex flex-col gap-1.5"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">${adminT.subType}</label><select id="form-type" class="bg-[#111] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500">${(CATEGORIES[currentMainType] || []).map(k => `<option value="${k}" ${isEdit && k === item.type ? 'selected' : ''}>${archiveT.subCategories[k] || k}</option>`).join('')}</select></div></div><div class="flex flex-col gap-1.5"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">${adminT.date}</label><input type="date" id="form-date" value="${item.date}" required class="bg-[#111] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500"></div><div class="flex flex-col gap-1.5"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">${adminT.contentTitle}</label><input type="text" id="form-title" value="${item.title.replace(/"/g, '&quot;')}" required class="bg-[#111] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500"></div><div class="flex flex-col gap-1.5"><label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">${adminT.imgUrl}</label><input type="url" id="form-img" value="${item.img}" class="bg-[#111] border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-red-500"></div><div class="flex justify-end gap-2 mt-2"><button type="button" onclick="closeAdminModal()" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-[#111] border border-neutral-800 hover:bg-neutral-800 text-gray-300 transition-colors">${adminT.cancel}</button><button type="submit" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-500 text-white transition-colors shadow-lg shadow-red-600/20">${adminT.save}</button></div></form></div>
+            <div class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+              <form onsubmit="saveData(event)" class="bg-[#1a1a1a] w-full max-w-sm rounded-2xl p-6 border border-neutral-700 flex flex-col gap-4">
+                <h3 class="font-bold text-lg">${isEdit ? t.admin.editTitle : t.admin.addTitle}</h3>
+                <div class="grid grid-cols-2 gap-3">
+                  <input type="text" id="form-mainType" placeholder="Main Category" value="${item.mainType}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                  <input type="text" id="form-type" placeholder="Sub Category" value="${item.type}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                </div>
+                <input type="date" id="form-date" value="${item.date}" required class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="text" id="form-title" placeholder="Title" value="${item.title}" required class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="text" id="form-keywords" placeholder="Keywords (N Column)" value="${item.rawKeywords || ''}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="url" id="form-img" placeholder="Thumbnail URL" value="${item.img}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <div class="flex justify-end gap-2 mt-2">
+                  <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-xs bg-neutral-800 rounded-lg">${t.admin.cancel}</button>
+                  <button type="submit" class="px-4 py-2 text-xs bg-red-600 rounded-lg font-bold">${t.admin.save}</button>
+                </div>
+              </form>
+            </div>
           `;
         }
       } else {
-        mainTabsContainer.classList.remove('hidden');
-        const mainTabsData = [{ id: 'keyword', icon: '💖', label: t.tabs.keyword }, { id: 'archive', icon: '📁', label: t.tabs.archive }, { id: 'calendar', icon: '📅', label: t.tabs.calendar }];
-        mainTabsContainer.innerHTML = mainTabsData.map(tab => `<button onclick="setMainTab('${tab.id}')" class="flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-sm font-bold border-b-2 transition-colors ${state.activeMainTab === tab.id ? 'border-red-600 text-white' : 'border-transparent text-gray-400 hover:text-gray-200'}"><span>${tab.icon}</span>${tab.label}</button>`).join('');
+        const tabs = [{ id: 'keyword', icon: '💖', label: t.tabs.keyword }, { id: 'archive', icon: '📁', label: t.tabs.archive }, { id: 'calendar', icon: '📅', label: t.tabs.calendar }];
+        mainTabsContainer.innerHTML = tabs.map(tab => `<button onclick="setMainTab('${tab.id}')" class="flex items-center gap-1.5 px-4 py-3 text-sm font-bold border-b-2 transition-colors ${state.activeMainTab === tab.id ? 'border-red-600 text-white' : 'border-transparent text-gray-400'}"><span>${tab.icon}</span>${tab.label}</button>`).join('');
 
         if (state.activeMainTab === 'keyword') {
-          let keywordsHTML = `<div class="bg-[#1a1a1a] rounded-2xl p-3.5 mb-6 border border-neutral-800/50"><div class="flex items-center gap-1.5 mb-2.5 text-gray-400 font-medium text-xs"><i data-lucide="filter" class="w-3 h-3"></i> ${t.keyword.title}</div><div class="flex flex-wrap gap-1.5">`;
-          ['전체', ...KEYWORDS].forEach(kw => {
-            const isActive = state.activeKeyword === kw; const displayKw = kw === '전체' ? t.keyword.all : (t.keyword.items?.[kw] || kw);
-            keywordsHTML += `<button onclick="setKeyword('${kw}')" class="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${isActive ? 'bg-[#E50914] border-[#E50914] text-white' : 'bg-transparent border-neutral-600 text-gray-300 hover:border-neutral-400'}">${displayKw}</button>`;
+          let keywordData = MOCK_ARCHIVE_DATA.filter(item => {
+            if (state.activeKeyword === '전체') {
+              return item.rawKeywords && item.rawKeywords.trim() !== '';
+            }
+            return item.rawKeywords.toLowerCase().includes(state.activeKeyword.toLowerCase());
           });
-          keywordsHTML += `</div></div>`;
-
-          let keywordFilteredData = MOCK_ARCHIVE_DATA.filter(item => {
-             if (state.activeKeyword === '전체') return true;
-             return item.title.includes(state.activeKeyword) || item.searchData.includes(state.activeKeyword);
-          });
-          keywordFilteredData = getSortedData(getSearchFilteredData(keywordFilteredData));
-
-          let gridHTML = `<div class="grid grid-cols-2 gap-3">` + keywordFilteredData.map(item => createCardHTML(item, t)).join('') + `</div>`;
-          contentHTML = `<div class="animate-in fade-in duration-300">${keywordsHTML}<div class="flex justify-between items-center mb-4"><span class="text-gray-400 text-sm">${t.keyword.totalPrefix}${keywordFilteredData.length}${t.keyword.totalSuffix}</span><button onclick="toggleSort()" class="text-xs font-medium text-gray-400 bg-[#1a1a1a] hover:bg-neutral-800 border border-neutral-800 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"><i data-lucide="${state.sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'}" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button></div>${gridHTML}</div>`;
-        } 
-        else if (state.activeMainTab === 'archive') {
-          let subTabsHTML = `<div class="flex gap-2 overflow-x-auto scrollbar-hide mb-6 -mx-4 px-4 pb-1">`;
-          MAIN_TABS_LIST.forEach(tab => {
-            const isActive = state.activeSubTab === tab; const displayTab = t.archive.categories[tab] || tab;
-            subTabsHTML += `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium transition-colors border ${isActive ? 'bg-neutral-800 border-neutral-600 text-white' : 'bg-transparent border-transparent text-gray-400 hover:text-gray-300'}">${displayTab}</button>`;
-          });
-          subTabsHTML += `</div>`;
-
-          let categoryHTML = '';
-          if (state.activeSubTab !== '전체 보기' && CATEGORIES[state.activeSubTab] && CATEGORIES[state.activeSubTab].length > 0) {
-            categoryHTML += `<div class="bg-[#1a1a1a] rounded-2xl p-3.5 mb-6 border border-neutral-800/50"><div class="flex items-center gap-1.5 mb-2.5 text-gray-400 font-medium text-xs"><i data-lucide="filter" class="w-3 h-3"></i> ${t.archive.subCategoryTitle}</div><div class="flex flex-wrap gap-1.5"><button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${state.activeCategory === '전체' ? 'bg-[#E50914] border-[#E50914] text-white' : 'bg-transparent border-neutral-600 text-gray-300 hover:border-neutral-400'}">${t.archive.all}</button>`;
-            CATEGORIES[state.activeSubTab].forEach(cat => {
-              const isActive = state.activeCategory === cat; const displayCat = t.archive.subCategories?.[cat] || cat;
-              categoryHTML += `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors border ${isActive ? 'bg-[#E50914] border-[#E50914] text-white' : 'bg-transparent border-neutral-600 text-gray-300 hover:border-neutral-400'}">${displayCat}</button>`;
-            });
-            categoryHTML += `</div></div>`;
-          }
-
-          let filteredData = MOCK_ARCHIVE_DATA.filter(item => {
-            if (state.activeSubTab === '전체 보기') return true;
-            if (item.mainType !== state.activeSubTab) return false;
-            if (state.activeCategory === '전체') return true;
-            return item.type === state.activeCategory;
-          });
-          filteredData = getSortedData(getSearchFilteredData(filteredData));
-
-          let gridHTML = `<div class="grid grid-cols-2 gap-3">` + filteredData.map(item => createCardHTML(item, t)).join('') + `</div>`;
-          contentHTML = `<div class="animate-in fade-in duration-300">${subTabsHTML}${categoryHTML}<div class="flex justify-between items-center mb-4"><span class="text-gray-400 text-sm">${t.archive.totalPrefix}${filteredData.length}${t.archive.totalSuffix}</span><button onclick="toggleSort()" class="text-xs font-medium text-gray-400 bg-[#1a1a1a] hover:bg-neutral-800 border border-neutral-800 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"><i data-lucide="${state.sortOrder === 'desc' ? 'arrow-down' : 'arrow-up'}" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button></div>${gridHTML}</div>`;
-        } 
-        else if (state.activeMainTab === 'calendar') {
-          const year = state.viewYear; const month = state.viewMonth;
-          const daysInMonth = new Date(year, month, 0).getDate();
-          const firstDay = new Date(year, month - 1, 1).getDay();
-
-          let daysHTML = '';
-          for(let i=0; i<firstDay; i++) daysHTML += `<div></div>`;
-
-          const activeDays = MOCK_ARCHIVE_DATA
-            .filter(item => item.date && item.date.startsWith(`${year}-${String(month).padStart(2, '0')}`))
-            .map(item => parseInt(item.date.split('-')[2]));
-
-          for(let day=1; day<=daysInMonth; day++) {
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isSelected = state.selectedDate === dateStr;
-            const hasData = activeDays.includes(day);
-            const isRed = (firstDay + day - 1) % 7 === 0 && !isSelected;
-
-            daysHTML += `
-              <div class="flex flex-col items-center justify-start h-14 cursor-pointer" onclick="setSelectedDate('${dateStr}')">
-                <div class="w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold transition-colors ${isSelected ? 'bg-[#E50914] text-white' : 'text-gray-300 hover:bg-neutral-800'} ${isRed ? 'text-red-500' : ''}">${day}</div>
-                ${hasData ? `<div class="flex gap-1 mt-1"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span></div>` : ''}
+          
+          keywordData = getSortedData(getSearchFilteredData(keywordData));
+          contentHTML = `
+            <div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800">
+              <div class="flex flex-wrap gap-1.5">
+                ${['전체', ...KEYWORDS].map(kw => `<button onclick="setKeyword('${kw}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeKeyword === kw ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${kw === '전체' ? t.keyword.all : (t.keyword.items?.[kw] || kw)}</button>`).join('')}
               </div>
-            `;
+            </div>
+            <div class="flex justify-between items-center mb-4 text-xs text-gray-400">
+              <span>${t.keyword.totalPrefix}${keywordData.length}${t.keyword.totalSuffix}</span>
+              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">${keywordData.map(item => createCardHTML(item, t)).join('')}</div>
+          `;
+        } else if (state.activeMainTab === 'archive') {
+          let archiveData = MOCK_ARCHIVE_DATA.filter(item => (state.activeSubTab === '전체 보기' || item.mainType === state.activeSubTab) && (state.activeCategory === '전체' || item.type === state.activeCategory));
+          archiveData = getSortedData(getSearchFilteredData(archiveData));
+          contentHTML = `
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-4">
+              ${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600' : 'border-transparent text-gray-500'}">${t.archive.categories[tab] || tab}</button>`).join('')}
+            </div>
+            ${state.activeSubTab !== '전체 보기' ? `
+              <div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800">
+                <div class="flex flex-wrap gap-1.5">
+                  <button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === '전체' ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${t.archive.all}</button>
+                  ${(CATEGORIES[state.activeSubTab] || []).map(cat => `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === cat ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${t.archive.subCategories?.[cat] || cat}</button>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            <div class="flex justify-between items-center mb-4 text-xs text-gray-400">
+              <span>${t.archive.totalPrefix}${archiveData.length}${t.archive.totalSuffix}</span>
+              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">${archiveData.map(item => createCardHTML(item, t)).join('')}</div>
+          `;
+        } else if (state.activeMainTab === 'calendar') {
+          const daysInMonth = new Date(state.viewYear, state.viewMonth, 0).getDate();
+          const firstDay = new Date(state.viewYear, state.viewMonth - 1, 1).getDay();
+          const activeDays = MOCK_ARCHIVE_DATA.filter(item => item.date.startsWith(`${state.viewYear}-${String(state.viewMonth).padStart(2, '0')}`)).map(item => parseInt(item.date.split('-')[2]));
+          
+          let calGrid = '';
+          for(let i=0; i<firstDay; i++) calGrid += `<div></div>`;
+          for(let d=1; d<=daysInMonth; d++) {
+            const dateStr = `${state.viewYear}-${String(state.viewMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            const isSelected = state.selectedDate === dateStr;
+            calGrid += `<div onclick="setSelectedDate('${dateStr}')" class="flex flex-col items-center justify-center h-12 cursor-pointer group">
+              <div class="w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${isSelected ? 'bg-red-600 text-white' : 'text-gray-300 group-hover:bg-neutral-800'}">${d}</div>
+              ${activeDays.includes(d) ? `<div class="w-1 h-1 bg-red-500 rounded-full mt-0.5"></div>` : ''}
+            </div>`;
           }
 
-          let selectedDateData = MOCK_ARCHIVE_DATA.filter(item => item.date === state.selectedDate);
-          selectedDateData = getSortedData(getSearchFilteredData(selectedDateData));
-
-          const selectedCardsHTML = selectedDateData.length > 0 
-            ? selectedDateData.map(item => createCardHTML(item, t)).join('')
-            : `<div class="col-span-2 text-center text-gray-500 py-10 text-sm">해당 날짜의 기록이 없습니다.</div>`;
-            
-          const currentYear = new Date().getFullYear();
-          const yearOptions = Array.from({length: currentYear - 2017 + 3}, (_, i) => 2017 + i); 
-          const monthOptions = Array.from({length: 12}, (_, i) => i + 1);
+          let dailyData = getSortedData(getSearchFilteredData(MOCK_ARCHIVE_DATA.filter(item => item.date === state.selectedDate)));
 
           contentHTML = `
-            <div class="animate-in fade-in duration-300">
-              <div class="flex items-center justify-between py-2 mb-4 px-1">
-                <button onclick="prevMonth()" class="p-2 bg-[#1a1a1a] border border-neutral-800 rounded-full text-gray-400 hover:text-white hover:border-neutral-600 transition-colors shadow-sm"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-                <div class="flex items-center gap-2">
-                  <div class="relative custom-dropdown-container"><div onclick="toggleYearDropdown(event)" class="flex items-center gap-1.5 bg-[#1a1a1a] border border-neutral-800 hover:border-neutral-600 px-4 py-1.5 rounded-xl cursor-pointer transition-all shadow-sm"><span class="text-lg font-bold text-white tracking-tight">${state.viewYear}${t.calendar.yearSuffix}</span><i data-lucide="${state.isYearDropdownOpen ? 'chevron-up' : 'chevron-down'}" class="w-4 h-4 text-gray-500"></i></div>${state.isYearDropdownOpen ? `<div class="absolute top-full left-0 mt-2 w-full min-w-[80px] max-h-48 overflow-y-auto bg-[#1a1a1a] border border-neutral-700 rounded-xl shadow-xl z-50 py-1 scrollbar-hide animate-in fade-in slide-in-from-top-2 duration-200">${yearOptions.map(y => `<div onclick="changeViewYear(${y})" class="px-3 py-2.5 text-sm text-center cursor-pointer transition-colors ${y === state.viewYear ? 'text-red-500 font-bold bg-neutral-800/80' : 'text-gray-300 hover:bg-neutral-800 hover:text-white'}">${y}${t.calendar.yearSuffix}</div>`).join('')}</div>` : ''}</div>
-                  <div class="relative custom-dropdown-container"><div onclick="toggleMonthDropdown(event)" class="flex items-center gap-1.5 bg-[#1a1a1a] border border-neutral-800 hover:border-neutral-600 px-4 py-1.5 rounded-xl cursor-pointer transition-all shadow-sm"><span class="text-lg font-bold text-white tracking-tight">${String(state.viewMonth).padStart(2, '0')}${t.calendar.monthSuffix}</span><i data-lucide="${state.isMonthDropdownOpen ? 'chevron-up' : 'chevron-down'}" class="w-4 h-4 text-gray-500"></i></div>${state.isMonthDropdownOpen ? `<div class="absolute top-full left-0 mt-2 w-full min-w-[70px] max-h-48 overflow-y-auto bg-[#1a1a1a] border border-neutral-700 rounded-xl shadow-xl z-50 py-1 scrollbar-hide animate-in fade-in slide-in-from-top-2 duration-200">${monthOptions.map(m => `<div onclick="changeViewMonth(${m})" class="px-3 py-2.5 text-sm text-center cursor-pointer transition-colors ${m === state.viewMonth ? 'text-red-500 font-bold bg-neutral-800/80' : 'text-gray-300 hover:bg-neutral-800 hover:text-white'}">${m}${t.calendar.monthSuffix}</div>`).join('')}</div>` : ''}</div>
-                </div>
-                <button onclick="nextMonth()" class="p-2 bg-[#1a1a1a] border border-neutral-800 rounded-full text-gray-400 hover:text-white hover:border-neutral-600 transition-colors shadow-sm"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            <div class="flex items-center justify-between mb-6">
+              <button onclick="prevMonth()"><i data-lucide="chevron-left"></i></button>
+              <div class="flex gap-2">
+                <span class="font-bold text-lg">${state.viewYear}${t.calendar.yearSuffix} ${state.viewMonth}${t.calendar.monthSuffix}</span>
               </div>
-              <div class="mb-8">
-                <div class="grid grid-cols-7 mb-2">${['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, i) => `<div class="text-center text-xs font-bold py-2 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}">${day}</div>`).join('')}</div>
-                <div class="grid grid-cols-7 gap-y-4">${daysHTML}</div>
+              <button onclick="nextMonth()"><i data-lucide="chevron-right"></i></button>
+            </div>
+            <div class="grid grid-cols-7 text-[10px] text-gray-500 font-bold mb-2 text-center">
+              ${['SUN','MON','TUE','WED','THU','FRI','SAT'].map(day => `<div>${day}</div>`).join('')}
+            </div>
+            <div class="grid grid-cols-7 gap-y-1 mb-8">${calGrid}</div>
+            <div class="border-t border-neutral-800 pt-6">
+              <div class="flex items-center gap-2 mb-4 border-l-4 border-red-600 pl-3">
+                <h3 class="font-bold text-gray-200">${state.selectedDate}${t.calendar.archiveTitleSuffix}</h3>
               </div>
-              <div class="border-t border-neutral-800 pt-6">
-                <div class="flex items-center gap-2 mb-4 border-l-4 border-red-600 pl-3">
-                  <h3 class="text-red-500 font-bold text-lg flex items-center gap-2">📅 ${state.selectedDate}${t.calendar.archiveTitleSuffix}</h3>
-                  <span class="text-gray-500 text-sm">${t.calendar.countPrefix}${selectedDateData.length}${t.calendar.countSuffix}</span>
-                </div>
-                <div class="grid grid-cols-2 gap-3">${selectedCardsHTML}</div>
-              </div>
+              <div class="grid grid-cols-2 gap-3">${dailyData.length > 0 ? dailyData.map(item => createCardHTML(item, t)).join('') : `<div class="col-span-2 text-center text-gray-500 text-sm py-10">기록이 없습니다.</div>`}</div>
             </div>
           `;
         }
@@ -503,8 +460,8 @@
       lucide.createIcons();
     }
 
+    // --- Init ---
     loadSheetData();
-
   </script>
 </body>
 </html>
