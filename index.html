@@ -25,14 +25,6 @@
         <h1 class="text-red-600 font-black text-2xl tracking-tighter cursor-pointer" onclick="location.reload()">HQ ARCHIVE</h1>
         <div class="flex items-center gap-3">
           
-          <div id="lang-btn-container" class="relative custom-dropdown-container">
-            <i data-lucide="globe" onclick="toggleLangDropdown(event)" class="w-[18px] h-[18px] text-gray-400 cursor-pointer hover:text-white transition-colors"></i>
-            <div id="lang-dropdown" class="hidden absolute right-0 top-full mt-3 w-28 bg-[#1a1a1a] border border-neutral-700 rounded-xl shadow-xl z-50 py-1 flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-              <div onclick="setLanguage('ko')" id="lang-ko" class="px-3 py-2.5 text-sm text-center cursor-pointer transition-colors">한국어</div>
-              <div onclick="setLanguage('en')" id="lang-en" class="px-3 py-2.5 text-sm text-center cursor-pointer transition-colors">English</div>
-            </div>
-          </div>
-
           <div class="flex items-center gap-1 cursor-pointer group">
             <div class="w-8 h-8 rounded-full bg-neutral-700 overflow-hidden border border-neutral-600 group-hover:border-neutral-400 transition-colors">
               <img src="https://pbs.twimg.com/media/HB6pDDka8AA0v-3?format=jpg&name=large" alt="Profile" class="w-full h-full object-cover" onerror="this.src='https://via.placeholder.com/150'"/>
@@ -55,7 +47,7 @@
             class="w-full bg-[#1e1e1e] border border-neutral-800 text-white pl-10 pr-4 py-2.5 rounded-full text-sm focus:outline-none focus:border-neutral-600 transition-colors"
           />
         </div>
-        <div id="search-hint" class="text-[11px] text-gray-500 mt-2 px-2"></div>
+        <div id="search-hint" class="text-[11px] text-gray-500 mt-2 px-2">💡 추천 검색: 2023-05-22, ㅇㅇㅎ, 하크잖</div>
       </div>
     </header>
 
@@ -88,47 +80,22 @@
 
     let MOCK_ARCHIVE_DATA = [];
 
-    const i18n = {
-      ko: {
-        searchPlaceholder: "검색어를 입력하세요",
-        searchHint: "💡 추천 검색: 2023-05-22, ㅇㅇㅎ, 하크잖",
-        sortLatest: "최신순",
-        sortOldest: "과거순",
-        tabs: { keyword: "키워드", archive: "아카이브", calendar: "캘린더" },
-        keyword: { title: "카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개", items: { '모음집': '모음집', '이마키스': '이마키스', '질투': '질투', '친지마': '친지마' } },
-        archive: { 
-          subCategoryTitle: "상세 카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개", 
-          categories: { "전체 보기": "전체 보기", "연말결산": "연말결산", "무대영상": "무대영상", "라이브": "라이브", "유튜브": "유튜브", "SNS": "SNS", "메시지": "메시지", "미디어": "미디어", "기타": "기타", "백업": "백업" }
-        },
-        calendar: { archiveTitleSuffix: "월 전체 아카이브", countPrefix: " (", countSuffix: "개)", yearSuffix: "년", monthSuffix: "월" },
-        admin: { title: "데이터 관리 모드", addBtn: "+ 데이터 추가", edit: "수정", delete: "삭제", save: "저장", cancel: "취소", addTitle: "새 데이터 추가", editTitle: "데이터 수정", mainType: "대분류", subType: "소분류", date: "날짜", contentTitle: "제목", imgUrl: "썸네일 URL", confirmDel: "정말 삭제하시겠습니까?" }
+    const textLabels = {
+      searchPlaceholder: "검색어를 입력하세요",
+      loadMore: "더보기 (+)",
+      sortLatest: "최신순",
+      sortOldest: "과거순",
+      tabs: { archive: "아카이브", keyword: "키워드", calendar: "캘린더" },
+      keyword: { title: "카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개" },
+      archive: { 
+        subCategoryTitle: "상세 카테고리", all: "전체", totalPrefix: "전체 ", totalSuffix: "개"
       },
-      en: {
-        searchPlaceholder: "Search keywords...",
-        searchHint: "💡 Try searching: 2023-05-22, ㅇㅇㅎ, 하크잖",
-        sortLatest: "Latest",
-        sortOldest: "Oldest",
-        tabs: { keyword: "Keywords", archive: "Archive", calendar: "Calendar" },
-        keyword: { title: "Category", all: "All", totalPrefix: "Total ", totalSuffix: " items", items: { '모음집': 'Compilation', '이마키스': 'Forehead Kiss', '질투': 'Jealousy', '친지마': 'Don\'t Get Close' } },
-        archive: {
-          subCategoryTitle: "Sub Category", all: "All", totalPrefix: "Total ", totalSuffix: " items",
-          categories: { "전체 보기": "View All", "연말결산": "Year-End", "무대영상": "Stage", "라이브": "Live", "유튜브": "YouTube", "SNS": "SNS", "메시지": "Message", "Media": "Media", "기타": "Etc", "백업": "Backup" },
-          subCategories: {
-            '연말결산': 'Year-End', '공항': 'Airport', '대학축제': 'Uni Festival', '목격담': 'Sightings', '버스킹': 'Busking', '쇼케이스': 'Showcase', '음악방송': 'Music Show', '직캠': 'Fancam', '콘서트': 'Concert', '킹덤': 'Kingdom', '퇴근길': 'Off-work', '팬미팅': 'Fan Meeting', '팬싸': 'Fansign', '페스티벌': 'Festival', '해외투어': 'World Tour',
-            '개인 라이브': 'Solo Live', '단체 라이브': 'Group Live', '승구리당당숭당당': 'Seungguri', '승협이': 'Seunghyub', '우리 얘기 좀 합시다': "Let's Talk", '하루의 마무리': 'Day End', '라이브': 'Live',
-            '레코딩로그': 'Recording', '만년썰전': 'Mannyeon', '메이킹': 'Making', '뮤비': 'MV', '버킷리스트': 'Bucket List', '비하인드': 'Behind', '쇼츠': 'Shorts', '스페셜클립': 'Special Clip', '승캠': 'Seung Cam', '엔킷리스트': 'N-Kit', '엔피아 모집': 'Recruitment', '커버': 'Cover', '하얀 크리스마스잖아요': 'Christmas', '합주일지': 'Practice Log',
-            '개인 인스타그램': 'Instagram', '공식 인스타그램': 'Official IG', '공식 트위터': 'Official Twitter', '공식 블로그': 'Official Blog', '공식 카페': 'Official Cafe', '릴스': 'Reels',
-            '버블': 'Bubble', '프롬': 'FROMM', '라디오': 'Radio', '방송': 'Broadcast', '유튜브 컨텐츠': 'YT Contents', '인터뷰': 'Interview', '기타': 'Etc', '백업': 'Backup'
-          }
-        },
-        calendar: { archiveTitleSuffix: " Full Archive", countPrefix: " (", countSuffix: " items)", yearSuffix: "", monthSuffix: "" },
-        admin: { title: "Admin Mode", addBtn: "+ Add Data", edit: "Edit", delete: "Delete", save: "Save", cancel: "Cancel", addTitle: "Add New Data", editTitle: "Edit Data", mainType: "Main Cat.", subType: "Sub Cat.", date: "Date", contentTitle: "Title", imgUrl: "Thumbnail URL", confirmDel: "Are you sure?" }
-      }
+      calendar: { archiveTitleSuffix: "월 전체 아카이브", countPrefix: " (", countSuffix: "개)", yearSuffix: "년", monthSuffix: "월" },
+      admin: { title: "데이터 관리 모드", addBtn: "+ 데이터 추가", edit: "수정", delete: "삭제", save: "저장", cancel: "취소", addTitle: "새 데이터 추가", editTitle: "데이터 수정", mainType: "대분류", subType: "소분류", date: "날짜", contentTitle: "제목", imgUrl: "썸네일 URL", confirmDel: "정말 삭제하시겠습니까?" }
     };
 
     const state = {
       isLoading: true,
-      language: 'ko',
       sortOrder: 'desc',
       activeMainTab: 'archive', 
       activeSubTab: '전체 보기',
@@ -138,20 +105,20 @@
       viewYear: now.getFullYear(),
       viewMonth: now.getMonth() + 1,
       searchTerm: '',
-      isYearDropdownOpen: false, isMonthDropdownOpen: false, isLangDropdownOpen: false,
+      displayLimit: 30,
+      isYearDropdownOpen: false, isMonthDropdownOpen: false,
       isAdminMode: false, isEditModalOpen: false, adminEditingId: null, adminTempMainType: '무대영상'
     };
 
-    window.setMainTab = (tabId) => { state.activeMainTab = tabId; render(); };
-    window.setSubTab = (tab) => { state.activeSubTab = tab; state.activeCategory = '전체'; render(); };
-    window.setCategory = (cat) => { state.activeCategory = cat; render(); };
+    window.setMainTab = (tabId) => { state.activeMainTab = tabId; state.displayLimit = 30; render(); };
+    window.setSubTab = (tab) => { state.activeSubTab = tab; state.activeCategory = '전체'; state.displayLimit = 30; render(); };
+    window.setCategory = (cat) => { state.activeCategory = cat; state.displayLimit = 30; render(); };
     window.setSelectedDate = (date) => { state.selectedDate = date; render(); };
-    window.setKeyword = (kw) => { state.activeKeyword = kw; render(); };
-    window.setLanguage = (lang) => { state.language = lang; state.isLangDropdownOpen = false; render(); };
-    window.handleSearch = (e) => { state.searchTerm = e.target.value; render(); };
+    window.setKeyword = (kw) => { state.activeKeyword = kw; state.displayLimit = 30; render(); };
+    window.handleSearch = (e) => { state.searchTerm = e.target.value; state.displayLimit = 30; render(); };
     window.toggleSort = () => { state.sortOrder = state.sortOrder === 'desc' ? 'asc' : 'desc'; render(); };
+    window.loadMore = () => { state.displayLimit += 30; render(); };
 
-    window.toggleLangDropdown = (e) => { e.stopPropagation(); state.isLangDropdownOpen = !state.isLangDropdownOpen; render(); };
     window.toggleYearDropdown = (e) => { e.stopPropagation(); state.isYearDropdownOpen = !state.isYearDropdownOpen; render(); };
     window.toggleMonthDropdown = (e) => { e.stopPropagation(); state.isMonthDropdownOpen = !state.isMonthDropdownOpen; render(); };
     
@@ -170,15 +137,15 @@
     window.closeAdminModal = () => { state.isEditModalOpen = false; render(); };
     window.adminMainTypeChange = (val) => { state.adminTempMainType = val; render(); };
     
-    window.deleteData = (id) => { if(confirm(i18n[state.language].admin.confirmDel)) { MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== id); render(); } };
+    window.deleteData = (id) => { if(confirm(textLabels.admin.confirmDel)) { MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== id); render(); } };
     window.saveData = (e) => {
       e.preventDefault();
-      const mainType = document.getElementById('form-mainType').value;
-      const type = document.getElementById('form-type').value;
-      const date = document.getElementById('form-date').value;
-      const title = document.getElementById('form-title').value;
+      const mainType = document.getElementById('form-mainType').value.trim();
+      const type = document.getElementById('form-type').value.trim();
+      const date = document.getElementById('form-date').value.trim();
+      const title = document.getElementById('form-title').value.trim();
       const img = document.getElementById('form-img').value;
-      const rawKeywords = document.getElementById('form-keywords')?.value || '';
+      const rawKeywords = document.getElementById('form-keywords')?.value.trim() || '';
       const cleanDate = date.replace(/-/g, '');
       const searchData = `${title} ${type} ${mainType} ${rawKeywords} ${date} ${cleanDate}`.toLowerCase();
 
@@ -192,8 +159,8 @@
     };
 
     document.addEventListener('click', () => {
-      if (state.isYearDropdownOpen || state.isMonthDropdownOpen || state.isLangDropdownOpen) {
-        state.isYearDropdownOpen = false; state.isMonthDropdownOpen = false; state.isLangDropdownOpen = false; render();
+      if (state.isYearDropdownOpen || state.isMonthDropdownOpen) {
+        state.isYearDropdownOpen = false; state.isMonthDropdownOpen = false; render();
       }
     });
 
@@ -209,26 +176,26 @@
 
         MOCK_ARCHIVE_DATA = rows.map((row, index) => {
           if (!row.c) return null;
-          const title = (row.c[0]?.v || '').toString();
+          const title = (row.c[0]?.v || '').toString().trim();
           let rawDate = (row.c[1]?.f || row.c[1]?.v || '').toString().trim();
           let dateStr = rawDate.replace(/[\.\s\/]/g, '-').replace(/-+/g, '-');
-          if (dateStr.includes('-')) {
+          if (dateStr && dateStr.includes('-')) {
             const parts = dateStr.split('-');
             if (parts.length === 3) {
               dateStr = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
             }
           }
           const cleanDate = dateStr.replace(/-/g, ''); 
-          const link = row.c[2]?.v || '';
-          const mainType = row.c[8]?.v || '기타'; 
-          const type = row.c[10]?.v || '기타';   
-          const img = row.c[11]?.v || '';       
-          const rawKeywords = (row.c[13]?.v || '').toString(); 
-          const searchKeywordsField = (row.c[3]?.v || '').toString();
+          const link = (row.c[2]?.v || '').toString().trim();
+          const mainType = (row.c[8]?.v || '기타').toString().trim(); 
+          const type = (row.c[10]?.v || '기타').toString().trim();   
+          const img = (row.c[11]?.v || '').toString().trim();       
+          const rawKeywords = (row.c[13]?.v || '').toString().trim(); 
+          const searchKeywordsField = (row.c[3]?.v || '').toString().trim();
           const searchData = `${title} ${searchKeywordsField} ${rawKeywords} ${mainType} ${type} ${dateStr} ${cleanDate}`.toLowerCase();
 
           return { id: index + 1, mainType, type, date: dateStr, title, img, link, searchData, rawKeywords };
-        }).filter(item => item && item.title && item.date);
+        }).filter(item => item && item.title); 
 
         state.isLoading = false;
         render();
@@ -239,8 +206,7 @@
       }
     }
 
-    function createCardHTML(item, t) {
-      const displayType = t.archive?.subCategories?.[item.type] || item.type;
+    function createCardHTML(item) {
       const imgUrl = item.img || 'https://via.placeholder.com/600x337/1a1a1a/ffffff?text=No+Image';
       const WrapperTag = item.link ? 'a' : 'div';
       const hrefAttr = item.link ? `href="${item.link}" target="_blank"` : '';
@@ -253,8 +219,8 @@
           </div>
           <div class="flex flex-col gap-1 px-0.5">
             <div class="flex justify-between items-center text-[10px]">
-              <span class="border border-red-500/50 text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded font-medium">${displayType}</span>
-              <span class="text-gray-500 font-medium tracking-tight">${item.date}</span>
+              <span class="border border-red-500/50 text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded font-medium">${item.type}</span>
+              <span class="text-gray-500 font-medium tracking-tight">${item.date || ''}</span>
             </div>
             <h3 class="text-xs font-medium text-gray-200 line-clamp-2 leading-snug mt-1 group-hover:text-white transition-colors">${item.title}</h3>
           </div>
@@ -273,17 +239,16 @@
 
     function getSortedData(dataArray) {
       return [...dataArray].sort((a, b) => {
-        const dateComp = state.sortOrder === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+        const dateA = a.date || "";
+        const dateB = b.date || "";
+        const dateComp = state.sortOrder === 'desc' ? dateB.localeCompare(dateA) : dateA.localeCompare(dateB);
         return dateComp || (state.sortOrder === 'desc' ? b.id - a.id : a.id - b.id);
       });
     }
 
     function render() {
-      const t = i18n[state.language]; 
-      
       const searchInput = document.getElementById('search-input');
-      if(searchInput) searchInput.placeholder = t.searchPlaceholder;
-      document.getElementById('search-hint').innerText = t.searchHint;
+      if(searchInput) searchInput.placeholder = textLabels.searchPlaceholder;
       
       const adminBtn = document.getElementById('admin-toggle-btn');
       adminBtn.innerHTML = state.isAdminMode 
@@ -291,10 +256,6 @@
         : `<i data-lucide="lock" class="w-[18px] h-[18px] text-gray-400"></i>`;
       
       document.getElementById('search-container').style.display = state.isAdminMode ? 'none' : 'block';
-      document.getElementById('lang-btn-container').style.display = state.isAdminMode ? 'none' : 'block';
-
-      const langDropdown = document.getElementById('lang-dropdown');
-      langDropdown.style.display = state.isLangDropdownOpen ? 'flex' : 'none';
 
       const mainTabsContainer = document.getElementById('main-tabs');
       const contentArea = document.getElementById('content-area');
@@ -312,19 +273,19 @@
         contentHTML = `
           <div class="animate-in fade-in duration-300">
             <div class="flex justify-between items-center mb-6 px-1">
-              <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-red-500"></i> ${t.admin.title}</h2>
-              <button onclick="openAdminModal()" class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">${t.admin.addBtn}</button>
+              <h2 class="text-xl font-bold flex items-center gap-2"><i data-lucide="database" class="w-5 h-5 text-red-500"></i> ${textLabels.admin.title}</h2>
+              <button onclick="openAdminModal()" class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">${textLabels.admin.addBtn}</button>
             </div>
             <div class="flex flex-col gap-3">
               ${MOCK_ARCHIVE_DATA.map(item => `
                 <div class="bg-[#1a1a1a] p-3 rounded-xl border border-neutral-800 flex gap-4">
                   <img src="${item.img || 'https://via.placeholder.com/80'}" class="w-16 h-16 rounded-lg object-cover">
                   <div class="flex-1 min-w-0">
-                    <div class="text-[10px] text-red-400 mb-1">${item.mainType} > ${item.type} | ${item.date}</div>
+                    <div class="text-[10px] text-red-400 mb-1">${item.mainType} > ${item.type} | ${item.date || 'No Date'}</div>
                     <div class="text-xs font-medium line-clamp-1 mb-2">${item.title}</div>
                     <div class="flex gap-2">
-                      <button onclick="openAdminModal(${item.id})" class="text-[10px] bg-neutral-800 px-2 py-1 rounded">${t.admin.edit}</button>
-                      <button onclick="deleteData(${item.id})" class="text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded">${t.admin.delete}</button>
+                      <button onclick="openAdminModal(${item.id})" class="text-[10px] bg-neutral-800 px-2 py-1 rounded">${textLabels.admin.edit}</button>
+                      <button onclick="deleteData(${item.id})" class="text-[10px] bg-red-900/30 text-red-400 px-2 py-1 rounded">${textLabels.admin.delete}</button>
                     </div>
                   </div>
                 </div>
@@ -338,25 +299,25 @@
           contentHTML += `
             <div class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
               <form onsubmit="saveData(event)" class="bg-[#1a1a1a] w-full max-sm rounded-2xl p-6 border border-neutral-700 flex flex-col gap-4">
-                <h3 class="font-bold text-lg">${isEdit ? t.admin.editTitle : t.admin.addTitle}</h3>
+                <h3 class="font-bold text-lg">${isEdit ? textLabels.admin.editTitle : textLabels.admin.addTitle}</h3>
                 <div class="grid grid-cols-2 gap-3">
-                  <input type="text" id="form-mainType" placeholder="Main Category" value="${item.mainType}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
-                  <input type="text" id="form-type" placeholder="Sub Category" value="${item.type}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                  <input type="text" id="form-mainType" placeholder="대분류" value="${item.mainType}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                  <input type="text" id="form-type" placeholder="소분류" value="${item.type}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
                 </div>
-                <input type="date" id="form-date" value="${item.date}" required class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
-                <input type="text" id="form-title" placeholder="Title" value="${item.title}" required class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
-                <input type="text" id="form-keywords" placeholder="Keywords (N Column)" value="${item.rawKeywords || ''}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
-                <input type="url" id="form-img" placeholder="Thumbnail URL" value="${item.img}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="date" id="form-date" value="${item.date}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="text" id="form-title" placeholder="제목" value="${item.title}" required class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="text" id="form-keywords" placeholder="키워드 (N열)" value="${item.rawKeywords || ''}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
+                <input type="url" id="form-img" placeholder="썸네일 URL" value="${item.img}" class="bg-[#111] border border-neutral-700 rounded-lg p-2 text-xs">
                 <div class="flex justify-end gap-2 mt-2">
-                  <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-xs bg-neutral-800 rounded-lg">${t.admin.cancel}</button>
-                  <button type="submit" class="px-4 py-2 text-xs bg-red-600 rounded-lg font-bold">${t.admin.save}</button>
+                  <button type="button" onclick="closeAdminModal()" class="px-4 py-2 text-xs bg-neutral-800 rounded-lg">${textLabels.admin.cancel}</button>
+                  <button type="submit" class="px-4 py-2 text-xs bg-red-600 rounded-lg font-bold">${textLabels.admin.save}</button>
                 </div>
               </form>
             </div>
           `;
         }
       } else {
-        const tabs = [{ id: 'archive', icon: '📁', label: t.tabs.archive }, { id: 'keyword', icon: '💖', label: t.tabs.keyword }, { id: 'calendar', icon: '📅', label: t.tabs.calendar }];
+        const tabs = [{ id: 'archive', icon: '📁', label: textLabels.tabs.archive }, { id: 'keyword', icon: '💖', label: textLabels.tabs.keyword }, { id: 'calendar', icon: '📅', label: textLabels.tabs.calendar }];
         mainTabsContainer.innerHTML = tabs.map(tab => `<button onclick="setMainTab('${tab.id}')" class="flex items-center gap-1.5 px-4 py-3 text-sm font-bold border-b-2 transition-colors ${state.activeMainTab === tab.id ? 'border-red-600 text-white' : 'border-transparent text-gray-400'}"><span>${tab.icon}</span>${tab.label}</button>`).join('');
 
         if (state.activeMainTab === 'keyword') {
@@ -364,49 +325,54 @@
             if (state.activeKeyword === '전체') {
               return item.rawKeywords && item.rawKeywords.trim() !== '';
             }
-            const target = state.activeKeyword.toLowerCase();
-            return item.searchData.includes(target);
+            return item.searchData.includes(state.activeKeyword.toLowerCase());
           });
           
           keywordData = getSortedData(getSearchFilteredData(keywordData));
+          const visibleData = keywordData.slice(0, state.displayLimit);
+
           contentHTML = `
             <div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800">
               <div class="flex flex-wrap gap-1.5">
-                ${['전체', ...KEYWORDS].map(kw => `<button onclick="setKeyword('${kw}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeKeyword === kw ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${kw === '전체' ? t.keyword.all : (t.keyword.items?.[kw] || kw)}</button>`).join('')}
+                ${['전체', ...KEYWORDS].map(kw => `<button onclick="setKeyword('${kw}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeKeyword === kw ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${kw === '전체' ? textLabels.keyword.all : kw}</button>`).join('')}
               </div>
             </div>
             <div class="flex justify-between items-center mb-4 text-xs text-gray-400">
-              <span>${t.keyword.totalPrefix}${keywordData.length}${t.keyword.totalSuffix}</span>
-              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button>
+              <span>${textLabels.keyword.totalPrefix}${keywordData.length}${textLabels.keyword.totalSuffix}</span>
+              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? textLabels.sortLatest : textLabels.sortOldest}</button>
             </div>
-            <div class="grid grid-cols-2 gap-3">${keywordData.map(item => createCardHTML(item, t)).join('')}</div>
+            <div class="grid grid-cols-2 gap-3">${visibleData.map(item => createCardHTML(item)).join('')}</div>
+            ${keywordData.length > state.displayLimit ? `<button onclick="loadMore()" class="w-full mt-8 py-3 bg-[#1a1a1a] border border-neutral-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-colors">${textLabels.loadMore}</button>` : ''}
           `;
         } else if (state.activeMainTab === 'archive') {
           let archiveData = MOCK_ARCHIVE_DATA.filter(item => (state.activeSubTab === '전체 보기' || item.mainType === state.activeSubTab) && (state.activeCategory === '전체' || item.type === state.activeCategory));
           archiveData = getSortedData(getSearchFilteredData(archiveData));
+          const visibleData = archiveData.slice(0, state.displayLimit);
+
           contentHTML = `
             <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-4">
-              ${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600' : 'border-transparent text-gray-500'}">${t.archive.categories[tab] || tab}</button>`).join('')}
+              ${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600' : 'border-transparent text-gray-500'}">${tab}</button>`).join('')}
             </div>
             ${state.activeSubTab !== '전체 보기' ? `
               <div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800">
                 <div class="flex flex-wrap gap-1.5">
-                  <button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === '전체' ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${t.archive.all}</button>
-                  ${(CATEGORIES[state.activeSubTab] || []).map(cat => `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === cat ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${t.archive.subCategories?.[cat] || cat}</button>`).join('')}
+                  <button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === '전체' ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${textLabels.archive.all}</button>
+                  ${(CATEGORIES[state.activeSubTab] || []).map(cat => `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === cat ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${cat}</button>`).join('')}
                 </div>
               </div>
             ` : ''}
             <div class="flex justify-between items-center mb-4 text-xs text-gray-400">
-              <span>${t.archive.totalPrefix}${archiveData.length}${t.archive.totalSuffix}</span>
-              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? t.sortLatest : t.sortOldest}</button>
+              <span>${textLabels.archive.totalPrefix}${archiveData.length}${textLabels.archive.totalSuffix}</span>
+              <button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? textLabels.sortLatest : textLabels.sortOldest}</button>
             </div>
-            <div class="grid grid-cols-2 gap-3">${archiveData.map(item => createCardHTML(item, t)).join('')}</div>
+            <div class="grid grid-cols-2 gap-3">${visibleData.map(item => createCardHTML(item)).join('')}</div>
+            ${archiveData.length > state.displayLimit ? `<button onclick="loadMore()" class="w-full mt-8 py-3 bg-[#1a1a1a] border border-neutral-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-colors">${textLabels.loadMore}</button>` : ''}
           `;
         } else if (state.activeMainTab === 'calendar') {
           const daysInMonth = new Date(state.viewYear, state.viewMonth, 0).getDate();
           const firstDay = new Date(state.viewYear, state.viewMonth - 1, 1).getDay();
           const monthKey = `${state.viewYear}-${String(state.viewMonth).padStart(2, '0')}`;
-          const currentMonthData = MOCK_ARCHIVE_DATA.filter(item => item.date.startsWith(monthKey));
+          const currentMonthData = MOCK_ARCHIVE_DATA.filter(item => item.date && item.date.startsWith(monthKey));
           const monthlyTotal = currentMonthData.length;
           const activeDays = currentMonthData.map(item => parseInt(item.date.split('-')[2]));
           
@@ -428,7 +394,7 @@
             <div class="flex items-center justify-between mb-6">
               <button onclick="prevMonth()"><i data-lucide="chevron-left"></i></button>
               <div class="flex gap-2">
-                <span class="font-bold text-lg">${state.viewYear}${t.calendar.yearSuffix} ${state.viewMonth}${t.calendar.monthSuffix}</span>
+                <span class="font-bold text-lg">${state.viewYear}${textLabels.calendar.yearSuffix} ${state.viewMonth}${textLabels.calendar.monthSuffix}</span>
               </div>
               <button onclick="nextMonth()"><i data-lucide="chevron-right"></i></button>
             </div>
@@ -438,14 +404,9 @@
             <div class="grid grid-cols-7 gap-y-1 mb-8">${calGrid}</div>
             <div class="border-t border-neutral-800 pt-6">
               <div class="flex items-center gap-2 mb-4 border-l-4 border-red-600 pl-3">
-                <h3 class="font-bold text-gray-200">
-                  ${state.language === 'ko' 
-                    ? `${state.viewMonth}${t.calendar.archiveTitleSuffix}${t.calendar.countPrefix}${monthlyTotal}${t.calendar.countSuffix}`
-                    : `${state.viewMonth}${t.calendar.archiveTitleSuffix}${t.calendar.countPrefix}${monthlyTotal}${t.calendar.countSuffix}`
-                  }
-                </h3>
+                <h3 class="font-bold text-gray-200">${state.viewMonth}${textLabels.calendar.archiveTitleSuffix}${textLabels.calendar.countPrefix}${monthlyTotal}${textLabels.calendar.countSuffix}</h3>
               </div>
-              <div class="grid grid-cols-2 gap-3">${dailyData.length > 0 ? dailyData.map(item => createCardHTML(item, t)).join('') : `<div class="col-span-2 text-center text-gray-500 text-sm py-10">기록이 없습니다.</div>`}</div>
+              <div class="grid grid-cols-2 gap-3">${dailyData.length > 0 ? dailyData.map(item => createCardHTML(item)).join('') : `<div class="col-span-2 text-center text-gray-500 text-sm py-10">기록이 없습니다.</div>`}</div>
             </div>
           `;
         }
@@ -459,3 +420,4 @@
   </script>
 </body>
 </html>
+
