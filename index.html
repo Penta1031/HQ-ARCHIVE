@@ -116,7 +116,7 @@
   </div>
 
   <script>
-    // 💡 Apps Script 배포 URL
+    // 💡 Apps Script 배포 URL (반드시 본인의 배포된 URL로 유지해주세요)
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyVg2Dr7RQJpSVG10mXiwc9ecKs2t3K8hIqZ0AUw_D6dqGCENqhJEOvsQk0C6YXkDM1/exec"; 
 
     const now = new Date();
@@ -243,8 +243,8 @@
           '개인 라이브': '個人ライブ', '기타 라이브': '他ライブ', '단체 라이브': '団体ライブ', '승구리당당': '承协ライブ2', '승협이 라이브': '承协ライブ', '우리 얘기 좀 합시다': '話そう', '인스타그램 라이브': 'インスタライブ', '하루의 마무리': '1日の締め',
           '버블': 'Bubble', '프롬': 'Fromm',
           '레코딩로그': 'レコーディング', '메이킹': 'メイキング', '뮤직비디오': 'MV', '버킷리스트': 'リスト', '비하인드': 'ビハインド', '쇼츠': 'Shorts', '스페셜클립': '特別映像', '승캠': '承Cam', '승협이': '承协', '엔킷리스트': '募集中', '커버곡': 'カバー', '합주일지': '合奏日誌',
-          '개인 인스타그램': '個人IG', '공식 블로그': '公式ブログ', '공식 인스타그램': '公式IG', '공식 카페': 'ファンカフェ', '공식 트위터': '公式Twitter', '릴스': 'Reels',
-          '라디오': 'ラジオ', '방송/예능': 'バラエティ', '웹예능/웹컨텐츠': 'Web番組', '인터뷰': 'インタビュー', '雑誌/グラビア': '雑誌/グラビア',
+          '개인 인스타그램': '個人IG', '공식 블로그': '公式ブログ', '공식 인스타그램': '公式IG', '공식 카페': 'ファンカフェ', '公式 ト위터': '公式Twitter', '릴스': 'Reels',
+          '라디오': 'ラジオ', '방송/예능': 'バラエティ', '웹예능/웹컨텐츠': 'Web番組', '인터뷰': 'インタビュー', '잡지/화보': '雑誌/グラビア',
           '목격담': '目撃談', '모음집': 'まとめ', '백업': 'バックアップ', '연말결산': '年末精算',
           '이마키스': 'おでこキス', '질투': '嫉妬', '친지마': 'チンジマ', '투샷': 'ツーショット', '셀카': '自撮り', '하크잖': 'ハート', '커플템': 'ペア'
         }
@@ -695,12 +695,12 @@
       if (countSpan) countSpan.innerText = selectedCount > 0 ? `(${selectedCount}개)` : '';
     }
 
+    // 🚀 [해결 완료] 직접 시트 데이터를 다이렉트로 읽어오는 방식으로 HTML 통신 구조 최적화
     window.handleImportFetch = async () => {
       state.isLoading = true;
       render();
 
       try {
-        // 🚀 [해결됨] 프론트엔드에서 직접 시트를 가져오지 않고 우회(Proxy) 요청
         const res = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -709,29 +709,27 @@
         const result = await res.json();
 
         if (result.status !== "success") {
-          throw new Error("서버에서 Raw 데이터를 가져오지 못했습니다.");
+          throw new Error(result.message || "서버에서 Raw 데이터를 가져오지 못했습니다.");
         }
 
-        const text = result.data;
-        const rows = parseCSV(text);
-
-        if (rows.length > 0 && rows[0][0] && rows[0][0].includes('제목')) rows.shift();
+        const rows = result.data; // CSV 파싱 없이 배열 그대로 사용
+        if (rows.length > 0 && String(rows[0][0]).includes('제목')) rows.shift();
 
         let rawDataList = rows.map((row, index) => {
           if (!row || row.length < 2 || !row[0]) return null;
-          const title = (row[0] || '').trim();
-          let rawDate = (row[1] || '').trim();
+          const title = String(row[0] || '').trim();
+          let rawDate = String(row[1] || '').trim();
           let dateStr = rawDate.replace(/[\.\s\/]/g, '-').replace(/-+/g, '-');
           if (dateStr.includes('-')) {
             const parts = dateStr.split('-');
             if (parts.length >= 3) dateStr = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
           }
-          const link = (row[2] || '').trim();
-          const account = (row[3] || '').trim();
-          const mainType = (row[4] || '기타').trim(); 
-          const type = (row[5] || '기타').trim();   
-          const rawKeywords = (row[6] || '').trim(); 
-          const img = (row[7] || '').trim();         
+          const link = String(row[2] || '').trim();
+          const account = String(row[3] || '').trim();
+          const mainType = String(row[4] || '기타').trim(); 
+          const type = String(row[5] || '기타').trim();   
+          const rawKeywords = String(row[6] || '').trim(); 
+          const img = String(row[7] || '').trim();         
           return { id: 'raw_' + index, mainType, type, date: dateStr, title, img, link, rawKeywords, account, selected: false };
         }).filter(item => item && item.title);
 
@@ -749,7 +747,7 @@
 
         state.hasSearchedImport = true;
       } catch (err) {
-        await customAlert("Raw 데이터를 불러오지 못했습니다. 에러: " + err.message);
+        await customAlert("Raw 데이터 조회 실패: " + err.message);
       }
       
       state.isLoading = false;
@@ -854,28 +852,9 @@
       }
     });
 
-    function parseCSV(str) {
-      const arr = [];
-      let quote = false;
-      let row = 0, col = 0;
-      for (let c = 0; c < str.length; c++) {
-        let cc = str[c], nc = str[c+1];
-        arr[row] = arr[row] || [];
-        arr[row][col] = arr[row][col] || '';
-        if (cc == '"' && quote && nc == '"') { arr[row][col] += cc; ++c; continue; }
-        if (cc == '"') { quote = !quote; continue; }
-        if (cc == ',' && !quote) { ++col; continue; }
-        if (cc == '\r' && nc == '\n' && !quote) { ++row; col = 0; ++c; continue; }
-        if (cc == '\n' && !quote) { ++row; col = 0; continue; }
-        if (cc == '\r' && !quote) { ++row; col = 0; continue; }
-        arr[row][col] += cc;
-      }
-      return arr;
-    }
-
+    // 🚀 [해결 완료] 직접 시트 데이터를 다이렉트로 읽어오는 방식으로 HTML 통신 구조 최적화
     async function loadSheetData() {
       try {
-        // 🚀 [해결됨] 프론트엔드에서 직접 시트를 가져오지 않고 우회(Proxy) 요청
         const res = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -884,29 +863,27 @@
         const result = await res.json();
 
         if (result.status !== "success") {
-          throw new Error("서버에서 메인 데이터를 가져오지 못했습니다.");
+          throw new Error(result.message || "서버에서 메인 데이터를 가져오지 못했습니다.");
         }
 
-        const text = result.data;
-        const rows = parseCSV(text);
-
-        if (rows.length > 0 && rows[0][0] && rows[0][0].includes('제목')) rows.shift();
+        const rows = result.data; // CSV 파싱 없이 배열 그대로 사용
+        if (rows.length > 0 && String(rows[0][0]).includes('제목')) rows.shift();
 
         MOCK_ARCHIVE_DATA = rows.map((row, index) => {
           if (!row || row.length < 2 || !row[0]) return null;
-          const title = (row[0] || '').trim();
-          let rawDate = (row[1] || '').trim();
+          const title = String(row[0] || '').trim();
+          let rawDate = String(row[1] || '').trim();
           let dateStr = rawDate.replace(/[\.\s\/]/g, '-').replace(/-+/g, '-');
           if (dateStr.includes('-')) {
             const parts = dateStr.split('-');
             if (parts.length >= 3) dateStr = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
           }
-          const link = (row[2] || '').trim();
-          const account = (row[3] || '').trim();
-          const mainType = (row[4] || '기타').trim(); 
-          const type = (row[5] || '기타').trim();   
-          const rawKeywords = (row[6] || '').trim(); 
-          const img = (row[7] || '').trim();         
+          const link = String(row[2] || '').trim();
+          const account = String(row[3] || '').trim();
+          const mainType = String(row[4] || '기타').trim(); 
+          const type = String(row[5] || '기타').trim();   
+          const rawKeywords = String(row[6] || '').trim(); 
+          const img = String(row[7] || '').trim();         
           const searchData = `${title} ${account} ${rawKeywords} ${mainType} ${type} ${dateStr}`.toLowerCase();
           return { id: index + 1, mainType, type, date: dateStr, title, img, link, searchData, rawKeywords, account };
         }).filter(item => item && item.title); 
@@ -915,6 +892,7 @@
         render();
       } catch (error) {
         state.isLoading = false;
+        await customAlert("데이터 로드 실패: " + error.message);
         render();
       }
     }
