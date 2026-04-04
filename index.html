@@ -662,14 +662,24 @@
       if (countSpan) countSpan.innerText = selectedCount > 0 ? `(${selectedCount}개)` : '';
     }
 
+    // 👇 수정된 부분 1 (Raw 데이터 우회 가져오기)
     window.handleImportFetch = async () => {
       state.isLoading = true;
       render();
 
       try {
-        // 캐시 무시를 위해 URL 끝에 현재 시간 타임스탬프 추가
-        const res = await fetch(RAW_SHEET_URL + '&t=' + new Date().getTime(), { cache: 'no-store' });
-        const text = await res.text();
+        const res = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: "getRawData" })
+        });
+        const result = await res.json();
+
+        if (result.status !== "success") {
+          throw new Error("서버에서 Raw 데이터를 가져오지 못했습니다.");
+        }
+
+        const text = result.data;
         const rows = parseCSV(text);
 
         if (rows.length > 0 && rows[0][0] && rows[0][0].includes('제목')) rows.shift();
@@ -830,11 +840,21 @@
       return arr;
     }
 
+    // 👇 수정된 부분 2 (메인 데이터 우회 가져오기)
     async function loadSheetData() {
       try {
-        // 캐시 무시를 위해 URL 끝에 현재 시간 타임스탬프 추가
-        const res = await fetch(SHEET_URL + '&t=' + new Date().getTime(), { cache: 'no-store' });
-        const text = await res.text();
+        const res = await fetch(GAS_WEB_APP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: "getMainData" })
+        });
+        const result = await res.json();
+
+        if (result.status !== "success") {
+          throw new Error("서버에서 메인 데이터를 가져오지 못했습니다.");
+        }
+
+        const text = result.data;
         const rows = parseCSV(text);
 
         if (rows.length > 0 && rows[0][0] && rows[0][0].includes('제목')) rows.shift();
@@ -1307,5 +1327,3 @@
   </script>
 </body>
 </html>
-
-
