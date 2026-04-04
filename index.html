@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HQ ARCHIVE</title>
-  <!-- favicon 에러 방지용 빈 아이콘 -->
   <link rel="icon" href="data:;base64,iVBORw0KGgo=">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -51,18 +50,15 @@
   
   <div class="w-full max-w-[480px] bg-[#111111] min-h-screen relative shadow-2xl overflow-x-hidden border-x border-neutral-800/50 flex flex-col">
     
-    <!-- 최상단 홈 바로가기 -->
-    <a href="https://hq-record.netlify.app/" target="_blank" class="w-full py-2.5 bg-red-600/10 border-b border-red-500/20 flex items-center justify-center gap-2 hover:bg-red-600/20 transition-all active:scale-[0.98] group shrink-0">
+    <a href="https://hq-record.vercel.app/" target="_blank" class="w-full py-2.5 bg-red-600/10 border-b border-red-500/20 flex items-center justify-center gap-2 hover:bg-red-600/20 transition-all active:scale-[0.98] group shrink-0">
       <i data-lucide="home" class="w-3.5 h-3.5 text-red-500"></i>
       <span id="top-home-text" class="text-red-500 font-bold text-[11px] tracking-tight"></span>
     </a>
 
-    <!-- Header -->
     <header class="px-4 py-4 sticky top-0 bg-[#111111] z-40 border-b border-neutral-800 shrink-0">
       <div class="flex justify-between items-center mb-4">
         <h1 class="text-red-600 font-black text-2xl tracking-tighter cursor-pointer" onclick="location.reload()">HQ ARCHIVE</h1>
         <div class="flex items-center gap-2">
-          <!-- Language Selection -->
           <div class="flex bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 mr-1">
             <button onclick="setLanguage('ko')" id="lang-ko" class="px-1.5 py-1 text-[9px] font-bold rounded transition-colors">KO</button>
             <button onclick="setLanguage('en')" id="lang-en" class="px-1.5 py-1 text-[9px] font-bold rounded transition-colors">EN</button>
@@ -106,15 +102,21 @@
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
+    // ✅ 최종 이미지 데이터 기반 카테고리 업데이트
     const CATEGORIES = {
       '무대영상': ['음악방송', '직캠', '콘서트', '페스티벌', '대학축제', '버스킹', '쇼케이스', '팬미팅', '팬싸인회', '공항/퇴근길', '해외투어', '킹덤'],
       '라이브': ['하루의 마무리', '승협이 라이브', '승구리당당', '우리 얘기 좀 합시다', '개인 라이브', '단체 라이브', '인스타그램 라이브', '기타 라이브'],
-      '유튜브': ['뮤직비디오', '메이킹/비하인드', '레코딩로그', '승캠', '승협이', '합주일지', '커버곡', '스페셜클립', '쇼츠', '엔킷리스트', '자체 컨텐츠'],
+      '유튜브': ['뮤직비디오', '메이킹', '비하인드', '레코딩로그', '승캠', '승협이', '합주일지', '커버곡', '스페셜클립', '쇼츠', '엔킷리스트', '버킷리스트'],
       '미디어': ['방송/예능', '라디오', '인터뷰', '잡지/화보', '웹예능/웹컨텐츠'],
       'SNS': ['공식 트위터', '개인 인스타그램', '공식 인스타그램', '릴스', '틱톡', '공식 카페', '공식 블로그'],
       '메시지': ['버블', '프롬'],
-      '기타': ['연말결산', '기타', '백업']
+      '기타': ['연말결산', '기타', '백업', '목격담', '모음집']
     };
+
+    const MAIN_TABS_LIST = ['전체 보기', ...Object.keys(CATEGORIES)];
+    
+    // ✅ 최종 이미지 데이터 기반 키워드 업데이트
+    const KEYWORDS = ['모음집', '이마키스', '질투', '친지마', '투샷', '셀카', '하크잖', '커플템'];
 
     const TRANSLATIONS = {
       ko: {
@@ -128,15 +130,20 @@
         postBtn: "게시하기", extract: "추출", landingLink: "랜딩 링크", thumbUrl: "썸네일 URL", title: "제목", date: "날짜", mainCat: "대분류", subCat: "소분류", keywordCat: "키워드",
         passwordTitle: "관리자 인증", passwordPlaceholder: "비밀번호를 입력하세요", passwordBtn: "확인", passwordError: "비밀번호가 틀렸습니다.",
         goToMain: "메인 홈페이지로 이동",
+        guideTitle: "아카이브 이용 가이드",
+        guideSearch: "날짜(2024-01-01), 초성, 키워드로 검색이 가능합니다.",
+        guideCalendar: "점이 표시된 날짜를 클릭하면 해당 날짜의 기록을 모아볼 수 있습니다.",
+        guideFilter: "카테고리와 상세 분류를 통해 원하는 영상을 빠르게 찾아보세요.",
+        guideContact: "오류 및 기타 문의사항은 @Penta_1031로 문의해 주세요.",
         categories: {
           '무대영상': '무대영상', '라이브': '라이브', '유튜브': '유튜브', '미디어': '미디어', 'SNS': 'SNS', '메시지': '메시지', '기타': '기타', '전체 보기': '전체 보기',
           '음악방송': '음악방송', '직캠': '직캠', '콘서트': '콘서트', '페스티벌': '페스티벌', '대학축제': '대학축제', '버스킹': '버스킹', '쇼케이스': '쇼케이스', '팬미팅': '팬미팅', '팬싸인회': '팬싸인회', '공항/퇴근길': '공항/퇴근길', '해외투어': '해외투어', '킹덤': '킹덤',
           '하루의 마무리': '하루의 마무리', '승협이 라이브': '승협이 라이브', '승구리당당': '승구리당당', '우리 얘기 좀 합시다': '우리 얘기 좀 합시다', '개인 라이브': '개인 라이브', '단체 라이브': '단체 라이브', '인스타그램 라이브': '인스타그램 라이브', '기타 라이브': '기타 라이브',
-          '뮤직비디오': '뮤직비디오', '메이킹/비하인드': '메이킹/비하인드', '레코딩로그': '레코딩로그', '승캠': '승캠', '승협이': '승협이', '합주일지': '합주일지', '커버곡': '커버곡', '스페셜클립': '스페셜클립', '쇼츠': '쇼츠', '엔킷리스트': '엔피아 모집', '자체 컨텐츠': '자체 컨텐츠',
+          '뮤직비디오': '뮤직비디오', '메이킹': '메이킹', '비하인드': '비하인드', '레코딩로그': '레코딩로그', '승캠': '승캠', '승협이': '승협이', '합주일지': '합주일지', '커버곡': '커버곡', '스페셜클립': '스페셜클립', '쇼츠': '쇼츠', '엔킷리스트': '엔피아 모집', '버킷리스트': '버킷리스트',
           '방송/예능': '방송/예능', '라디오': '라디오', '인터뷰': '인터뷰', '잡지/화보': '잡지/화보', '웹예능/웹컨텐츠': '웹예능/웹컨텐츠',
           '공식 트위터': '공식 트위터', '개인 인스타그램': '개인 인스타그램', '공식 인스타그램': '공식 인스타그램', '릴스': '릴스', '틱톡': '틱톡', '공식 카페': '공식 카페', '공식 블로그': '공식 블로그',
-          '버블': '버블', '프롬': '프롬', '연말결산': '연말결산', '백업': '백업',
-          '모음집': '모음집', '이마키스': '이마키스', '질투': '질투', '친지마': '친지마'
+          '버블': '버블', '프롬': '프롬', '연말결산': '연말결산', '백업': '백업', '목격담': '목격담',
+          '모음집': '모음집', '이마키스': '이마키스', '질투': '질투', '친지마': '친지마', '투샷': '투샷', '셀카': '셀카', '하크잖': '하크잖', '커플템': '커플템'
         }
       },
       en: {
@@ -150,15 +157,20 @@
         postBtn: "Publish", extract: "Extract", landingLink: "Landing Link", thumbUrl: "Thumbnail URL", title: "Title", date: "Date", mainCat: "Main Cat", subCat: "Sub Cat", keywordCat: "Keyword",
         passwordTitle: "Admin Auth", passwordPlaceholder: "Enter password", passwordBtn: "Confirm", passwordError: "Incorrect password.",
         goToMain: "Back to Home",
+        guideTitle: "Archive User Guide",
+        guideSearch: "You can search by date (2024-01-01), initials, or keywords.",
+        guideCalendar: "Click on dates with dots to see records for that day.",
+        guideFilter: "Quickly find videos through categories and detailed filters.",
+        guideContact: "For errors and other inquiries, please contact @Penta_1031.",
         categories: {
           '무대영상': 'Performance', '라이브': 'Live', '유튜브': 'YouTube', '미디어': 'Media', 'SNS': 'SNS', '메시지': 'Message', '기타': 'ETC', '전체 보기': 'View All',
           '음악방송': 'Music Show', '직캠': 'Fancam', '콘서트': 'Concert', '페스티벌': 'Festival', '대학축제': 'Univ Festival', '버스킹': 'Busking', '쇼케이스': 'Showcase', '팬미팅': 'Fanmeeting', '팬싸인회': 'Fansign', '공항/퇴근길': 'Airport/Exit', '해외투어': 'World Tour', '킹덤': 'Kingdom',
           '하루의 마무리': 'End of Day', '승협이 라이브': 'Seunghyub Live', '승구리당당': 'Seungguri', '우리 얘기 좀 합시다': 'Lets Talk', '개인 라이브': 'Solo Live', '단체 라이브': 'Group Live', '인스타그램 라이브': 'Insta Live', '기타 라이브': 'Other Live',
-          '뮤직비디오': 'Music Video', '메이킹/비하인드': 'Behind/Making', '레코딩로그': 'Recording Log', '승캠': 'Seung-Cam', '승협이': 'Seunghyub', '합주일지': 'Ensemble Log', '커버곡': 'Covers', '스페셜클립': 'Special Clips', '쇼츠': 'Shorts', '엔킷리스트': 'N.Fia Recruit', '자체 컨텐츠': 'Originals',
+          '뮤직비디오': 'Music Video', '메이킹': 'Making', '비하인드': 'Behind', '레코딩로그': 'Recording Log', '승캠': 'Seung-Cam', '승협이': 'Seunghyub', '합주일지': 'Ensemble Log', '커버곡': 'Covers', '스페셜클립': 'Special Clips', '쇼츠': 'Shorts', '엔킷리스트': 'N.Fia Recruit', '버킷리스트': 'Bucket List',
           '방송/예능': 'TV Show', '라디오': 'Radio', '인터뷰': 'Interview', '잡지/화보': 'Magazine/Pictorial', '웹예능/웹컨텐츠': 'Web Content',
           '공식 트위터': 'Official Twitter', '개인 인스타그램': 'Personal IG', '공식 인스타그램': 'Official IG', '릴스': 'Reels', '틱톡': 'TikTok', '공식 카페': 'Fan Cafe', '공식 블로그': 'Official Blog',
-          '버블': 'Bubble', '프롬': 'Fromm', '연말결산': 'Year-end', '백업': 'Backup',
-          '모음집': 'Collection', '이마키스': 'Forehead Kiss', '질투': 'Jealousy', '친지마': 'Chinjima'
+          '버블': 'Bubble', '프롬': 'Fromm', '연말결산': 'Year-end', '백업': 'Backup', '목격담': 'Sighting',
+          '모음집': 'Collection', '이마키스': 'Forehead Kiss', '질투': 'Jealousy', '친지마': 'Chinjima', '투샷': 'Two-shot', '셀카': 'Selfie', '하크잖': 'Heart', '커플템': 'Matching'
         }
       },
       cn: {
@@ -172,15 +184,20 @@
         postBtn: "发布", extract: "提取", landingLink: "着陆链接", thumbUrl: "缩略图 URL", title: "标题", date: "日期", mainCat: "大类", subCat: "小类", keywordCat: "关键词",
         passwordTitle: "管理员验证", passwordPlaceholder: "输入密码", passwordBtn: "确认", passwordError: "密码错误。",
         goToMain: "回到主页",
+        guideTitle: "存档使用指南",
+        guideSearch: "您可以通过日期(2024-01-01)、首字母或关键词进行搜索。",
+        guideCalendar: "点击带点的日期即可查看当天的记录。",
+        guideFilter: "通过类别和详细筛选快速找到您想要的视频。",
+        guideContact: "错误及其他咨询请联系 @Penta_1031。",
         categories: {
           '무대영상': '舞台视频', '라이브': '直播', '유튜브': 'YouTube', '미디어': '媒体', 'SNS': '社群', '메시지': '消息', '기타': '其他', '전체 보기': '全部显示',
           '음악방송': '打歌节目', '직캠': '直拍', '콘서트': '演唱会', '페스티벌': '音乐节', '대학축제': '大学庆典', '버스킹': '路演', '쇼케이스': 'Showcase', '팬미팅': '见面会', '팬싸인회': '签售会', '공항/퇴근길': '机场/下班', '해외투어': '海外巡演', '킹덤': 'Kingdom',
-          '하루의 마무리': '一天的结束', '승협이 라이브': '承协直播', '승구리당당': '承协直播2', '우리 얘기 좀 합시다': '聊聊吧', '개인 라이브': '个人直播', '단체 라이브': '团体直播', '인스타그램 라이브': 'IG 直播', '기타 라이브': '其他直播',
-          '뮤직비디오': 'MV', '메이킹/비하인드': '幕后', '레코딩로그': '录音日志', '승캠': '承Cam', '승협이': '承协', '합주일지': '合奏日志', '커버곡': '翻唱', '스페셜클립': '特别片段', '쇼츠': 'Shorts', '엔킷리스트': '招募', '자체 컨텐츠': '自制内容',
-          '방송/예능': '综艺节目', '라디오': '广播', '인터뷰': '采访', '잡지/화보': '杂志/画报', '웹예능/웹컨텐츠': '网络综艺',
-          '공식 트위터': '官方推特', '개인 인스타그램': '个人IG', '공식 인스타그램': '官方IG', '릴스': 'Reels', '틱톡': 'TikTok', '공식 카페': '官咖', '공식 블로그': '官方博客',
-          '버블': 'Bubble', '프롬': 'Fromm', '연말결산': '年终结算', '백업': '备份',
-          '모음집': '合集', '이마키스': '额头吻', '질투': '嫉妒', '친지마': '亲其马'
+          '하루의 마무리': '一天的结束', '승협이 라이브': '承协直播', '승구리당당': '承协直播2', '우리 얘기 좀 합시다': '聊聊吧', '개인 라이브': '个人直播', '团体直播': '团体直播', 'IG 直播': 'IG 直播', '其他直播': '其他直播',
+          '뮤직비디오': 'MV', '메이킹': '制作', '비하인드': '花絮', '레코딩로그': '录音日志', '승캠': '承Cam', '승협이': '承协', '合奏日志': '合奏日志', '翻唱': '翻唱', '特别片段': '特别片段', 'Shorts': 'Shorts', '招募': '招募', '清单': '清单',
+          '방송/예능': '综艺节目', '라디오': '广播', '인터뷰': '采访', '잡지/화보': '杂志/画报', '网络综艺': '网络综艺',
+          '공식 트위터': '官方推트', '개인 인스타그램': '个人IG', '官方 인스타그램': '官方IG', '릴스': 'Reels', '틱톡': 'TikTok', '官咖': '官咖', '官方博客': '官方博客',
+          '버블': 'Bubble', '프롬': 'Fromm', '연말결산': '年终结算', '백업': '备份', '目击': '目击',
+          '合集': '合集', '额头吻': '额头吻', '嫉妒': '嫉妒', '亲其马': '亲其马', '合影': '合影', '自拍': '自拍', '爱心': '爱心', '情侣款': '情侣款'
         }
       },
       jp: {
@@ -188,27 +205,29 @@
         listAdmin: "リスト", calAdmin: "カレンダー", importAdmin: "インポート",
         searchPlaceholder: "キーワードを入力...", searchHint: "💡 検索例: 2023-05-22, ライブ, 動画",
         all: "すべて", total: "合計", unit: "件", more: "もっと見る (+)", latest: "最新順", oldest: "古い順",
-        empty: "記録がありません。", add: "+ 追加", save: "保存", cancel: "Cancel", edit: "編集", delete: "削除",
-        year: "年", month: "月", daySun: "日", dayMon: "月", dayTue: "火", dayWed: "水", dayThu: "木", dayFri: "金", daySat: "土",
+        empty: "記録がありません。", add: "+ 追加", save: "保存", cancel: "Cancel", edit: "編集", delete: "삭제",
+        year: "年", month: "月", daySun: "日", dayMon: "月", dayTue: "화", dayWed: "水", dayThu: "목", dayFri: "金", daySat: "土",
         importTitle: "外部データ管理", importId: "アカウントフィルタ (任意)", importStart: "開始日", importEnd: "終了日", importBtn: "Rawデータ取得",
-        postBtn: "投稿する", extract: "抽出", landingLink: "リンク", thumbUrl: "サムネイル URL", title: "タイトル", date: "日付", mainCat: "大分類", subCat: "小分類", keywordCat: "キーワード",
-        passwordTitle: "管理者認証", passwordPlaceholder: "パスワードを入力", passwordBtn: "確認", passwordError: "パスワード가違います。",
+        postBtn: "投稿する", extract: "抽出", landingLink: "링크", thumbUrl: "サムネイル URL", title: "タイトル", date: "日付", mainCat: "大分類", subCat: "小分類", keywordCat: "キーワード",
+        passwordTitle: "管理者認証", passwordPlaceholder: "パスワードを入力", passwordBtn: "確認", passwordError: "パスワード가 틀렸습니다.",
         goToMain: "メインへ戻る",
+        guideTitle: "アーカイブ利用ガイド",
+        guideSearch: "日付(2024-01-01)、頭文字、キーワードで検索が可能です。",
+        guideCalendar: "点が表示された日付をクリックすると、その日の記録をまとめて表示します。",
+        guideFilter: "カテゴリーと詳細分類を通じて、目的の動画を素早く見つけてください。",
+        guideContact: "エラーおよびその他のお問い合わせは @Penta_1031 までお願いいたします。",
         categories: {
           '무대영상': 'ステージ', '라이브': 'ライブ', '유튜브': 'YouTube', '미디어': 'メディア', 'SNS': 'SNS', '메시지': 'メッセージ', '기타': 'その他', '전체 보기': 'すべて表示',
-          '음악방송': '音楽番組', '직캠': 'ファンカム', '콘서트': 'コンサート', '페스티벌': 'フェス', '대학축제': '学祭', '버스킹': '路上ライブ', '쇼케이스': 'ショーケース', '팬미팅': 'ファンミ', '팬싸인회': 'サイン회', '공항/퇴근길': '空港/出勤', '해외ツアー': '海外ツアー', '킹덤': 'KINGDOM',
-          '하루의 마무리': '1日の締め', '승협이 라이브': '承协ライブ', '승구리당당': '承协ライブ2', '우리 얘기 좀 합시다': '話そう', '개인 라이브': '個人ライブ', '단체 라이브': '団体ライブ', '인스타그램 라이브': 'インスタライブ', '기타 라이브': '他ライブ',
-          '뮤직비디오': 'MV', '메이킹/비하인드': 'メイキング', '레코딩로그': 'レコーディング', '승캠': '承Cam', '승협이': '承协', '합주일지': '合奏日誌', '커버곡': 'カバー', '스페셜클립': '特別映像', '쇼츠': 'Shorts', '엔킷리스트': '募集中', '자체 컨텐츠': '独自コンテンツ',
-          '방송/예능': 'バラエティ', '라디오': 'ラジオ', '인터뷰': 'インタビュー', '잡지/화보': '雑誌/グラビア', '웹예능/웹컨텐츠': 'Web番組',
-          '공식 트위터': '公式Twitter', '개인 인스타그램': '個人IG', '공식 인스타그램': '公式IG', '릴스': 'Reels', '틱톡': 'TikTok', '공식 카페': 'ファンカフェ', '공식ブログ': '公式ブログ',
-          '버블': 'Bubble', '프롬': 'Fromm', '연말결산': '年末精算', '백업': 'バックアップ',
-          '모음집': 'まとめ', '이마키스': 'おで고キス', '질투': '嫉妬', '친지마': 'チンジマ'
+          '음악방송': '音楽番組', '직캠': 'ファンカム', '콘서트': 'コンサート', 'フェ스': 'フェ스', '学祭': '学祭', '路上ライブ': '路上ライブ', 'ショーケース': 'ショーケース', 'ファン미': 'ファンミ', 'サイン会': 'サイン会', '空港/出勤': '空港/出勤', '海外ツアー': '海外ツアー', 'KINGDOM': 'KINGDOM',
+          '1日の締め': '1日の締め', '承协ライブ': '承协ライブ', '承协ライブ2': '承协ライブ2', '話そう': '話そう', '個人ライブ': '個人ライブ', '団体ライブ': '団体ライブ', 'インスタライブ': 'インスタライブ', '他ライブ': '他ライブ',
+          '뮤직비디오': 'MV', 'メイキング': 'メイキング', '비하인드': '비하인드', 'レコーディング': 'レコーディング', '承Cam': '承Cam', '승협이': '承协', '合奏日誌': '合奏日誌', 'カバー': 'カバー', '特別映像': '特別映像', 'Shorts': 'Shorts', '募集中': '募集中', 'リスト': 'リスト',
+          'バラエティ': 'バラエティ', '라디오': 'ラジオ', '인터뷰': 'インタビュー', '雑誌/グラビア': '雑誌/グラビア', 'Web番組': 'Web番組',
+          '公式Twitter': '公式Twitter', '個人IG': '個人IG', '公式IG': '公式IG', 'Reels': 'Reels', 'TikTok': 'TikTok', 'ファンカフェ': 'ファンカフェ', '公式ブログ': '公式ブログ',
+          '버블': 'Bubble', 'Fromm': 'Fromm', '年末精算': '年末精算', 'バックアップ': 'バックアップ', '目撃談': '目撃談',
+          'まとめ': 'まとめ', 'おでこキス': 'おでこキス', '嫉妬': '嫉妬', 'チンジマ': 'チンジマ', 'ツーショット': 'ツーショット', '自撮り': '自撮り', 'ハート': 'ハート', 'ペア': 'ペア'
         }
       }
     };
-
-    const MAIN_TABS_LIST = ['전체 보기', ...Object.keys(CATEGORIES)];
-    const KEYWORDS = ['모음집', '이마키스', '질투', '친지마'];
 
     let MOCK_ARCHIVE_DATA = [];
     let IMPORTED_TEMP_DATA = []; 
@@ -235,16 +254,23 @@
       passwordError: false,
       isExtracting: false, 
       adminEditingId: null,
+      adminEditingRaw: false,
       adminTempMainType: '무대영상',
       importTempId: '',
       importStartDate: '',
       importEndDate: '',
-      hasSearchedImport: false
+      hasSearchedImport: false,
+      showGuide: true
     };
 
     const getT = (key) => {
-      const langMap = TRANSLATIONS[state.lang].categories;
-      return langMap[key] || key;
+      if (!TRANSLATIONS[state.lang] || !TRANSLATIONS[state.lang].categories) return key;
+      return TRANSLATIONS[state.lang].categories[key] || key;
+    };
+
+    const getGuideT = (key) => {
+      if (!TRANSLATIONS[state.lang]) return "";
+      return TRANSLATIONS[state.lang][key] || "";
     };
 
     // --- Actions ---
@@ -253,11 +279,12 @@
     window.setAdminTab = (tabId) => { state.adminTab = tabId; state.displayLimit = 30; render(); };
     window.setSubTab = (tab) => { state.activeSubTab = tab; state.activeCategory = '전체'; state.displayLimit = 30; render(); };
     window.setCategory = (cat) => { state.activeCategory = cat; state.displayLimit = 30; render(); };
-    window.setSelectedDate = (date) => { state.selectedDate = date; render(); };
+    window.setSelectedDate = (date) => { state.selectedDate = (state.selectedDate === date) ? null : date; render(); };
     window.setKeyword = (kw) => { state.activeKeyword = kw; state.displayLimit = 30; render(); };
     window.handleSearch = (e) => { state.searchTerm = e.target.value; state.displayLimit = 30; render(); };
     window.toggleSort = () => { state.sortOrder = state.sortOrder === 'desc' ? 'asc' : 'desc'; render(); };
     window.loadMore = () => { state.displayLimit += 30; render(); };
+    window.toggleGuide = () => { state.showGuide = !state.showGuide; render(); };
 
     window.toggleYearDropdown = (e) => { e.stopPropagation(); state.isYearDropdownOpen = !state.isYearDropdownOpen; state.isMonthDropdownOpen = false; render(); };
     window.toggleMonthDropdown = (e) => { e.stopPropagation(); state.isMonthDropdownOpen = !state.isMonthDropdownOpen; state.isYearDropdownOpen = false; render(); };
@@ -298,11 +325,18 @@
       }
     };
     
-    window.openAdminModal = (id = null) => {
+    window.openAdminModal = (id = null, isRaw = false) => {
+      state.adminEditingId = id;
+      state.adminEditingRaw = isRaw;
+      
       if (id !== null) {
-        state.adminEditingId = Number(id);
-        const item = MOCK_ARCHIVE_DATA.find(d => d.id === state.adminEditingId);
-        if (item) state.adminTempMainType = item.mainType;
+        let item;
+        if (isRaw) {
+          item = IMPORTED_TEMP_DATA[id];
+        } else {
+          item = MOCK_ARCHIVE_DATA.find(d => d.id === Number(id));
+        }
+        if (item) state.adminTempMainType = item.mainType || '무대영상';
       } else {
         state.adminEditingId = null;
         state.adminTempMainType = '무대영상'; 
@@ -312,17 +346,105 @@
     };
 
     window.closeAdminModal = () => { state.isEditModalOpen = false; render(); };
-    window.adminMainTypeChange = (val) => {
-      state.adminTempMainType = val;
-      const typeSelect = document.getElementById('form-type');
-      if (typeSelect) {
-        const subCats = CATEGORIES[val] || [];
-        typeSelect.innerHTML = subCats.map(k => `<option value="${k}">${getT(k)}</option>`).join('');
+    
+    window.handleAdminSubCatChange = (subVal) => {
+      for (const mainKey in CATEGORIES) {
+        if (CATEGORIES[mainKey].includes(subVal)) {
+          state.adminTempMainType = mainKey;
+          const mainSelect = document.getElementById('form-mainType');
+          if (mainSelect) mainSelect.value = mainKey;
+          break;
+        }
       }
     };
     
-    window.deleteData = (id) => { if(confirm("정말 삭제하시겠습니까?")) { MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== Number(id)); render(); } };
-    window.saveData = (e) => {
+    window.deleteData = async (id) => { 
+      if(confirm("정말 삭제하시겠습니까?")) { 
+        const item = MOCK_ARCHIVE_DATA.find(d => d.id === Number(id));
+        if (!item) return;
+
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: "deleteMain", link: item.link })
+          });
+          const result = await res.json();
+          if (result.status === "success") {
+            MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== Number(id)); 
+            alert("메인 시트에서 삭제되었습니다.");
+            render(); 
+          } else {
+            throw new Error(result.message || "Apps Script 오류");
+          }
+        } catch (err) {
+          alert("삭제 실패: " + err.message);
+        }
+      } 
+    };
+
+    window.deleteRawData = async (indexOrEvent) => {
+      if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes("여기에_앱스스크립트")) {
+        return alert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
+      }
+
+      let selectedIndices = [];
+      if (typeof indexOrEvent === 'number') {
+        selectedIndices.push(indexOrEvent);
+      } else {
+        selectedIndices = IMPORTED_TEMP_DATA.map((item, idx) => item.selected ? idx : -1).filter(idx => idx !== -1);
+      }
+
+      if (selectedIndices.length === 0) {
+        return alert("선택된 항목이 없습니다.");
+      }
+
+      if (!confirm(`선택한 ${selectedIndices.length}개의 항목을 Raw 시트에서 영구 삭제하시겠습니까?`)) return;
+
+      const bulkBtn = document.getElementById('bulk-delete-btn');
+      if (bulkBtn) bulkBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 loading-spin inline-block align-middle mr-1"></i> 삭제중...';
+
+      let successCount = 0;
+      let failCount = 0;
+      let lastError = "";
+
+      for (let i = 0; i < selectedIndices.length; i++) {
+        const idx = selectedIndices[i];
+        const item = IMPORTED_TEMP_DATA[idx];
+        const btn = document.getElementById(`del-raw-btn-${idx}`);
+        if(btn) btn.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 loading-spin inline-block align-middle"></i>';
+
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: "deleteRaw", link: item.link })
+          });
+          const result = await res.json();
+          if (result.status === "success") {
+            item._deleted = true;
+            successCount++;
+          } else {
+            throw new Error(result.message || "Apps Script 내부 오류");
+          }
+        } catch (err) { 
+          lastError = err.message;
+          failCount++;
+        }
+      }
+
+      IMPORTED_TEMP_DATA = IMPORTED_TEMP_DATA.filter(item => !item._deleted);
+
+      if (failCount > 0) {
+        alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
+      } else {
+        alert(`총 ${successCount}건의 데이터가 Raw 시트에서 성공적으로 삭제되었습니다.`);
+      }
+      
+      render();
+    };
+
+    window.saveData = async (e) => {
       e.preventDefault();
       const mainType = document.getElementById('form-mainType').value.trim();
       const type = document.getElementById('form-type').value.trim();
@@ -331,16 +453,104 @@
       const link = document.getElementById('form-link').value.trim();
       const img = document.getElementById('form-img').value.trim();
       const rawKeywords = document.getElementById('form-keywords').value.trim();
-      if(state.adminEditingId !== null) {
-        const idx = MOCK_ARCHIVE_DATA.findIndex(d => d.id === state.adminEditingId);
-        if(idx > -1) MOCK_ARCHIVE_DATA[idx] = { ...MOCK_ARCHIVE_DATA[idx], mainType, type, date, title, img, link, searchData: `${title} ${rawKeywords}`.toLowerCase(), rawKeywords, account: MOCK_ARCHIVE_DATA[idx].account };
+
+      const btn = document.getElementById('modal-save-btn');
+      if(btn) btn.innerHTML = '저장 중...';
+
+      if (state.adminEditingRaw) {
+        const idx = state.adminEditingId;
+        const item = IMPORTED_TEMP_DATA[idx];
+        const oldLink = item.link;
+        const account = item.account;
+        const newData = [title, date, link, account, mainType, type, rawKeywords, img];
+
+        try {
+          const res = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: "updateRaw", oldLink: oldLink, newData: newData })
+          });
+          const result = await res.json();
+          if (result.status === "success") {
+            IMPORTED_TEMP_DATA[idx] = { ...item, mainType, type, date, title, img, link, rawKeywords };
+            alert("Raw 데이터가 시트에 성공적으로 수정되었습니다.");
+          } else {
+            throw new Error(result.message);
+          }
+        } catch (err) {
+          alert("수정 실패: " + err.message);
+        }
       } else {
-        MOCK_ARCHIVE_DATA.push({ id: Date.now(), mainType, type, date, title, img, link, searchData: `${title} ${rawKeywords}`.toLowerCase(), rawKeywords, account: "" });
+        if(state.adminEditingId !== null) {
+          const idx = MOCK_ARCHIVE_DATA.findIndex(d => d.id === state.adminEditingId);
+          if(idx > -1) {
+            const item = MOCK_ARCHIVE_DATA[idx];
+            const oldLink = item.link;
+            const account = item.account || "";
+            const newData = [title, date, link, account, mainType, type, rawKeywords, img];
+            
+            try {
+              const res = await fetch(GAS_WEB_APP_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: "updateMain", oldLink: oldLink, newData: newData })
+              });
+              const result = await res.json();
+              if (result.status === "success") {
+                MOCK_ARCHIVE_DATA[idx] = { 
+                  ...item, mainType, type, date, title, img, link, 
+                  searchData: `${title} ${account} ${rawKeywords} ${mainType} ${type} ${date}`.toLowerCase(), rawKeywords 
+                };
+                alert("메인 시트 데이터가 성공적으로 수정되었습니다.");
+              } else {
+                throw new Error(result.message || "Apps Script 오류");
+              }
+            } catch(err) {
+              alert("수정 실패: " + err.message);
+              if(btn) btn.innerHTML = '저장하기';
+              return;
+            }
+          }
+        } else {
+          const account = "";
+          const newData = [title, date, link, account, mainType, type, rawKeywords, img];
+          try {
+            const res = await fetch(GAS_WEB_APP_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain' },
+              body: JSON.stringify({ action: "publish", data: newData })
+            });
+            const result = await res.json();
+            if (result.status === "success") {
+              MOCK_ARCHIVE_DATA.unshift({ 
+                id: Date.now(), mainType, type, date, title, img, link, 
+                searchData: `${title} ${account} ${rawKeywords} ${mainType} ${type} ${date}`.toLowerCase(), rawKeywords, account 
+              });
+              alert("메인 시트에 새 데이터가 성공적으로 추가되었습니다.");
+            } else {
+              throw new Error(result.message || "Apps Script 오류");
+            }
+          } catch(err) {
+            alert("추가 실패: " + err.message);
+            if(btn) btn.innerHTML = '저장하기';
+            return;
+          }
+        }
       }
-      state.isEditModalOpen = false; render();
+      
+      state.isEditModalOpen = false; 
+      render();
     };
 
-    // 트위터 API 호출을 앱스 스크립트로 전달하는 로직
+    window.updateImportFields = () => {
+      const idInput = document.getElementById('import-id');
+      const startInput = document.getElementById('import-start-date');
+      const endInput = document.getElementById('import-end-date');
+      if(idInput) state.importTempId = idInput.value;
+      if(startInput) state.importStartDate = startInput.value;
+      if(endInput) state.importEndDate = endInput.value;
+    };
+
     window.handleTwitterFetch = async () => {
       const twitterId = document.getElementById('twitter-id').value.trim();
       const startDate = document.getElementById('twitter-start-date').value;
@@ -357,7 +567,7 @@
       try {
         const response = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain' }, // CORS preflight 우회용
+          headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             action: "fetchTwitter",
             twitterId: twitterId,
@@ -372,8 +582,7 @@
         
         if (result.status === "success") {
           alert(`성공적으로 ${result.count}개의 트윗을 가져와 RawContents 시트에 추가했습니다!`);
-          // 성공 후 Raw 목록 최신화
-          handleImportFetch();
+          handleImportFetch(); 
         } else {
           throw new Error(result.message || "서버에서 오류가 발생했습니다.");
         }
@@ -385,16 +594,6 @@
       }
     };
 
-    window.updateImportFields = () => {
-      const idInput = document.getElementById('import-id');
-      const startInput = document.getElementById('import-start-date');
-      const endInput = document.getElementById('import-end-date');
-      if(idInput) state.importTempId = idInput.value;
-      if(startInput) state.importStartDate = startInput.value;
-      if(endInput) state.importEndDate = endInput.value;
-    };
-
-    // 불러오기 항목 단일 체크 토글
     window.toggleImportSelect = (idx) => {
       if (IMPORTED_TEMP_DATA[idx]) {
         IMPORTED_TEMP_DATA[idx].selected = !IMPORTED_TEMP_DATA[idx].selected;
@@ -402,7 +601,6 @@
       updateImportBulkUI();
     };
 
-    // 불러오기 항목 전체 체크 토글
     window.toggleImportSelectAll = (e) => {
       const checked = e.target.checked;
       IMPORTED_TEMP_DATA.forEach((item, idx) => {
@@ -413,7 +611,6 @@
       updateImportBulkUI();
     };
 
-    // 전체선택 체크박스 및 선택 개수 UI 업데이트 (전체 리렌더링 방지)
     function updateImportBulkUI() {
       const allSelected = IMPORTED_TEMP_DATA.length > 0 && IMPORTED_TEMP_DATA.every(item => item.selected);
       const allCheckbox = document.getElementById('import-select-all');
@@ -424,7 +621,6 @@
       if (countSpan) countSpan.innerText = selectedCount > 0 ? `(${selectedCount}개)` : '';
     }
 
-    // Raw Contents 시트에서 데이터 가져오기
     window.handleImportFetch = async () => {
       state.isLoading = true;
       render();
@@ -450,11 +646,10 @@
           const mainType = (row[4] || '기타').trim(); 
           const type = (row[5] || '기타').trim();   
           const rawKeywords = (row[6] || '').trim(); 
-          const img = (row[7] || '').trim();       
+          const img = (row[7] || '').trim();         
           return { id: 'raw_' + index, mainType, type, date: dateStr, title, img, link, rawKeywords, account, selected: false };
         }).filter(item => item && item.title);
 
-        // 필터링 처리 (계정ID 및 시작/종료 날짜 기준)
         const accountFilter = state.importTempId.toLowerCase();
         const startDate = state.importStartDate;
         const endDate = state.importEndDate;
@@ -476,19 +671,15 @@
       render();
     };
 
-    // [다중/단일 통합] 선택된 Raw 데이터를 구글 앱스 스크립트로 게시(POST)하는 함수
     window.publishSelectedRawData = async (indexOrEvent) => {
       if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes("여기에_앱스스크립트")) {
-        alert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다. 코드를 확인해주세요.");
-        return;
+        return alert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
       }
 
       let selectedIndices = [];
-      // 개별 '게시하기' 버튼 클릭 시 (숫자가 넘어옴)
       if (typeof indexOrEvent === 'number') {
         selectedIndices.push(indexOrEvent);
       } else {
-        // 상단 '선택 게시하기' 버튼 클릭 시 (이벤트 객체가 넘어오거나 undefined)
         selectedIndices = IMPORTED_TEMP_DATA.map((item, idx) => item.selected ? idx : -1).filter(idx => idx !== -1);
       }
 
@@ -505,7 +696,6 @@
       let failCount = 0;
       let lastError = "";
 
-      // Apps Script 동시 접속 오류를 방지하기 위해 순차적으로 통신
       for (let i = 0; i < selectedIndices.length; i++) {
         const idx = selectedIndices[i];
         const item = IMPORTED_TEMP_DATA[idx];
@@ -517,7 +707,7 @@
           
           const response = await fetch(GAS_WEB_APP_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' }, // CORS preflight 우회
+            headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify({ action: "publish", data: rowData })
           });
 
@@ -525,28 +715,24 @@
 
           const result = await response.json();
           if (result.status === "success") {
-            item.id = Date.now() + i; // 고유 ID 부여
+            item.id = Date.now() + i;
             item.searchData = `${item.title} ${item.account} ${item.rawKeywords} ${item.mainType} ${item.type} ${item.date}`.toLowerCase();
-            
-            // 기존 데이터 맨 아래에 추가 (push)
             MOCK_ARCHIVE_DATA.push(item); 
-            item._published = true; // 삭제 처리를 위한 플래그
+            item._published = true;
             successCount++;
           } else {
             throw new Error(result.message || "Apps Script 내부 오류");
           }
         } catch (err) {
-          console.error("게시 에러 상세:", err);
           lastError = err.message;
           failCount++;
         }
       }
 
-      // 게시 성공한 항목만 가져오기 목록에서 제거
       IMPORTED_TEMP_DATA = IMPORTED_TEMP_DATA.filter(item => !item._published);
 
       if (failCount > 0) {
-        alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}\n\n💡 구글 시트 권한이 '모든 사용자'인지 확인하거나, F12 콘솔 창을 확인해주세요.`);
+        alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
       } else {
         alert(`총 ${successCount}건의 데이터가 시트에 성공적으로 게시되었습니다.`);
       }
@@ -554,7 +740,7 @@
       render();
     };
 
-    window.extractThumbnail = async () => {
+    window.extractThumbnail = async (e) => {
       const link = document.getElementById('form-link').value.trim();
       if(!link) return alert("랜딩 링크를 먼저 입력해주세요.");
       state.isExtracting = true;
@@ -583,7 +769,6 @@
       }
     });
 
-    // CSV 파싱 함수
     function parseCSV(str) {
       const arr = [];
       let quote = false;
@@ -613,7 +798,6 @@
 
         MOCK_ARCHIVE_DATA = rows.map((row, index) => {
           if (!row || row.length < 2 || !row[0]) return null;
-          
           const title = (row[0] || '').trim();
           let rawDate = (row[1] || '').trim();
           let dateStr = rawDate.replace(/[\.\s\/]/g, '-').replace(/-+/g, '-');
@@ -621,24 +805,19 @@
             const parts = dateStr.split('-');
             if (parts.length >= 3) dateStr = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
           }
-          
           const link = (row[2] || '').trim();
           const account = (row[3] || '').trim();
           const mainType = (row[4] || '기타').trim(); 
           const type = (row[5] || '기타').trim();   
           const rawKeywords = (row[6] || '').trim(); 
-          const img = (row[7] || '').trim();       
-          
+          const img = (row[7] || '').trim();         
           const searchData = `${title} ${account} ${rawKeywords} ${mainType} ${type} ${dateStr}`.toLowerCase();
-          
           return { id: index + 1, mainType, type, date: dateStr, title, img, link, searchData, rawKeywords, account };
         }).filter(item => item && item.title); 
         
         state.isLoading = false;
         render();
       } catch (error) {
-        console.error("데이터 로드 에러 상세:", error);
-        alert("데이터를 불러오지 못했습니다. 에러: " + error.message);
         state.isLoading = false;
         render();
       }
@@ -655,7 +834,7 @@
               <div class="text-xs font-bold text-white line-clamp-1">${item.title}</div>
             </div>
             <div class="flex gap-2 mt-2">
-              <button onclick="openAdminModal(${item.id})" class="text-[10px] font-bold bg-neutral-800 text-gray-300 px-3 py-1.5 rounded-lg active:scale-95 transition-all">${T.edit}</button>
+              <button onclick="openAdminModal(${item.id}, false)" class="text-[10px] font-bold bg-neutral-800 text-gray-300 px-3 py-1.5 rounded-lg active:scale-95 transition-all">${T.edit}</button>
               <button onclick="deleteData(${item.id})" class="text-[10px] font-bold bg-red-900/20 text-red-400 px-3 py-1.5 rounded-lg active:scale-95 transition-all">${T.delete}</button>
             </div>
           </div>
@@ -720,6 +899,39 @@
       `;
     }
 
+    function getGuideHTML() {
+      if (!state.showGuide) return `<div class="mb-4 text-right px-2"><button onclick="toggleGuide()" class="text-[10px] font-bold text-gray-500 flex items-center gap-1 justify-end ml-auto"><i data-lucide="info" class="w-3 h-3"></i> ${getGuideT('guideTitle')}</button></div>`;
+      
+      return `
+        <div class="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-4 mb-6 animate-in fade-in slide-in-from-top-2 duration-300 relative">
+          <button onclick="toggleGuide()" class="absolute top-3 right-3 text-gray-500 hover:text-white transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button>
+          <h2 class="text-sm font-bold text-white flex items-center gap-2 mb-4">
+            <i data-lucide="info" class="w-4 h-4 text-red-500"></i>
+            ${getGuideT('guideTitle')}
+          </h2>
+          <div class="flex flex-col gap-3">
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-lg bg-red-600/10 flex items-center justify-center shrink-0 border border-red-600/20"><i data-lucide="search" class="w-4 h-4 text-red-500"></i></div>
+              <p class="text-[11px] text-gray-400 leading-relaxed"><strong class="text-gray-200 block mb-0.5">Search</strong>${getGuideT('guideSearch')}</p>
+            </div>
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-lg bg-red-600/10 flex items-center justify-center shrink-0 border border-red-600/20"><i data-lucide="calendar" class="w-4 h-4 text-red-500"></i></div>
+              <p class="text-[11px] text-gray-400 leading-relaxed"><strong class="text-gray-200 block mb-0.5">Calendar</strong>${getGuideT('guideCalendar')}</p>
+            </div>
+            <div class="flex gap-3">
+              <div class="w-8 h-8 rounded-lg bg-red-600/10 flex items-center justify-center shrink-0 border border-red-600/20"><i data-lucide="filter" class="w-4 h-4 text-red-500"></i></div>
+              <p class="text-[11px] text-gray-400 leading-relaxed"><strong class="text-gray-200 block mb-0.5">Filter</strong>${getGuideT('guideFilter')}</p>
+            </div>
+          </div>
+          <div class="mt-4 pt-4 border-t border-neutral-800/50">
+            <p class="text-[10px] text-gray-500 italic leading-tight">
+              ${getGuideT('guideContact')}
+            </p>
+          </div>
+        </div>
+      `;
+    }
+
     function render() {
       const T = TRANSLATIONS[state.lang];
       
@@ -778,7 +990,7 @@
           const visibleData = filteredData.slice(0, state.displayLimit);
           contentHTML = `
             <div class="animate-in fade-in duration-300">
-              <div class="flex justify-between items-center mb-6 px-1"><h2 class="text-xl font-bold text-white flex items-center gap-2"><i data-lucide="shield-check" class="w-5 h-5 text-red-500"></i> ${T.listAdmin}</h2><button onclick="openAdminModal()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">${T.add}</button></div>
+              <div class="flex justify-between items-center mb-6 px-1"><h2 class="text-xl font-bold text-white flex items-center gap-2"><i data-lucide="shield-check" class="w-5 h-5 text-red-500"></i> ${T.listAdmin}</h2><button onclick="openAdminModal(null, false)" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">${T.add}</button></div>
               <div class="flex flex-col gap-3">${visibleData.map(item => createAdminCardHTML(item)).join('')}</div>
               ${filteredData.length > state.displayLimit ? `<button onclick="loadMore()" class="w-full mt-8 py-3 bg-[#1a1a1a] border border-neutral-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-colors">${T.more}</button>` : ''}
             </div>
@@ -789,6 +1001,11 @@
           const monthKey = `${state.viewYear}-${String(state.viewMonth).padStart(2, '0')}`;
           const currentMonthData = MOCK_ARCHIVE_DATA.filter(item => item.date && item.date.startsWith(monthKey));
           const activeDays = currentMonthData.map(item => parseInt(item.date.split('-')[2]));
+          
+          if (state.selectedDate && !state.selectedDate.startsWith(monthKey)) {
+            state.selectedDate = null;
+          }
+
           let calGrid = '';
           for(let i=0; i<firstDay; i++) calGrid += `<div></div>`;
           for(let d=1; d<=daysInMonth; d++) {
@@ -797,15 +1014,25 @@
             const isToday = todayStr === dateStr;
             calGrid += `<div onclick="setSelectedDate('${dateStr}')" class="flex flex-col items-center justify-center h-12 cursor-pointer group"><div class="w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${isSelected ? 'bg-red-600 text-white' : isToday ? 'text-red-500 bg-neutral-800' : 'text-gray-300 group-hover:bg-neutral-800'}">${d}</div>${activeDays.includes(d) ? `<div class="w-1 h-1 bg-red-500 rounded-full mt-0.5"></div>` : ''}</div>`;
           }
-          let dailyData = getSortedData(MOCK_ARCHIVE_DATA.filter(item => item.date === state.selectedDate));
+          
+          let displayData = [];
+          let displayTitle = '';
+          if (state.selectedDate) {
+            displayData = getSortedData(MOCK_ARCHIVE_DATA.filter(item => item.date === state.selectedDate));
+            displayTitle = `${state.selectedDate} ${T.calAdmin}`;
+          } else {
+            displayData = getSortedData(currentMonthData);
+            displayTitle = `${state.viewMonth}${T.month} ${T.calAdmin}`;
+          }
+
           contentHTML = `
             <div class="animate-in fade-in duration-300">
               ${getCalendarHeaderHTML()}
               <div class="grid grid-cols-7 text-[10px] text-gray-500 font-bold mb-2 text-center"><div>${T.daySun}</div><div>${T.dayMon}</div><div>${T.dayTue}</div><div>${T.dayWed}</div><div>${T.dayThu}</div><div>${T.dayFri}</div><div>${T.daySat}</div></div>
               <div class="grid grid-cols-7 gap-y-1 mb-8">${calGrid}</div>
               <div class="border-t border-neutral-800 pt-6">
-                <div class="flex items-center justify-between mb-4 border-l-4 border-red-600 pl-3"><h3 class="font-bold text-gray-200">${state.selectedDate} ${T.calAdmin}</h3><button onclick="openAdminModal()" class="text-[10px] font-bold text-red-500">${T.add}</button></div>
-                <div class="flex flex-col gap-3">${dailyData.length > 0 ? dailyData.map(item => createAdminCardHTML(item)).join('') : `<div class="text-center text-gray-500 text-sm py-10">${T.empty}</div>`}</div>
+                <div class="flex items-center justify-between mb-4 border-l-4 border-red-600 pl-3"><h3 class="font-bold text-gray-200">${displayTitle}</h3><button onclick="openAdminModal(null, false)" class="text-[10px] font-bold text-red-500">${T.add}</button></div>
+                <div class="flex flex-col gap-3">${displayData.length > 0 ? displayData.map(item => createAdminCardHTML(item)).join('') : `<div class="text-center text-gray-500 text-sm py-10">${T.guideContact}</div>`}</div>
               </div>
             </div>
           `;
@@ -818,7 +1045,6 @@
               <div class="mb-6 px-1">
                 <h2 class="text-xl font-bold text-white flex items-center gap-2 mb-4"><i data-lucide="download-cloud" class="w-5 h-5 text-red-500"></i> ${T.importTitle}</h2>
                 
-                <!-- 신규: 트위터 수집 UI -->
                 <div class="bg-[#1a1a1a] border border-neutral-800 rounded-2xl p-4 flex flex-col gap-4 mb-6">
                   <div class="flex items-center gap-2 mb-1">
                     <i data-lucide="twitter" class="w-4 h-4 text-[#1DA1F2]"></i>
@@ -843,7 +1069,6 @@
 
                 <div class="border-b border-neutral-800 mb-6"></div>
 
-                <!-- 기존: Raw Contents 조회 및 게시 UI -->
                 <div class="flex items-center gap-2 mb-3">
                   <i data-lucide="database" class="w-4 h-4 text-gray-400"></i>
                   <h3 class="font-bold text-sm text-gray-300">Raw 데이터 조회 및 게시</h3>
@@ -863,9 +1088,14 @@
                       <input type="checkbox" id="import-select-all" onchange="toggleImportSelectAll(event)" ${allSelected ? 'checked' : ''} class="w-4 h-4 rounded bg-[#111] border-neutral-700 text-red-600 focus:ring-red-600">
                       <span>전체 선택</span>
                     </label>
-                    <button id="bulk-publish-btn" onclick="publishSelectedRawData()" class="bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg active:scale-95 transition-all flex items-center gap-1">
-                      <i data-lucide="send" class="w-3 h-3"></i> 선택 게시하기 <span id="bulk-publish-count">${selectedCount > 0 ? `(${selectedCount}개)` : ''}</span>
-                    </button>
+                    <div class="flex gap-2">
+                      <button id="bulk-delete-btn" onclick="deleteRawData(event)" class="bg-red-900/20 text-red-500 hover:text-red-400 text-xs font-bold px-3 py-2 rounded-lg active:scale-95 transition-all flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> 선택 삭제
+                      </button>
+                      <button id="bulk-publish-btn" onclick="publishSelectedRawData(event)" class="bg-red-600 text-white text-xs font-bold px-3 py-2 rounded-lg active:scale-95 transition-all flex items-center gap-1">
+                        <i data-lucide="send" class="w-3 h-3"></i> 선택 게시 <span id="bulk-publish-count">${selectedCount > 0 ? `(${selectedCount}개)` : ''}</span>
+                      </button>
+                    </div>
                   </div>
                 ` : ''}
 
@@ -883,7 +1113,9 @@
                               <div class="text-xs font-bold text-white line-clamp-1">${item.title}</div>
                             </div>
                             <div class="flex gap-2 mt-2 justify-end">
-                              <button id="publish-btn-${idx}" onclick="publishSelectedRawData(${idx})" class="text-[10px] font-bold bg-neutral-800 hover:bg-red-600 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg active:scale-95 transition-all flex items-center gap-1"><i data-lucide="send" class="w-3 h-3"></i> 게시하기</button>
+                              <button onclick="openAdminModal(${idx}, true)" class="text-[10px] font-bold bg-neutral-800 hover:bg-neutral-700 text-gray-300 hover:text-white px-3 py-1.5 rounded-lg active:scale-95 transition-all flex items-center gap-1"><i data-lucide="edit-3" class="w-3 h-3"></i> 수정</button>
+                              <button id="del-raw-btn-${idx}" onclick="deleteRawData(${idx})" class="text-[10px] font-bold bg-red-900/10 hover:bg-red-900/30 text-red-500 hover:text-red-400 px-3 py-1.5 rounded-lg active:scale-95 transition-all flex items-center gap-1"><i data-lucide="trash-2" class="w-3 h-3"></i> 삭제</button>
+                              <button id="publish-btn-${idx}" onclick="publishSelectedRawData(${idx})" class="text-[10px] font-bold bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg active:scale-95 transition-all flex items-center gap-1"><i data-lucide="send" class="w-3 h-3"></i> 게시하기</button>
                             </div>
                           </div>
                         </div>
@@ -895,28 +1127,44 @@
             </div>
           `;
         }
+
         if (state.isEditModalOpen) {
-          const isEdit = state.adminEditingId !== null;
-          const targetItem = isEdit ? MOCK_ARCHIVE_DATA.find(d => d.id === state.adminEditingId) : null;
-          const item = targetItem || { mainType: state.adminTempMainType, type: '', date: state.selectedDate || todayStr, title: '', img: '', link: '', rawKeywords: '' };
-          let displayDate = item.date;
+          let item = { mainType: state.adminTempMainType, type: '', date: state.selectedDate || todayStr, title: '', img: '', link: '', rawKeywords: '' };
+          if (state.adminEditingId !== null) {
+            item = state.adminEditingRaw ? IMPORTED_TEMP_DATA[state.adminEditingId] : MOCK_ARCHIVE_DATA.find(d => d.id === Number(state.adminEditingId));
+          }
+          let displayDate = item.date || '';
           if (displayDate && !displayDate.includes('-') && displayDate.length === 8) displayDate = `${displayDate.slice(0,4)}-${displayDate.slice(4,6)}-${displayDate.slice(6,8)}`;
+          
           contentHTML += `
             <div class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onclick="event.stopPropagation()">
               <form onsubmit="saveData(event)" class="bg-[#1a1a1a] w-full max-sm rounded-2xl p-6 border border-neutral-700 flex flex-col gap-4 animate-in zoom-in-95 duration-200 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
-                <h3 class="font-bold text-lg text-white">${isEdit ? T.edit : T.add}</h3>
+                <div class="flex justify-between items-center">
+                  <h3 class="font-bold text-lg text-white">${state.adminEditingRaw ? "Raw 데이터 수정" : (state.adminEditingId !== null ? T.edit : T.add)}</h3>
+                  <button type="button" onclick="closeAdminModal()" class="text-gray-500 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
-                  <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.mainCat}</label><select id="form-mainType" onchange="adminMainTypeChange(this.value)" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none">${Object.keys(CATEGORIES).map(k => `<option value="${k}" ${k === state.adminTempMainType ? 'selected' : ''}>${getT(k)}</option>`).join('')}</select></div>
-                  <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.subCat}</label><select id="form-type" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none">${(CATEGORIES[state.adminTempMainType] || []).map(k => `<option value="${k}" ${item.type === k ? 'selected' : ''}>${getT(k)}</option>`).join('')}</select></div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[10px] text-gray-500 font-bold ml-1">${T.subCat}</label>
+                    <select id="form-type" onchange="handleAdminSubCatChange(this.value)" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none">
+                      ${Object.values(CATEGORIES).flat().map(k => `<option value="${k}" ${item.type === k ? 'selected' : ''}>${getT(k)}</option>`).join('')}
+                    </select>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <label class="text-[10px] text-gray-500 font-bold ml-1">${T.mainCat}</label>
+                    <select id="form-mainType" disabled class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-gray-400 focus:outline-none opacity-70">
+                      ${Object.keys(CATEGORIES).map(k => `<option value="${k}" ${k === state.adminTempMainType ? 'selected' : ''}>${getT(k)}</option>`).join('')}
+                    </select>
+                  </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                   <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.date}</label><input type="date" id="form-date" value="${displayDate}" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"></div>
                   <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.keywordCat}</label><select id="form-keywords" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"><option value="">${T.all}</option>${KEYWORDS.map(kw => `<option value="${kw}" ${item.rawKeywords === kw ? 'selected' : ''}>${getT(kw)}</option>`).join('')}</select></div>
                 </div>
-                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.title}</label><input type="text" id="form-title" placeholder="${T.title}" value="${item.title.replace(/"/g, '&quot;')}" required class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"></div>
-                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.landingLink}</label><input type="url" id="form-link" value="${item.link}" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"></div>
-                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.thumbUrl}</label><div class="flex gap-2"><input type="url" id="form-img" value="${item.img}" class="flex-1 bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"><button type="button" id="btn-extract" onclick="extractThumbnail()" class="shrink-0 bg-neutral-800 hover:bg-neutral-700 px-4 py-2 rounded-xl text-xs font-bold text-gray-300 transition-colors flex items-center gap-1"><i data-lucide="image-plus" class="w-4 h-4"></i> ${T.extract}</button></div></div>
-                <div class="flex justify-end gap-2 mt-4"><button type="button" onclick="closeAdminModal()" class="px-5 py-2.5 text-xs bg-neutral-800 hover:bg-neutral-700 rounded-xl font-bold text-gray-300 transition-colors">${T.cancel}</button><button type="submit" class="px-5 py-2.5 text-xs bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white shadow-lg shadow-red-900/40 transition-colors">${T.save}</button></div>
+                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.title}</label><input type="text" id="form-title" placeholder="${T.title}" value="${(item.title || '').replace(/"/g, '&quot;')}" required class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"></div>
+                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.landingLink}</label><input type="url" id="form-link" value="${item.link || ''}" class="bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"></div>
+                <div class="flex flex-col gap-1"><label class="text-[10px] text-gray-500 font-bold ml-1">${T.thumbUrl}</label><div class="flex gap-2"><input type="url" id="form-img" value="${item.img || ''}" class="flex-1 bg-[#111] border border-neutral-700 rounded-xl p-3 text-xs text-white focus:outline-none"><button type="button" id="btn-extract" onclick="extractThumbnail()" class="shrink-0 bg-neutral-800 hover:bg-neutral-700 px-4 py-2 rounded-xl text-xs font-bold text-gray-300 transition-colors flex items-center gap-1"><i data-lucide="image-plus" class="w-4 h-4"></i> ${T.extract}</button></div></div>
+                <div class="flex justify-end gap-2 mt-4"><button type="button" onclick="closeAdminModal()" class="px-5 py-2.5 text-xs bg-neutral-800 hover:bg-neutral-700 rounded-xl font-bold text-gray-300 transition-colors">${T.cancel}</button><button type="submit" id="modal-save-btn" class="px-5 py-2.5 text-xs bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white shadow-lg shadow-red-900/40 transition-colors">${T.save}</button></div>
               </form>
             </div>
           `;
@@ -927,7 +1175,7 @@
         document.getElementById('search-container').style.display = 'block';
 
         if (state.activeMainTab === 'keyword') {
-          let keywordData = MOCK_ARCHIVE_DATA.filter(item => { if (state.activeKeyword === '전체') return item.rawKeywords && item.rawKeywords.trim() !== ''; return item.searchData.includes(state.activeKeyword.toLowerCase()); });
+          let keywordData = MOCK_ARCHIVE_DATA.filter(item => { if (state.activeKeyword === '전체') return item.rawKeywords && item.rawKeywords.trim() !== ''; return (item.rawKeywords === state.activeKeyword); });
           keywordData = getSortedData(getSearchFilteredData(keywordData));
           const visibleData = keywordData.slice(0, state.displayLimit);
           contentHTML = `
@@ -943,8 +1191,9 @@
           archiveData = getSortedData(getSearchFilteredData(archiveData));
           const visibleData = archiveData.slice(0, state.displayLimit);
           contentHTML = `
+            ${getGuideHTML()}
             <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-4 pb-1">${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600 text-white' : 'border-transparent text-gray-500'}">${getT(tab)}</button>`).join('')}</div>
-            ${state.activeSubTab !== '전체 보기' ? `<div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800"><div class="flex flex-wrap gap-1.5"><button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === '전체' ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${T.all}</button>${(CATEGORIES[state.activeSubTab] || []).map(cat => `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === cat ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${getT(cat)}</button>`).join('')}</div></div>` : ''}
+            ${state.activeSubTab !== '전체 보기' ? `<div class="bg-[#1a1a1a] rounded-2xl p-3 mb-6 border border-neutral-800"><div class="flex wrap gap-1.5"><button onclick="setCategory('전체')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === '전체' ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${T.all}</button>${(CATEGORIES[state.activeSubTab] || []).map(cat => `<button onclick="setCategory('${cat}')" class="px-2.5 py-1 rounded-full text-[11px] border ${state.activeCategory === cat ? 'bg-red-600 border-red-600 text-white' : 'border-neutral-600 text-gray-400'}">${getT(cat)}</button>`).join('')}</div></div>` : ''}
             <div class="flex justify-between items-center mb-4 text-xs text-gray-400"><span>${T.total} ${archiveData.length}${T.unit}</span><button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? T.latest : T.oldest}</button></div>
             <div class="grid grid-cols-2 gap-3">${visibleData.map(item => createCardHTML(item)).join('')}</div>
             ${archiveData.length > state.displayLimit ? `<button onclick="loadMore()" class="w-full mt-8 py-3 bg-[#1a1a1a] border border-neutral-800 rounded-xl text-xs font-bold text-gray-400 hover:text-white transition-colors">${T.more}</button>` : ''}
@@ -954,8 +1203,12 @@
           const firstDay = new Date(state.viewYear, state.viewMonth - 1, 1).getDay();
           const monthKey = `${state.viewYear}-${String(state.viewMonth).padStart(2, '0')}`;
           const currentMonthData = MOCK_ARCHIVE_DATA.filter(item => item.date && item.date.startsWith(monthKey));
-          const monthlyTotal = currentMonthData.length;
           const activeDays = currentMonthData.map(item => parseInt(item.date.split('-')[2]));
+          
+          if (state.selectedDate && !state.selectedDate.startsWith(monthKey)) {
+            state.selectedDate = null;
+          }
+
           let calGrid = '';
           for(let i=0; i<firstDay; i++) calGrid += `<div></div>`;
           for(let d=1; d<=daysInMonth; d++) {
@@ -964,7 +1217,18 @@
             const isToday = todayStr === dateStr;
             calGrid += `<div onclick="setSelectedDate('${dateStr}')" class="flex flex-col items-center justify-center h-12 cursor-pointer group"><div class="w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${isSelected ? 'bg-red-600 text-white' : isToday ? 'text-red-500 bg-neutral-800' : 'text-gray-300 group-hover:bg-neutral-800'}">${d}</div>${activeDays.includes(d) ? `<div class="w-1 h-1 bg-red-500 rounded-full mt-0.5"></div>` : ''}</div>`;
           }
-          let dailyData = getSortedData(getSearchFilteredData(currentMonthData));
+          
+          let displayData = [];
+          let displayTitle = '';
+          
+          if (state.selectedDate) {
+            displayData = getSortedData(getSearchFilteredData(MOCK_ARCHIVE_DATA.filter(item => item.date === state.selectedDate)));
+            displayTitle = `${state.selectedDate} (${displayData.length}${T.unit})`;
+          } else {
+            displayData = getSortedData(getSearchFilteredData(currentMonthData));
+            displayTitle = `${state.viewMonth}${T.month} ${T.archive} (${displayData.length}${T.unit})`;
+          }
+          
           contentHTML = `
             <div class="animate-in fade-in duration-300">
               ${getCalendarHeaderHTML()}
@@ -972,9 +1236,9 @@
               <div class="grid grid-cols-7 gap-y-1 mb-8">${calGrid}</div>
               <div class="border-t border-neutral-800 pt-6">
                 <div class="flex items-center gap-2 mb-4 border-l-4 border-red-600 pl-3">
-                  <h3 class="font-bold text-gray-200">${state.viewMonth}${T.month} ${T.total} (${monthlyTotal}${T.unit})</h3>
+                  <h3 class="font-bold text-gray-200">${displayTitle}</h3>
                 </div>
-                <div class="grid grid-cols-2 gap-3">${dailyData.length > 0 ? dailyData.map(item => createCardHTML(item)).join('') : `<div class="col-span-2 text-center text-gray-500 text-sm py-10">${T.empty}</div>`}</div>
+                <div class="grid grid-cols-2 gap-3">${displayData.length > 0 ? displayData.map(item => createCardHTML(item)).join('') : `<div class="col-span-2 text-center text-gray-500 text-sm py-10">${T.empty}</div>`}</div>
               </div>
             </div>
           `;
