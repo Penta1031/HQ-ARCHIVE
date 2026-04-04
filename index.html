@@ -479,7 +479,7 @@
       if (failCount > 0) {
         alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
       } else {
-        alert(`총 ${successCount}건のデータが Raw シートから正常に削除されました。`);
+        alert(`총 ${successCount}건의 데이터가 Raw 시트에서 성공적으로 삭제되었습니다.`);
       }
       
       render();
@@ -667,7 +667,8 @@
       render();
 
       try {
-        const res = await fetch(RAW_SHEET_URL);
+        // 캐시 무시를 위해 URL 끝에 현재 시간 타임스탬프 추가
+        const res = await fetch(RAW_SHEET_URL + '&t=' + new Date().getTime(), { cache: 'no-store' });
         const text = await res.text();
         const rows = parseCSV(text);
 
@@ -831,7 +832,8 @@
 
     async function loadSheetData() {
       try {
-        const res = await fetch(SHEET_URL);
+        // 캐시 무시를 위해 URL 끝에 현재 시간 타임스탬프 추가
+        const res = await fetch(SHEET_URL + '&t=' + new Date().getTime(), { cache: 'no-store' });
         const text = await res.text();
         const rows = parseCSV(text);
 
