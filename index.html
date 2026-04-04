@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HQ ARCHIVE</title>
   
-  <!-- Open Graph & Twitter Card Meta Tags (썸네일 호환성 강화) -->
+  <!-- Open Graph & Twitter Card Meta Tags -->
   <meta name="description" content="HQ RECORD">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://hq-record.vercel.app/">
@@ -49,7 +49,6 @@
       to { transform: rotate(360deg); }
     }
 
-    /* 다크 모드 캘린더 아이콘 및 팝업 스타일 적용 */
     input[type="date"] {
       color-scheme: dark;
     }
@@ -100,12 +99,19 @@
         <div id="search-hint" class="text-[11px] text-gray-500 mt-2 px-2"></div>
       </div>
       
-      <!-- 아카이브 이용 가이드 영역 (검색창 바로 아래) -->
       <div id="guide-wrapper"></div>
     </header>
 
     <nav id="main-tabs" class="flex px-4 overflow-x-auto scrollbar-hide border-b border-neutral-800 bg-[#111111] shrink-0"></nav>
     <main id="content-area" class="p-4 pb-20 flex-1 overflow-y-auto custom-scrollbar relative"></main>
+
+    <!-- Custom Modal UI -->
+    <div id="custom-modal" class="hidden fixed inset-0 bg-black/80 z-[200] items-center justify-center p-4 backdrop-blur-sm">
+      <div class="bg-[#1a1a1a] w-full max-w-sm rounded-2xl p-6 border border-neutral-700 flex flex-col gap-4 shadow-2xl">
+        <p id="custom-modal-text" class="text-white text-sm text-center font-medium leading-relaxed"></p>
+        <div id="custom-modal-buttons" class="flex justify-center gap-2 mt-2"></div>
+      </div>
+    </div>
 
   </div>
 
@@ -113,16 +119,10 @@
     // 💡 Apps Script 배포 URL
     const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyVg2Dr7RQJpSVG10mXiwc9ecKs2t3K8hIqZ0AUw_D6dqGCENqhJEOvsQk0C6YXkDM1/exec"; 
 
-    // Contents 시트 (메인 데이터) CSV 링크
-    const SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRC80s5f91fT_g0tIDmNTTGbhihJqxC6VeNQ643GjbeVB25_-ycP0Tj-uhaz3d4cqOVkjU829dO8TT3/pub?gid=0&single=true&output=csv`;
-    
-    // Raw Contents 시트 (불러오기 데이터) CSV 링크
-    const RAW_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vRC80s5f91fT_g0tIDmNTTGbhihJqxC6VeNQ643GjbeVB25_-ycP0Tj-uhaz3d4cqOVkjU829dO8TT3/pub?gid=74517521&single=true&output=csv`;
-
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    // ✅ 최종 이미지 데이터 기반 카테고리 업데이트 (정렬 완료)
+    // ✅ 카테고리 순서 및 가나다순 정렬 적용
     const CATEGORIES = {
       '무대영상': ['공항/퇴근길', '대학축제', '버스킹', '쇼케이스', '음악방송', '직캠', '콘서트', '킹덤', '팬미팅', '팬싸인회', '페스티벌', '해외투어'],
       '라이브': ['개인 라이브', '기타 라이브', '단체 라이브', '승구리당당', '승협이 라이브', '우리 얘기 좀 합시다', '인스타그램 라이브', '하루의 마무리'],
@@ -134,8 +134,6 @@
     };
 
     const MAIN_TABS_LIST = ['전체 보기', ...Object.keys(CATEGORIES)];
-    
-    // ✅ 최종 이미지 데이터 기반 키워드 업데이트
     const KEYWORDS = ['모음집', '이마키스', '질투', '친지마', '투샷', '셀카', '하크잖', '커플템'];
 
     const TRANSLATIONS = {
@@ -155,7 +153,6 @@
         guideCalendar: "점이 표시된 날짜를 클릭하면 해당 날짜의 기록을 모아볼 수 있습니다.",
         guideFilter: "카테고리와 상세 분류를 통해 원하는 영상을 빠르게 찾아보세요. (상단 카테고리 메뉴를 옆으로 스크롤할 수 있습니다.)",
         guideContact: "오류 및 기타 문의사항은 @Penta_1031로 문의해 주세요.",
-        scrollHint: "옆으로 넘겨보세요",
         categories: {
           '전체 보기': '전체 보기', '무대영상': '무대영상', '라이브': '라이브', '메시지': '메시지', '유튜브': '유튜브', 'SNS': 'SNS', '미디어': '미디어', '기타': '기타',
           '공항/퇴근길': '공항/퇴근길', '대학축제': '대학축제', '버스킹': '버스킹', '쇼케이스': '쇼케이스', '음악방송': '음악방송', '직캠': '직캠', '콘서트': '콘서트', '킹덤': '킹덤', '팬미팅': '팬미팅', '팬싸인회': '팬싸인회', '페스티벌': '페스티벌', '해외투어': '해외투어',
@@ -184,7 +181,6 @@
         guideCalendar: "Click on dates with dots to see records for that day.",
         guideFilter: "Quickly find videos through categories and detailed filters. (You can scroll the top menus horizontally.)",
         guideContact: "For errors and other inquiries, please contact @Penta_1031.",
-        scrollHint: "Swipe to see more",
         categories: {
           '전체 보기': 'View All', '무대영상': 'Performance', '라이브': 'Live', '메시지': 'Message', '유튜브': 'YouTube', 'SNS': 'SNS', '미디어': 'Media', '기타': 'ETC',
           '공항/퇴근길': 'Airport/Exit', '대학축제': 'Univ Festival', '버스킹': 'Busking', '쇼케이스': 'Showcase', '음악방송': 'Music Show', '직캠': 'Fancam', '콘서트': 'Concert', '킹덤': 'Kingdom', '팬미팅': 'Fanmeeting', '팬싸인회': 'Fansign', '페스티벌': 'Festival', '해외투어': 'World Tour',
@@ -213,7 +209,6 @@
         guideCalendar: "点击带点的日期即可查看当天的记录。",
         guideFilter: "通过类别和详细筛选快速找到您想要的视频。 (您可以横向滑动顶部菜单。)",
         guideContact: "错误及其他咨询请联系 @Penta_1031。",
-        scrollHint: "向侧边滑动查看更多",
         categories: {
           '전체 보기': '全部显示', '무대영상': '舞台视频', '라이브': '直播', '메시지': '消息', '유튜브': 'YouTube', 'SNS': '社群', '미디어': '媒体', '기타': '其他',
           '공항/퇴근길': '机场/下班', '대학축제': '大学庆典', '버스킹': '路演', '쇼케이스': 'Showcase', '음악방송': '打歌节目', '직캠': '直拍', '콘서트': '演唱会', '킹덤': 'Kingdom', '팬미팅': '见面会', '팬싸인회': '签售会', '페스티벌': '音乐节', '해외투어': '海外巡演',
@@ -242,7 +237,6 @@
         guideCalendar: "点が表示された日付をクリックすると、その日の記録をまとめて表示します。",
         guideFilter: "カテゴリーと詳細分類を通じて、目的の動画を素早く見つけてください。 (上部のメニューは横にスクロールできます。)",
         guideContact: "エラーおよびその他のお問い合わせは @Penta_1031 までお願いいたします。",
-        scrollHint: "横にスワイプして表示",
         categories: {
           '전체 보기': 'すべて表示', '무대영상': 'ステージ', '라이브': 'ライブ', '메시지': 'メッセージ', '유튜브': 'YouTube', 'SNS': 'SNS', '미디어': 'メディア', '기타': 'その他',
           '공항/퇴근길': '空港/出勤', '대학축제': '学祭', '버스킹': '路上ライブ', '쇼케이스': 'ショーケース', '음악방송': '音楽番組', '직캠': 'ファンカム', '콘서트': 'コンサート', '킹덤': 'KINGDOM', '팬미팅': 'ファンミ', '팬싸인회': 'サイン会', '페스티벌': 'フェス', '해외투어': '海外ツアー',
@@ -267,7 +261,7 @@
       activeMainTab: 'archive', 
       activeSubTab: '전체 보기',
       activeCategory: '전체',
-      activeCategoryMap: {}, // 메인 카테고리별 서브 카테고리 상태 저장
+      activeCategoryMap: {},
       selectedDate: todayStr,
       activeKeyword: '전체',
       viewYear: now.getFullYear(),
@@ -302,20 +296,59 @@
       return TRANSLATIONS[state.lang][key] || "";
     };
 
+    // --- Custom Alert & Confirm ---
+    window.customAlert = function(msg) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('custom-modal');
+        document.getElementById('custom-modal-text').innerText = msg;
+        const btns = document.getElementById('custom-modal-buttons');
+        btns.innerHTML = `<button id="custom-modal-ok" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white text-xs transition-colors shadow-lg">확인</button>`;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.getElementById('custom-modal-ok').onclick = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          resolve();
+        };
+      });
+    };
+
+    window.customConfirm = function(msg) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('custom-modal');
+        document.getElementById('custom-modal-text').innerText = msg;
+        const btns = document.getElementById('custom-modal-buttons');
+        btns.innerHTML = `
+          <button id="custom-modal-cancel" class="px-6 py-2.5 bg-neutral-800 hover:bg-neutral-700 rounded-xl font-bold text-gray-300 text-xs transition-colors">취소</button>
+          <button id="custom-modal-ok" class="px-6 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white text-xs transition-colors shadow-lg">확인</button>
+        `;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        document.getElementById('custom-modal-ok').onclick = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          resolve(true);
+        };
+        document.getElementById('custom-modal-cancel').onclick = () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          resolve(false);
+        };
+      });
+    };
+
     // --- Actions ---
     window.setLanguage = (code) => { state.lang = code; render(); };
     window.setMainTab = (tabId) => { state.activeMainTab = tabId; state.displayLimit = 30; render(); };
     window.setAdminTab = (tabId) => { state.adminTab = tabId; state.displayLimit = 30; render(); };
     window.setSubTab = (tab) => { 
       state.activeSubTab = tab; 
-      // 이전 선택 상태가 있으면 복원, 없으면 '전체'로 설정
       state.activeCategory = state.activeCategoryMap[tab] || '전체'; 
       state.displayLimit = 30; 
       render(); 
     };
     window.setCategory = (cat) => { 
       state.activeCategory = cat; 
-      // 현재 메인 카테고리에서의 선택 상태 저장
       state.activeCategoryMap[state.activeSubTab] = cat;
       state.displayLimit = 30; 
       render(); 
@@ -400,7 +433,7 @@
     };
     
     window.deleteData = async (id) => { 
-      if(confirm("정말 삭제하시겠습니까?")) { 
+      if(await customConfirm("정말 삭제하시겠습니까?")) { 
         const item = MOCK_ARCHIVE_DATA.find(d => d.id === Number(id));
         if (!item) return;
 
@@ -413,20 +446,20 @@
           const result = await res.json();
           if (result.status === "success") {
             MOCK_ARCHIVE_DATA = MOCK_ARCHIVE_DATA.filter(d => d.id !== Number(id)); 
-            alert("메인 시트에서 삭제되었습니다.");
+            await customAlert("메인 시트에서 삭제되었습니다.");
             render(); 
           } else {
             throw new Error(result.message || "Apps Script 오류");
           }
         } catch (err) {
-          alert("삭제 실패: " + err.message);
+          await customAlert("삭제 실패: " + err.message);
         }
       } 
     };
 
     window.deleteRawData = async (indexOrEvent) => {
       if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes("여기에_앱스스크립트")) {
-        return alert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
+        return customAlert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
       }
 
       let selectedIndices = [];
@@ -437,10 +470,10 @@
       }
 
       if (selectedIndices.length === 0) {
-        return alert("선택된 항목이 없습니다.");
+        return customAlert("선택된 항목이 없습니다.");
       }
 
-      if (!confirm(`선택한 ${selectedIndices.length}개의 항목을 Raw 시트에서 영구 삭제하시겠습니까?`)) return;
+      if (!(await customConfirm(`선택한 ${selectedIndices.length}개의 항목을 Raw 시트에서 영구 삭제하시겠습니까?`))) return;
 
       const bulkBtn = document.getElementById('bulk-delete-btn');
       if (bulkBtn) bulkBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 loading-spin inline-block align-middle mr-1"></i> 삭제중...';
@@ -477,9 +510,9 @@
       IMPORTED_TEMP_DATA = IMPORTED_TEMP_DATA.filter(item => !item._deleted);
 
       if (failCount > 0) {
-        alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
+        await customAlert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
       } else {
-        alert(`총 ${successCount}건의 데이터가 Raw 시트에서 성공적으로 삭제되었습니다.`);
+        await customAlert(`총 ${successCount}건의 데이터가 Raw 시트에서 성공적으로 삭제되었습니다.`);
       }
       
       render();
@@ -514,12 +547,12 @@
           const result = await res.json();
           if (result.status === "success") {
             IMPORTED_TEMP_DATA[idx] = { ...item, mainType, type, date, title, img, link, rawKeywords };
-            alert("Raw 데이터가 시트에 성공적으로 수정되었습니다.");
+            await customAlert("Raw 데이터가 시트에 성공적으로 수정되었습니다.");
           } else {
             throw new Error(result.message);
           }
         } catch (err) {
-          alert("수정 실패: " + err.message);
+          await customAlert("수정 실패: " + err.message);
         }
       } else {
         if(state.adminEditingId !== null) {
@@ -542,12 +575,12 @@
                   ...item, mainType, type, date, title, img, link, 
                   searchData: `${title} ${account} ${rawKeywords} ${mainType} ${type} ${date}`.toLowerCase(), rawKeywords 
                 };
-                alert("메인 시트 데이터가 성공적으로 수정되었습니다.");
+                await customAlert("메인 시트 데이터가 성공적으로 수정되었습니다.");
               } else {
                 throw new Error(result.message || "Apps Script 오류");
               }
             } catch(err) {
-              alert("수정 실패: " + err.message);
+              await customAlert("수정 실패: " + err.message);
               if(btn) btn.innerHTML = '저장하기';
               return;
             }
@@ -567,12 +600,12 @@
                 id: Date.now(), mainType, type, date, title, img, link, 
                 searchData: `${title} ${account} ${rawKeywords} ${mainType} ${type} ${date}`.toLowerCase(), rawKeywords, account 
               });
-              alert("메인 시트에 새 데이터가 성공적으로 추가되었습니다.");
+              await customAlert("메인 시트에 새 데이터가 성공적으로 추가되었습니다.");
             } else {
               throw new Error(result.message || "Apps Script 오류");
             }
           } catch(err) {
-            alert("추가 실패: " + err.message);
+            await customAlert("추가 실패: " + err.message);
             if(btn) btn.innerHTML = '저장하기';
             return;
           }
@@ -597,9 +630,9 @@
       const startDate = document.getElementById('twitter-start-date').value;
       const endDate = document.getElementById('twitter-end-date').value;
 
-      if(!twitterId) return alert("트위터 계정 아이디를 입력해주세요.");
-      if(!startDate || !endDate) return alert("수집할 시작 날짜와 종료 날짜를 모두 입력해주세요.");
-      if(startDate > endDate) return alert("시작 날짜가 종료 날짜보다 클 수 없습니다.");
+      if(!twitterId) return customAlert("트위터 계정 아이디를 입력해주세요.");
+      if(!startDate || !endDate) return customAlert("수집할 시작 날짜와 종료 날짜를 모두 입력해주세요.");
+      if(startDate > endDate) return customAlert("시작 날짜가 종료 날짜보다 클 수 없습니다.");
 
       const btn = document.getElementById('twitter-fetch-btn');
       const originalText = btn.innerHTML;
@@ -622,13 +655,13 @@
         const result = await response.json();
         
         if (result.status === "success") {
-          alert(`성공적으로 ${result.count}개의 트윗을 가져와 RawContents 시트에 추가했습니다!`);
+          await customAlert(`성공적으로 ${result.count}개의 트윗을 가져와 Raw 시트에 추가했습니다!`);
           handleImportFetch(); 
         } else {
           throw new Error(result.message || "서버에서 오류가 발생했습니다.");
         }
       } catch (err) {
-        alert("트위터 수집에 실패했습니다. 에러: " + err.message);
+        await customAlert("트위터 수집에 실패했습니다. 에러: " + err.message);
       } finally {
         btn.innerHTML = originalText;
         lucide.createIcons();
@@ -662,12 +695,12 @@
       if (countSpan) countSpan.innerText = selectedCount > 0 ? `(${selectedCount}개)` : '';
     }
 
-    // 👇 수정된 부분 1 (Raw 데이터 우회 가져오기)
     window.handleImportFetch = async () => {
       state.isLoading = true;
       render();
 
       try {
+        // 🚀 [해결됨] 프론트엔드에서 직접 시트를 가져오지 않고 우회(Proxy) 요청
         const res = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -716,7 +749,7 @@
 
         state.hasSearchedImport = true;
       } catch (err) {
-        alert("Raw 데이터를 불러오지 못했습니다. 에러: " + err.message);
+        await customAlert("Raw 데이터를 불러오지 못했습니다. 에러: " + err.message);
       }
       
       state.isLoading = false;
@@ -725,7 +758,7 @@
 
     window.publishSelectedRawData = async (indexOrEvent) => {
       if (!GAS_WEB_APP_URL || GAS_WEB_APP_URL.includes("여기에_앱스스크립트")) {
-        return alert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
+        return customAlert("Google Apps Script 웹 앱 URL이 설정되지 않았습니다.");
       }
 
       let selectedIndices = [];
@@ -736,10 +769,10 @@
       }
 
       if (selectedIndices.length === 0) {
-        return alert("선택된 항목이 없습니다.");
+        return customAlert("선택된 항목이 없습니다.");
       }
 
-      if (!confirm(`선택한 ${selectedIndices.length}개의 항목을 게시하겠습니까?`)) return;
+      if (!(await customConfirm(`선택한 ${selectedIndices.length}개의 항목을 게시하겠습니까?`))) return;
 
       const bulkBtn = document.getElementById('bulk-publish-btn');
       if(bulkBtn) bulkBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 loading-spin inline-block align-middle mr-1"></i> 처리중...';
@@ -784,9 +817,9 @@
       IMPORTED_TEMP_DATA = IMPORTED_TEMP_DATA.filter(item => !item._published);
 
       if (failCount > 0) {
-        alert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
+        await customAlert(`부분 실패가 발생했습니다.\n- 성공: ${successCount}건\n- 실패: ${failCount}건\n\n[마지막 에러] ${lastError}`);
       } else {
-        alert(`총 ${successCount}건의 데이터가 시트에 성공적으로 게시되었습니다.`);
+        await customAlert(`총 ${successCount}건의 데이터가 시트에 성공적으로 게시되었습니다.`);
       }
       
       render();
@@ -794,7 +827,7 @@
 
     window.extractThumbnail = async (e) => {
       const link = document.getElementById('form-link').value.trim();
-      if(!link) return alert("랜딩 링크를 먼저 입력해주세요.");
+      if(!link) return customAlert("랜딩 링크를 먼저 입력해주세요.");
       state.isExtracting = true;
       const btn = document.getElementById('btn-extract');
       if(btn) btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 loading-spin inline-block align-middle mr-1"></i>';
@@ -804,8 +837,8 @@
         const data = await response.json();
         if (data.status === 'success' && data.data.image && data.data.image.url) {
           document.getElementById('form-img').value = data.data.image.url;
-        } else { alert("이미지를 찾을 수 없습니다."); }
-      } catch (err) { alert("추출 중 오류 발생"); } finally {
+        } else { customAlert("이미지를 찾을 수 없습니다."); }
+      } catch (err) { customAlert("추출 중 오류 발생"); } finally {
         state.isExtracting = false;
         const T = TRANSLATIONS[state.lang];
         if(btn) btn.innerHTML = `<i data-lucide="image-plus" class="w-4 h-4 inline-block align-middle mr-1"></i> ${T.extract}`;
@@ -840,9 +873,9 @@
       return arr;
     }
 
-    // 👇 수정된 부분 2 (메인 데이터 우회 가져오기)
     async function loadSheetData() {
       try {
+        // 🚀 [해결됨] 프론트엔드에서 직접 시트를 가져오지 않고 우회(Proxy) 요청
         const res = await fetch(GAS_WEB_APP_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
@@ -1016,7 +1049,6 @@
       const searchHint = document.getElementById('search-hint');
       if(searchHint) searchHint.innerText = T.searchHint;
 
-      // 가이드 렌더링 (검색창 밑 고정 영역)
       const guideWrapper = document.getElementById('guide-wrapper');
       if (guideWrapper) {
         guideWrapper.innerHTML = state.isAdminMode ? '' : getGuideHTML();
@@ -1248,7 +1280,7 @@
           keywordData = getSortedData(getSearchFilteredData(keywordData));
           const visibleData = keywordData.slice(0, state.displayLimit);
           contentHTML = `
-            <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-4 pb-1">
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-4 pb-1 mt-2">
               ${['전체', ...KEYWORDS].map(kw => `<button onclick="setKeyword('${kw}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold border ${state.activeKeyword === kw ? 'bg-neutral-800 border-neutral-600 text-white' : 'border-transparent text-gray-500'}">${kw === '전체' ? T.all : getT(kw)}</button>`).join('')}
             </div>
             <div class="flex justify-between items-center mb-4 text-xs text-gray-400"><span>${T.total} ${keywordData.length}${T.unit}</span><button onclick="toggleSort()" class="flex items-center gap-1"><i data-lucide="arrow-up-down" class="w-3 h-3"></i>${state.sortOrder === 'desc' ? T.latest : T.oldest}</button></div>
@@ -1260,7 +1292,7 @@
           archiveData = getSortedData(getSearchFilteredData(archiveData));
           const visibleData = archiveData.slice(0, state.displayLimit);
           contentHTML = `
-            <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-3 pb-1">${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600 text-white' : 'border-transparent text-gray-500'}">${getT(tab)}</button>`).join('')}</div>
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide mb-3 pb-1 mt-2">${MAIN_TABS_LIST.map(tab => `<button onclick="setSubTab('${tab}')" class="whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold border ${state.activeSubTab === tab ? 'bg-neutral-800 border-neutral-600 text-white' : 'border-transparent text-gray-500'}">${getT(tab)}</button>`).join('')}</div>
             ${state.activeSubTab !== '전체 보기' ? `
               <div class="mb-6 -mt-1">
                 <div class="flex flex-wrap gap-1.5">
