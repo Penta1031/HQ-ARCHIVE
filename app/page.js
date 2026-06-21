@@ -9,8 +9,30 @@ import {
 import { archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
 
 const pad = (n) => String(n).padStart(2, "0");
-const today = new Date(2026, 5, 21);
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const KST_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+const getKstDate = (date = new Date()) => {
+  const parts = Object.fromEntries(KST_DATE_FORMATTER.formatToParts(date).map(({ type, value }) => [type, value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+function useKstToday() {
+  const [date, setDate] = useState("");
+  useEffect(() => {
+    const sync = () => setDate((current) => {
+      const next = getKstDate();
+      return current === next ? current : next;
+    });
+    sync();
+    const timer = window.setInterval(sync, 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return date;
+}
 const cn = (...classes) => classes.filter(Boolean).join(" ");
 const MAIN_CATEGORY_ORDER = ["전체", "무대영상", "라이브", "유튜브", "미디어", "SNS", "메시지", "기타"];
 const CATEGORY_MAP = {
@@ -113,7 +135,8 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
   const [keywordLoaded, setKeywordLoaded] = useState(false);
   const [todayItems, setTodayItems] = useState([]);
   const [todayLoading, setTodayLoading] = useState(false);
-  const [todayLoaded, setTodayLoaded] = useState(false);
+  const [todayLoadedDate, setTodayLoadedDate] = useState("");
+  const todayDate = useKstToday();
   const mains = MAIN_CATEGORY_ORDER;
   const subs = ["전체", ...(mainCategory === "전체" ? SUB_CATEGORY_OPTIONS : (CATEGORY_MAP[mainCategory] || []))];
 
@@ -133,10 +156,11 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
     keywordService.list().then(setKeywordData).catch(() => setKeywordData({items:[],tags:[]})).finally(() => { setKeywordLoading(false); setKeywordLoaded(true); });
   }, [subTab, keywordLoaded, keywordLoading]);
   useEffect(() => {
-    if (subTab !== "today" || todayLoaded || todayLoading) return;
+    if (!todayDate || subTab !== "today" || todayLoadedDate === todayDate || todayLoading) return;
+    const requestedDate = todayDate;
     setTodayLoading(true);
-    archiveService.today({ monthDay: formatDate(today).slice(5) }).then((result) => setTodayItems(result.items.filter((item) => item.date !== formatDate(today)))).catch(() => setTodayItems([])).finally(() => { setTodayLoading(false); setTodayLoaded(true); });
-  }, [subTab, todayLoaded, todayLoading]);
+    archiveService.today({ monthDay: requestedDate.slice(5) }).then((result) => setTodayItems(result.items.filter((item) => item.date !== requestedDate))).catch(() => setTodayItems([])).finally(() => { setTodayLoading(false); setTodayLoadedDate(requestedDate); });
+  }, [subTab, todayDate, todayLoadedDate, todayLoading]);
   useEffect(() => { if (initialKeyword) { setQuery(`#${initialKeyword}`); setSubTab("archive"); onKeywordConsumed(); } }, [initialKeyword, onKeywordConsumed]);
 
   const loadMore = async () => {
@@ -169,7 +193,7 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
         {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? "다음 30개 불러오는 중…" : "더보기 (+30)"}</button>}
       </div>}
       {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
-      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} />}
+      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} />}
     </div>
   );
 }
@@ -213,9 +237,10 @@ function KeywordView({ items, tags, query }) {
   </div>;
 }
 
-function TodayView({ items, loading = false }) {
-  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">21</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">6월 21일의 기록</h2></div>
-    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = today.getFullYear() - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
+function TodayView({ items, loading = false, todayDate = "" }) {
+  const [year, month, day] = (todayDate || "0-0-0").split("-").map(Number);
+  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? `${month}월 ${day}일의 기록` : "오늘의 기록"}</h2></div>
+    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
   </div>;
 }
 
@@ -516,7 +541,9 @@ function WorldcupAdmin({ onBack }) {
 }
 
 function ArchiveAdmin({ items, onBack, onReload }) {
-  const blank = { title: "", date: formatDate(new Date()), link: "", account: "", mainCategory: "무대영상", subCategory: "음악방송", rawKeywords: "", thumbnailUrl: "" };
+  const adminToday = getKstDate();
+  const [adminTodayYear, adminTodayMonth] = adminToday.split("-").map(Number);
+  const blank = { title: "", date: adminToday, link: "", account: "", mainCategory: "무대영상", subCategory: "음악방송", rawKeywords: "", thumbnailUrl: "" };
   const [adminTab, setAdminTab] = useState("list");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank);
@@ -530,9 +557,9 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   const [selectedMain, setSelectedMain] = useState([]);
   const [bulkDate, setBulkDate] = useState("");
   const [bulkSub, setBulkSub] = useState("");
-  const [adminYear, setAdminYear] = useState(today.getFullYear());
-  const [adminMonth, setAdminMonth] = useState(today.getMonth() + 1);
-  const [adminDate, setAdminDate] = useState(formatDate(today));
+  const [adminYear, setAdminYear] = useState(adminTodayYear);
+  const [adminMonth, setAdminMonth] = useState(adminTodayMonth);
+  const [adminDate, setAdminDate] = useState(adminToday);
   const [rawItems, setRawItems] = useState([]);
   const [rawLoaded, setRawLoaded] = useState(false);
   const [selectedRaw, setSelectedRaw] = useState([]);
