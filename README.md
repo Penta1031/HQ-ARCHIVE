@@ -2,6 +2,10 @@
 
 흩어져 있던 팬 아카이브, 월드컵, 포타 검색기, N년 전 오늘을 하나로 모은 모바일 웹앱입니다.
 
+## 미리보기
+
+https://penta1031.github.io/hq-record-archive/
+
 ## 시작하기
 
 ```bash
