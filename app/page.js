@@ -7,7 +7,7 @@ import {
   ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, UserRound, X
 } from "lucide-react";
 import { postypeItems } from "../lib/data";
-import { archiveService, keywordService, worldcupService } from "../lib/services";
+import { archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
 
 const pad = (n) => String(n).padStart(2, "0");
 const today = new Date(2026, 5, 21);
@@ -267,6 +267,13 @@ async function resolveTweetMedia(sourceUrl) {
     try {
       const source = new URL(sourceUrl);
       if (/pbs\.twimg\.com|video\.twimg\.com/i.test(source.hostname)) return { url: sourceUrl, isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(sourceUrl) };
+      try {
+        const serverMedia = await Promise.race([
+          tweetMediaService.resolve(sourceUrl),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),2500))
+        ]);
+        if (serverMedia?.url) return { ...serverMedia, isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
+      } catch {}
       const match = source.pathname.match(/\/([^/]+)\/(?:status|statuses)\/(\d+)/i);
       if (!match) return null;
       const path = `/${match[1]}/status/${match[2]}`;
