@@ -22,16 +22,21 @@ function getMainPage_(sheet, requestData) {
   var lastRow = sheet.getLastRow();
   var totalRows = Math.max(0, lastRow - 1);
 
-  // 기본 전체 조회는 필요한 30행만 바로 읽습니다.
-  // Contents 시트가 오래된 기록 -> 최신 기록 순으로 추가되는 구조를 전제로 합니다.
+  // 시트는 서버 내부에서 한 번에 읽고 날짜순으로 정렬합니다.
+  // 브라우저에는 현재 페이지 30개만 전송하여 기존 전체 전송 병목을 없앩니다.
   if (!query && mainCategory === "전체" && subCategory === "전체") {
+    var cache = CacheService.getScriptCache();
+    var cacheKey = "hq-main-page-" + page + "-" + limit + "-" + sortOrder;
+    var cached = cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
     var startOffset = (page - 1) * limit;
     if (startOffset >= totalRows) return { status: "success", data: [], total: totalRows, page: page, hasMore: false };
-    var rowCount = Math.min(limit, totalRows - startOffset);
-    var startRow = sortOrder === "desc" ? Math.max(2, lastRow - startOffset - rowCount + 1) : 2 + startOffset;
-    var rows = sheet.getRange(startRow, 1, rowCount, 8).getDisplayValues();
-    if (sortOrder === "desc") rows.reverse();
-    return { status: "success", data: rows, total: totalRows, page: page, hasMore: startOffset + rowCount < totalRows };
+    var rows = sheet.getRange(2, 1, totalRows, 8).getDisplayValues();
+    rows.sort(function(a, b) { var compared = String(a[1]).localeCompare(String(b[1])); return sortOrder === "asc" ? compared : -compared; });
+    var selected = rows.slice(startOffset, startOffset + limit);
+    var response = { status: "success", data: selected, total: totalRows, page: page, hasMore: startOffset + selected.length < totalRows };
+    cache.put(cacheKey, JSON.stringify(response), 120);
+    return response;
   }
 
   // 검색·필터는 서버에서 처리하고 현재 페이지 30개만 전송합니다.
@@ -45,6 +50,14 @@ function getMainPage_(sheet, requestData) {
   filtered.sort(function(a, b) { return sortOrder === "asc" ? String(a[1]).localeCompare(String(b[1])) : String(b[1]).localeCompare(String(a[1])); });
   var start = (page - 1) * limit;
   return { status: "success", data: filtered.slice(start, start + limit), total: filtered.length, page: page, hasMore: start + limit < filtered.length };
+}
+
+function clearArchivePageCache_() {
+  var keys = [];
+  ["asc", "desc"].forEach(function(sortOrder) {
+    for (var page = 1; page <= 20; page++) keys.push("hq-main-page-" + page + "-30-" + sortOrder);
+  });
+  CacheService.getScriptCache().removeAll(keys);
 }
 
 function getCalendarData_(sheet, requestData) {
