@@ -5,8 +5,8 @@ import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
   ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, UserRound, X
 } from "lucide-react";
-import { archiveItems, globalRanking, postypeItems, worldcups } from "../lib/data";
-import { archiveService, keywordService } from "../lib/services";
+import { postypeItems } from "../lib/data";
+import { archiveService, keywordService, worldcupService } from "../lib/services";
 
 const pad = (n) => String(n).padStart(2, "0");
 const today = new Date(2026, 5, 21);
@@ -39,6 +39,11 @@ export default function Page() {
     finally { setAdminLoading(false); }
   };
   const openAdmin = () => { setAdminOpen(true); if (!adminArchives.length && !adminLoading) loadAdminArchives(); };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("cupId") && params.has("winnerId")) setTab("worldcup");
+  }, []);
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
@@ -231,24 +236,135 @@ function CalendarView() {
   </div>;
 }
 
+const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
+const itemKey = (item) => `${item.originalCupId || "cup"}-${item.id}`;
+
+function unifiedWorldcup(cups) {
+  return {
+    id: "all",
+    title: "🦊 혚쾌 월드컵 🐰",
+    icon: "❣️",
+    items: cups.flatMap((cup) => cup.items.map((item) => ({ ...item, originalCupId: cup.id })))
+  };
+}
+
+function CandidateMedia({ item, className = "", controls = false }) {
+  const [media, setMedia] = useState(item.mediaUrl || "");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    setMedia(item.mediaUrl || ""); setFailed(false);
+    if (!item.mediaUrl && item.sourceUrl) {
+      try {
+        const source = new URL(item.sourceUrl);
+        fetch(`https://api.vxtwitter.com${source.pathname}`).then((response) => response.json()).then((data) => {
+          if (active && data.mediaURLs?.[0]) setMedia(data.mediaURLs[0]);
+        }).catch(() => {});
+      } catch {}
+    }
+    return () => { active = false; };
+  }, [item.id, item.mediaUrl, item.sourceUrl]);
+  const isVideo = item.isVideo || /\.mp4(?:$|\?)/i.test(media);
+  if (!media || failed) return <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-950 p-4 text-center text-sm font-black leading-5 text-neutral-300",className)}>{item.name}</div>;
+  if (isVideo) return <video src={media} autoPlay={!controls} controls={controls} loop muted={!controls} playsInline className={cn("h-full w-full object-cover",className)}/>;
+  return <img src={media} alt="" onError={()=>setFailed(true)} className={cn("h-full w-full object-cover",className)}/>;
+}
+
 function WorldcupView() {
-  const [selected, setSelected] = useState(null); const [game, setGame] = useState(null); const [winner, setWinner] = useState(null); const [round, setRound] = useState(0);
-  const start = (cup) => { const candidates = cup.candidates.length >= 2 ? cup.candidates : archiveItems.slice(0,4); setGame(candidates.slice(0,4)); setSelected(null); setWinner(null); setRound(0); };
-  const choose = (candidate) => { if (game.length <= 2) { setWinner(candidate); return; } const otherPair = game.slice(2,4); setGame([candidate, ...otherPair]); setRound(round+1); };
-  if (winner) return <WinnerView winner={winner} onBack={()=>{setWinner(null);setGame(null);}} />;
-  if (game) return <GameView candidates={game.slice(0,2)} round={round} onChoose={choose} onClose={()=>setGame(null)} />;
-  return <div className="pb-4"><section className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">HALL OF FAME</p><h2 className="mt-1 text-2xl font-black">명예의 전당</h2></div><Trophy className="ml-auto text-accent" size={27}/></div>
-    <div className="mt-4 space-y-2">{globalRanking.map((item)=><div key={item.rank} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-2.5"><span className={cn("w-7 text-center text-lg font-black italic",item.rank===1?"text-accent":"text-neutral-600")}>{item.rank}</span><img src={item.imageUrl} alt="" className="h-12 w-12 rounded-xl object-cover"/><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.title}</p><p className="mt-1 text-[10px] text-neutral-600">역대 우승 {item.wins.toLocaleString()}회</p></div>{item.rank===1&&<Crown size={17} className="mr-2 text-accent"/>}</div>)}</div></section>
-    <section className="mt-8"><div className="px-4"><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">CHOOSE YOUR ONE</p><h2 className="mt-1 text-xl font-black">진행 중인 월드컵</h2></div><div className="mt-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 no-scrollbar">{worldcups.map((cup)=><button key={cup.id} onClick={()=>setSelected(cup)} className="w-[76%] shrink-0 snap-center overflow-hidden rounded-3xl border border-white/10 bg-neutral-900 text-left"><div className="relative aspect-[16/10]"><img src={cup.coverUrl} alt="" className="h-full w-full object-cover"/><div className="absolute inset-0 bg-gradient-to-t from-black to-transparent"/><div className="absolute bottom-3 left-3 rounded-full bg-accent p-2"><Play size={15} fill="white"/></div></div><div className="p-4"><h3 className="text-base font-black">{cup.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-500">{cup.description}</p><div className="mt-3 flex items-center text-[10px] font-bold text-neutral-600"><Flame size={12} className="mr-1 text-accent"/>{cup.playCount.toLocaleString()}명 참여</div></div></button>)}</div></section>
-    {selected&&<WorldcupSheet cup={selected} onClose={()=>setSelected(null)} onStart={()=>start(selected)}/>} 
+  const [cups, setCups] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [rankingCup, setRankingCup] = useState(null);
+  const [bracketCup, setBracketCup] = useState(null);
+  const [game, setGame] = useState(null);
+  const [winner, setWinner] = useState(null);
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    worldcupService.list().then((items) => { if (active) setCups(items); }).catch((reason) => { if (active) setError(reason.message || "월드컵 데이터를 불러오지 못했어요."); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const unified = useMemo(() => unifiedWorldcup(cups), [cups]);
+  const globalRanking = useMemo(() => unified.items.filter((item) => item.winCount > 0).sort((a,b)=>b.winCount-a.winCount).slice(0,5), [unified]);
+
+  useEffect(() => {
+    if (loading || deepLinkHandled) return;
+    const params = new URLSearchParams(window.location.search);
+    const cupId = params.get("cupId"); const winnerId = params.get("winnerId");
+    if (cupId && winnerId) {
+      const cup = cupId === "all" ? unified : cups.find((item) => String(item.id) === cupId);
+      const found = cup?.items.find((item) => String(item.id) === winnerId);
+      if (cup && found) { setSelected(cup); setWinner(found); }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    setDeepLinkHandled(true);
+  }, [cups, unified, loading, deepLinkHandled]);
+
+  const start = (cup, size) => {
+    const roundItems = shuffle(cup.items).slice(0, size);
+    setSelected(cup); setWinner(null); setBracketCup(null);
+    setGame({ roundItems, nextRound: [], matchIndex: 0 });
+  };
+
+  const recordWinner = async (picked) => {
+    const originId = picked.originalCupId || selected.id;
+    const originCup = cups.find((cup) => String(cup.id) === String(originId));
+    const updatedCup = originCup ? { ...originCup, items: originCup.items.map((item) => String(item.id) === String(picked.id) ? { ...item, winCount: Number(item.winCount || 0) + 1 } : item) } : null;
+    if (updatedCup) setCups((current) => current.map((cup) => String(cup.id) === String(originId) ? updatedCup : cup));
+    setWinner({ ...picked, winCount: Number(picked.winCount || 0) + 1 }); setGame(null);
+    if (updatedCup) worldcupService.save(updatedCup).catch(() => {});
+  };
+
+  const choose = (picked) => {
+    const advanced = [...game.nextRound, picked];
+    const nextIndex = game.matchIndex + 2;
+    if (nextIndex >= game.roundItems.length) {
+      if (advanced.length === 1) recordWinner(advanced[0]);
+      else setGame({ roundItems: shuffle(advanced), nextRound: [], matchIndex: 0 });
+    } else setGame({ ...game, nextRound: advanced, matchIndex: nextIndex });
+  };
+
+  if (winner) return <WinnerView winner={winner} cup={selected} onBack={()=>{setWinner(null);setSelected(null);}} onAgain={()=>{setWinner(null);setBracketCup(selected);}}/>;
+  if (game) {
+    const candidates = game.roundItems.slice(game.matchIndex, game.matchIndex + 2);
+    return <GameView candidates={candidates} total={game.roundItems.length} matchIndex={game.matchIndex} onChoose={choose} onClose={()=>{setGame(null);setSelected(null);}}/>;
+  }
+
+  return <div className="pb-6"><section className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">HALL OF FAME</p><h2 className="mt-1 text-2xl font-black">명예의 전당</h2></div><Trophy className="ml-auto text-accent" size={27}/></div>
+    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : globalRanking.length ? <div className="mt-4 space-y-2">{globalRanking.map((item,index)=><div key={itemKey(item)} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-2.5"><span className={cn("w-7 text-center text-lg font-black italic",index===0?"text-accent":"text-neutral-600")}>{index+1}</span><div className="h-12 w-12 overflow-hidden rounded-xl"><CandidateMedia item={item}/></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.name}</p><p className="mt-1 text-[10px] text-neutral-600">역대 우승 {Number(item.winCount||0).toLocaleString()}회</p></div>{index===0&&<Crown size={17} className="mr-2 text-accent"/>}</div>)}</div> : <p className="mt-4 rounded-2xl border border-white/10 bg-neutral-900/60 p-5 text-center text-xs text-neutral-500">아직 우승 기록이 없습니다.</p>}</section>
+    {!loading&&!error&&<section className="mt-8 px-4"><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">CHOOSE YOUR ONE</p><h2 className="mt-1 text-xl font-black">혚쾌 월드컵</h2><div className="mt-4 space-y-3">{[...(unified.items.length>=4?[unified]:[]),...cups].map((cup)=><article key={cup.id} className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-900"><button onClick={()=>setSelected(cup)} className="flex w-full items-center gap-4 p-4 text-left"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-3xl">{cup.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm font-black">{cup.title}</strong><span className="mt-1 block text-[11px] font-bold text-neutral-500">후보 {cup.items.length}개</span></span><Play size={17} className="text-accent" fill="#e50000"/></button><button onClick={()=>setRankingCup(cup)} className="w-full border-t border-white/10 py-3 text-[11px] font-black text-neutral-500"><Crown size={13} className="mr-1.5 inline text-accent"/>랭킹 보기</button></article>)}</div></section>}
+    {selected&&<WorldcupSheet cup={selected} onClose={()=>setSelected(null)} onStart={()=>setBracketCup(selected)} onRanking={()=>setRankingCup(selected)}/>}
+    {bracketCup&&<BracketSheet cup={bracketCup} onClose={()=>setBracketCup(null)} onStart={start}/>}
+    {rankingCup&&<RankingSheet cup={rankingCup} onClose={()=>setRankingCup(null)}/>}
   </div>;
 }
 
-function WorldcupSheet({cup,onClose,onStart}) { return <div className="absolute inset-0 z-50 flex items-end bg-black/75 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(e)=>e.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5"><div className="mx-auto h-1 w-10 rounded bg-neutral-700"/><img src={cup.coverUrl} alt="" className="mt-5 aspect-[16/8] w-full rounded-2xl object-cover"/><h3 className="mt-4 text-xl font-black">{cup.title}</h3><p className="mt-2 text-sm leading-6 text-neutral-500">{cup.description}</p><button onClick={onStart} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Play size={16} fill="white"/>시작하기</button><button onClick={onClose} className="mt-2 w-full rounded-2xl bg-white/5 py-4 text-sm font-bold text-neutral-400">이 월드컵 결과 보기</button></div></div> }
+function WorldcupSheet({cup,onClose,onStart,onRanking}) { return <div className="absolute inset-0 z-50 flex items-end bg-black/80 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(e)=>e.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5"><div className="mx-auto h-1 w-10 rounded bg-neutral-700"/><div className="mt-5 flex aspect-[16/7] items-center justify-center rounded-2xl bg-[radial-gradient(circle,#e5000038,transparent_65%)] text-6xl">{cup.icon}</div><h3 className="mt-4 text-xl font-black">{cup.title}</h3><p className="mt-2 text-xs font-bold text-neutral-500">후보 {cup.items.length}개</p><button disabled={cup.items.length<2} onClick={onStart} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black disabled:bg-neutral-800 disabled:text-neutral-600"><Play size={16} fill="white"/>시작하기</button><button onClick={onRanking} className="mt-2 w-full rounded-2xl bg-white/5 py-4 text-sm font-bold text-neutral-400">이 월드컵 결과 보기</button></div></div> }
 
-function GameView({candidates,round,onChoose,onClose}) { return <div className="flex h-[calc(100dvh-68px)] flex-col bg-black"><div className="flex h-12 shrink-0 items-center px-4"><button onClick={onClose}><ChevronLeft/></button><p className="mx-auto pr-6 text-xs font-black tracking-widest text-neutral-500">{round ? "FINAL" : "SEMI FINAL"}</p></div><div className="relative grid min-h-0 flex-[3] grid-cols-2 gap-0.5"><button onClick={()=>onChoose(candidates[0])} className="overflow-hidden"><img src={candidates[0].thumbnailUrl} alt="" className="h-full w-full object-cover"/></button><button onClick={()=>onChoose(candidates[1])} className="overflow-hidden"><img src={candidates[1].thumbnailUrl} alt="" className="h-full w-full object-cover"/></button><div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg] items-center justify-center rounded-full border-4 border-black bg-accent text-sm font-black italic shadow-2xl">VS</div></div><div className="flex min-h-0 flex-[2] flex-col justify-center gap-3 p-4">{candidates.map((c)=><button key={c.id} onClick={()=>onChoose(c)} className="min-h-14 rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4 text-balance text-sm font-black leading-5 active:border-accent active:bg-accent">{c.title}</button>)}</div></div> }
+function BracketSheet({cup,onClose,onStart}) {
+  const sizes = [128,64,32,16,8,4].filter((size)=>size<cup.items.length);
+  return <div className="absolute inset-0 z-[60] flex items-end bg-black/85 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(event)=>event.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5"><h3 className="text-lg font-black">진행할 대진을 선택하세요</h3><p className="mt-1 text-xs text-neutral-500">후보를 무작위로 섞어 시작합니다.</p><div className="mt-5 grid grid-cols-2 gap-2"><button onClick={()=>onStart(cup,cup.items.length)} className="col-span-2 rounded-2xl bg-accent py-4 text-sm font-black">전체 ({cup.items.length}강)</button>{sizes.map((size)=><button key={size} onClick={()=>onStart(cup,size)} className="rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-black">{size}강</button>)}</div><button onClick={onClose} className="mt-3 w-full py-3 text-xs font-bold text-neutral-500">취소</button></div></div>;
+}
 
-function WinnerView({winner,onBack}) { const share=async()=>{if(navigator.share) await navigator.share({title:"HQ ARCHIVE 월드컵 우승",text:winner.title,url:location.href});}; return <div className="relative min-h-[calc(100dvh-68px)] overflow-hidden px-5 pt-10 text-center"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><div className="relative mx-auto mt-7 aspect-[4/5] w-[78%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><img src={winner.thumbnailUrl} alt="" className="h-full w-full object-cover"/><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="absolute inset-x-5 bottom-5 text-xl font-black">{winner.title}</p></div><button onClick={share} className="relative mt-7 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onBack} className="relative mt-2 w-full py-3 text-sm font-bold text-neutral-500">월드컵으로 돌아가기</button></div> }
+function RankingSheet({cup,onClose}) {
+  const ranking=[...cup.items].sort((a,b)=>Number(b.winCount||0)-Number(a.winCount||0));
+  return <div className="absolute inset-0 z-[60] flex items-end bg-black/85 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(event)=>event.stopPropagation()} className="max-h-[82dvh] w-full overflow-y-auto rounded-[28px] border border-white/10 bg-neutral-900 p-5 no-scrollbar animate-pop-in"><div className="flex items-start"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">LOCAL RANKING</p><h3 className="mt-1 text-lg font-black">{cup.title}</h3></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2"><X size={16}/></button></div><div className="mt-5 space-y-2">{ranking.map((item,index)=><div key={itemKey(item)} className="flex items-center gap-3 rounded-2xl bg-black/40 p-2.5"><span className={cn("w-6 text-center text-sm font-black",index<3?"text-accent":"text-neutral-600")}>{index+1}</span><div className="h-11 w-11 overflow-hidden rounded-xl"><CandidateMedia item={item}/></div><p className="min-w-0 flex-1 truncate text-xs font-bold">{item.name}</p><span className="text-[10px] font-black text-neutral-500">{Number(item.winCount||0)}승</span></div>)}</div></div></div>;
+}
+
+function GameView({candidates,total,matchIndex,onChoose,onClose}) {
+  const roundTitle=total===2?"결승전":`${total}강`;
+  if(candidates.length===1) return <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black p-6 text-center"><Flame size={32} className="text-accent"/><h2 className="mt-4 text-xl font-black">부전승 발생!</h2><p className="mt-2 text-sm leading-6 text-neutral-500"><b className="text-white">{candidates[0].name}</b>이(가)<br/>다음 라운드로 진출합니다.</p><button onClick={()=>onChoose(candidates[0])} className="mt-7 w-full rounded-2xl bg-accent py-4 text-sm font-black">다음 라운드 이동</button></div>;
+  return <div className="absolute inset-0 z-50 flex flex-col bg-black"><div className="flex h-12 shrink-0 items-center px-4"><button onClick={onClose}><ChevronLeft/></button><p className="mx-auto pr-6 text-xs font-black tracking-widest text-neutral-500">{roundTitle} {Math.floor(matchIndex/2)+1}/{Math.ceil(total/2)}</p></div><div className="relative grid min-h-0 flex-[3] grid-cols-2 gap-0.5">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="overflow-hidden"><CandidateMedia item={candidate}/></button>)}<div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg] items-center justify-center rounded-full border-4 border-black bg-accent text-sm font-black italic shadow-2xl">VS</div></div><div className="flex min-h-0 flex-[2] flex-col justify-center gap-3 p-4">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4 text-balance text-sm font-black leading-5 active:border-accent active:bg-accent"><span>{candidate.name}</span>{candidate.date&&<time className="ml-2 text-[10px] font-bold text-neutral-500">{candidate.date}</time>}</button>)}</div></div>;
+}
+
+function WinnerView({winner,cup,onBack,onAgain}) {
+  const shareUrl=()=>{const url=new URL(window.location.origin+window.location.pathname);url.searchParams.set("cupId",cup.id);url.searchParams.set("winnerId",winner.id);return url.toString();};
+  const share=async()=>{const data={title:`${cup.title} 결과`,text:`🏆 나의 ${cup.title} 우승 떡밥은 [ ${winner.name} ].ᐟ`,url:shareUrl()};if(navigator.share) await navigator.share(data).catch(()=>{});else{await navigator.clipboard.writeText(data.url);alert("우승 결과 링크가 복사되었습니다!");}};
+  return <div className="relative min-h-[calc(100dvh-68px)] overflow-hidden px-5 pt-8 text-center"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><div className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></div><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div>;
+}
 
 function PostypeView() {
   const [query,setQuery]=useState(""); const [tag,setTag]=useState("전체"); const [sort,setSort]=useState("최신순");
@@ -271,7 +387,7 @@ function AdminHub({ items, loading, onClose, onReload }) {
 
   return <div className="absolute inset-0 z-[80] flex items-end bg-black/80 p-3 backdrop-blur-md" onClick={onClose}>
     <div onClick={(event) => event.stopPropagation()} className="max-h-[92dvh] w-full overflow-y-auto rounded-[28px] border border-white/10 bg-neutral-950 p-5 shadow-2xl no-scrollbar animate-pop-in">
-      <div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">ADMIN CENTER</p><h2 className="mt-1 text-xl font-black">{section === "hub" ? "관리자 모드" : "아카이브 관리"}</h2></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
+      <div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">ADMIN CENTER</p><h2 className="mt-1 text-xl font-black">{section === "hub" ? "관리자 모드" : section === "worldcup" ? "월드컵 관리" : "아카이브 관리"}</h2></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
       {!authenticated ? <form onSubmit={authenticate} className="py-10">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent"><LockKeyhole size={24}/></div>
         <p className="mt-4 text-center text-sm font-bold">관리자 비밀번호를 입력하세요.</p>
@@ -280,9 +396,9 @@ function AdminHub({ items, loading, onClose, onReload }) {
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
         <AdminPortalCard icon={Archive} label="아카이브" description="Google Sheets 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
-        <AdminPortalCard icon={Trophy} label="월드컵" description="후보와 랭킹 데이터 관리" badge="다음 연결" />
+        <AdminPortalCard icon={Trophy} label="월드컵" description="대회·후보·랭킹 데이터 관리" active onClick={() => setSection("worldcup")}/>
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" badge="다음 연결" />
-      </div> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>} 
+      </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>}
     </div>
   </div>;
 }
@@ -293,6 +409,42 @@ function AdminPortalCard({ icon: Icon, label, description, active, onClick, badg
     <span><span className="flex items-center gap-2 text-sm font-black">{label}{badge && <em className="not-italic rounded-full bg-white/5 px-2 py-0.5 text-[9px] text-neutral-500">{badge}</em>}</span><span className="mt-1 block text-[11px] text-neutral-500">{description}</span></span>
     {active && <ChevronRight size={17} className="ml-auto text-accent"/>}
   </button>;
+}
+
+function WorldcupAdmin({ onBack }) {
+  const emptyCandidate = { id: "", name: "", date: "", sourceUrl: "", mediaUrl: "", isVideo: false, winCount: 0 };
+  const [cups,setCups]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const [notice,setNotice]=useState("");
+  const [editing,setEditing]=useState(null);
+  const [selectedIds,setSelectedIds]=useState([]);
+  const [candidateForm,setCandidateForm]=useState(null);
+  const [bulkOpen,setBulkOpen]=useState(false);
+  const [bulkText,setBulkText]=useState("");
+
+  const load=async()=>{setLoading(true);setError("");try{setCups(await worldcupService.list());}catch(reason){setError(reason.message||"월드컵 데이터를 불러오지 못했어요.");}finally{setLoading(false);}};
+  useEffect(()=>{load();},[]);
+  const updateCupList=(cup)=>setCups((current)=>{const exists=current.some((item)=>String(item.id)===String(cup.id));return (exists?current.map((item)=>String(item.id)===String(cup.id)?cup:item):[...current,cup]).sort((a,b)=>Number(a.id)-Number(b.id));});
+  const persist=async(next,message="저장되었습니다.")=>{setBusy(true);setError("");try{const saved=await worldcupService.save(next);setEditing(saved);updateCupList(saved);setNotice(message);return saved;}catch(reason){setError(reason.message||"저장하지 못했어요.");return null;}finally{setBusy(false);}};
+  const openCup=(cup)=>{setEditing(JSON.parse(JSON.stringify(cup)));setSelectedIds([]);setCandidateForm(null);setBulkOpen(false);setNotice("");setError("");};
+  const createCup=()=>openCup({id:Date.now(),title:"새로운 혚쾌 월드컵",icon:"🏆",items:[]});
+  const removeCup=async(cup)=>{if(!window.confirm(`'${cup.title}'을(를) 삭제할까요?`))return;setBusy(true);try{await worldcupService.remove(cup.id);setCups((current)=>current.filter((item)=>String(item.id)!==String(cup.id)));setNotice("월드컵을 삭제했습니다.");}catch(reason){setError(reason.message||"삭제하지 못했어요.");}finally{setBusy(false);}};
+  const saveCup=()=>{if(!editing.title.trim())return setError("월드컵 제목을 입력해주세요.");persist(editing,"월드컵을 저장하고 배포했습니다.");};
+  const saveCandidate=async(event)=>{event.preventDefault();if(!candidateForm.name.trim())return setError("후보 이름을 입력해주세요.");const existing=editing.items.find((item)=>String(item.id)===String(candidateForm.id));const candidate={id:candidateForm.id||Date.now(),name:candidateForm.name.trim(),date:candidateForm.date||"",sourceUrl:candidateForm.sourceUrl.trim(),mediaUrl:candidateForm.mediaUrl.trim(),isVideo:/\.mp4(?:$|\?)/i.test(candidateForm.mediaUrl),winCount:Number(existing?.winCount||candidateForm.winCount||0)};const next={...editing,items:existing?editing.items.map((item)=>String(item.id)===String(candidate.id)?candidate:item):[...editing.items,candidate]};const saved=await persist(next,existing?"후보를 수정했습니다.":"후보를 추가했습니다.");if(saved)setCandidateForm(null);};
+  const removeCandidates=async(ids)=>{if(!ids.length)return;if(!window.confirm(`${ids.length}개 후보를 삭제할까요?`))return;const keys=new Set(ids.map(String));const saved=await persist({...editing,items:editing.items.filter((item)=>!keys.has(String(item.id)))},`${ids.length}개 후보를 삭제했습니다.`);if(saved)setSelectedIds([]);};
+  const processBulk=async()=>{const blocks=bulkText.trim().split(/\n\s*\n/).map((block)=>block.split("\n").map((line)=>line.trim()).filter(Boolean)).filter((lines)=>lines.length);if(!blocks.length)return setError("추가할 텍스트를 입력해주세요.");const now=Date.now();const additions=blocks.map((lines,index)=>({id:now+index,name:lines[0],date:"",sourceUrl:lines[1]||"",mediaUrl:"",isVideo:false,winCount:0}));const saved=await persist({...editing,items:[...editing.items,...additions]},`${additions.length}개 후보를 추가했습니다.`);if(saved){setBulkOpen(false);setBulkText("");}};
+
+  if(loading)return <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">기존 월드컵 데이터를 불러오는 중…</p></div>;
+  if(!editing)return <div className="pt-5"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>{error&&<p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs font-bold text-accent">{error}</p>}{notice&&<p className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-xs font-bold text-neutral-400">{notice}</p>}<button onClick={createCup} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-accent/50 bg-accent/10 py-3.5 text-xs font-black text-accent"><Plus size={16}/>새 월드컵 만들기</button><p className="mb-2 mt-5 text-[10px] font-black tracking-wider text-neutral-600">생성된 월드컵 목록</p><div className="space-y-2">{cups.map((cup)=><div key={cup.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-xl">{cup.icon}</span><div className="min-w-0 flex-1"><p className="truncate text-xs font-black">{cup.title}</p><p className="mt-1 text-[10px] text-neutral-600">후보 {cup.items.length}개</p></div><button onClick={()=>openCup(cup)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>removeCup(cup)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></div>)}</div></div>;
+
+  const allSelected=editing.items.length>0&&editing.items.every((item)=>selectedIds.includes(String(item.id)));
+  return <div className="pt-5"><div className="flex items-center"><button onClick={()=>setEditing(null)} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>월드컵 목록</button><button disabled={busy} onClick={saveCup} className="ml-auto rounded-full bg-accent px-4 py-2 text-[11px] font-black disabled:opacity-50">저장 및 배포</button></div>{error&&<p className="mt-4 rounded-xl border border-accent/30 bg-accent/10 p-3 text-xs font-bold text-accent">{error}</p>}{notice&&<p className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 text-xs font-bold text-neutral-400">{notice}</p>}<div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4"><AdminInput label="월드컵 제목" value={editing.title} onChange={(value)=>setEditing((current)=>({...current,title:value}))}/><div className="mt-2"><AdminInput label="아이콘 (이모지 1개)" value={editing.icon} onChange={(value)=>setEditing((current)=>({...current,icon:value}))}/></div></div><div className="mt-5 flex items-center"><label className="flex items-center gap-2 text-xs font-black"><input type="checkbox" checked={allSelected} onChange={()=>setSelectedIds(allSelected?[]:editing.items.map((item)=>String(item.id)))} className="h-4 w-4 accent-[#e50000]"/>후보 <span className="text-accent">{editing.items.length}</span></label><div className="ml-auto flex gap-1.5"><button disabled={!selectedIds.length||busy} onClick={()=>removeCandidates(selectedIds)} className="rounded-lg bg-accent/10 px-2.5 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택삭제</button><button onClick={()=>{setBulkOpen(true);setBulkText("");}} className="rounded-lg bg-white/5 px-2.5 py-2 text-[10px] font-black text-neutral-400">대량추가</button><button onClick={()=>setCandidateForm(emptyCandidate)} className="rounded-lg bg-accent px-2.5 py-2 text-[10px] font-black">+ 후보추가</button></div></div>
+    {candidateForm&&<form onSubmit={saveCandidate} className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4"><div className="flex items-center"><h3 className="text-sm font-black">{candidateForm.id?"후보 수정":"후보 추가"}</h3><button type="button" onClick={()=>setCandidateForm(null)} className="ml-auto"><X size={16}/></button></div><div className="mt-3 space-y-2"><AdminInput label="후보 이름" value={candidateForm.name} onChange={(value)=>setCandidateForm((current)=>({...current,name:value}))} required/><AdminInput label="날짜 (YYYY-MM-DD)" type="date" value={candidateForm.date} onChange={(value)=>setCandidateForm((current)=>({...current,date:value}))}/><AdminInput label="원본 링크 (X/Twitter 등)" type="url" value={candidateForm.sourceUrl} onChange={(value)=>setCandidateForm((current)=>({...current,sourceUrl:value}))}/><AdminInput label="미디어 URL (선택)" type="url" value={candidateForm.mediaUrl} onChange={(value)=>setCandidateForm((current)=>({...current,mediaUrl:value}))}/></div><button disabled={busy} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{busy?"저장 중…":"저장"}</button></form>}
+    {bulkOpen&&<div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4"><div className="flex items-center"><div><h3 className="text-sm font-black">대량 항목 추가</h3><p className="mt-1 text-[10px] leading-4 text-neutral-500">후보 이름 다음 줄에 링크를 넣고, 후보 사이는 빈 줄로 구분하세요.<br/>텍스트 후보는 링크를 생략할 수 있습니다.</p></div><button onClick={()=>setBulkOpen(false)} className="ml-auto"><X size={16}/></button></div><textarea rows={8} value={bulkText} onChange={(event)=>setBulkText(event.target.value)} placeholder={`후보 이름\nhttps://x.com/...\n\n텍스트 후보 이름`} className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-black p-3 text-xs leading-5 outline-none focus:border-accent"/><button disabled={busy} onClick={processBulk} className="mt-2 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">일괄 추가</button></div>}
+    <div className="mt-4 space-y-2">{editing.items.length?editing.items.map((item)=><div key={item.id} className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-2.5"><input type="checkbox" checked={selectedIds.includes(String(item.id))} onChange={()=>setSelectedIds((current)=>current.includes(String(item.id))?current.filter((id)=>id!==String(item.id)):[...current,String(item.id)])} className="h-4 w-4 shrink-0 accent-[#e50000]"/><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/5 text-xs font-black text-neutral-500">{item.mediaUrl?<img src={item.mediaUrl} alt="" className="h-full w-full object-cover"/>:"T"}</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-black">{item.name}</p><p className="mt-1 truncate text-[9px] text-neutral-600">{item.date||item.sourceUrl||"텍스트 항목"} · {Number(item.winCount||0)}승</p></div><button onClick={()=>setCandidateForm({...item})} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={13}/></button><button disabled={busy} onClick={()=>removeCandidates([item.id])} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={13}/></button></div>):<p className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs text-neutral-600">등록된 후보가 없습니다.</p>}</div>
+  </div>;
 }
 
 function ArchiveAdmin({ items, onBack, onReload }) {
