@@ -3,38 +3,38 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
-  Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Sparkles, Trash2, Trophy, UserRound, X
+  ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, UserRound, X
 } from "lucide-react";
-import { archiveItems, globalRanking, keywordGroups, postypeItems, worldcups } from "../lib/data";
-import { archiveService } from "../lib/services";
+import { archiveItems, globalRanking, postypeItems, worldcups } from "../lib/data";
+import { archiveService, keywordService } from "../lib/services";
 
 const pad = (n) => String(n).padStart(2, "0");
 const today = new Date(2026, 5, 21);
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 const cn = (...classes) => classes.filter(Boolean).join(" ");
+const MAIN_CATEGORY_ORDER = ["전체", "무대영상", "라이브", "유튜브", "미디어", "SNS", "메시지", "기타"];
 
 export default function Page() {
   const [tab, setTab] = useState("home");
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [archives, setArchives] = useState(archiveItems);
-  const [dataMeta, setDataMeta] = useState({ source: "loading" });
+  const [keywordData, setKeywordData] = useState({ items: [], tags: [] });
   const [adminOpen, setAdminOpen] = useState(false);
   const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
   const loadArchives = async () => {
-    setDataMeta({ source: "loading" });
     const result = await archiveService.list();
     setArchives(result.items);
-    setDataMeta({ source: result.source, error: result.error });
+    setKeywordData(await keywordService.list(result.items));
   };
   useEffect(() => { loadArchives(); }, []);
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
-        <Header onAdmin={() => setAdminOpen(true)} dataMeta={dataMeta} />
+        <Header onAdmin={() => setAdminOpen(true)} />
         <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
           <div key={tab} className="animate-fade-in">
-            {tab === "home" && <HomeView items={archives} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
+            {tab === "home" && <HomeView items={archives} keywordData={keywordData} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView items={archives} />}
             {tab === "worldcup" && <WorldcupView />}
             {tab === "postype" && <PostypeView />}
@@ -47,18 +47,14 @@ export default function Page() {
   );
 }
 
-function Header({ onAdmin, dataMeta }) {
+function Header({ onAdmin }) {
   return (
     <header className="z-30 flex h-[68px] shrink-0 items-center border-b border-white/10 bg-black/90 px-5 backdrop-blur-xl">
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_18px_#e50000]" />
-          <h1 className="text-[19px] font-black tracking-[-.04em]">HQ ARCHIVE</h1>
-        </div>
-        <p className="mt-0.5 pl-[18px] text-[9px] font-semibold tracking-[.22em] text-neutral-600">EVERY MOMENT, ONE PLACE</p>
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_18px_#e50000]" />
+        <h1 className="text-[19px] font-black tracking-[-.04em]">HQ ARCHIVE</h1>
       </div>
-      <div className="ml-auto flex items-center gap-2">
-        <span title={dataMeta.error || "Google Sheets 연결됨"} className={cn("h-1.5 w-1.5 rounded-full", dataMeta.source === "google-sheets" ? "bg-emerald-400" : dataMeta.source === "loading" ? "animate-pulse bg-amber-400" : "bg-neutral-700")} />
+      <div className="ml-auto">
         <button onClick={onAdmin} aria-label="관리자 모드" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><LockKeyhole size={16} /></button>
       </div>
     </header>
@@ -75,81 +71,91 @@ function SearchBar({ value, onChange, placeholder = "제목, 키워드, 날짜�
   );
 }
 
-function HomeView({ items, initialKeyword, onKeywordConsumed }) {
+function HomeView({ items, keywordData, initialKeyword, onKeywordConsumed }) {
   const [subTab, setSubTab] = useState(initialKeyword ? "archive" : "archive");
   const [query, setQuery] = useState(initialKeyword ? `#${initialKeyword}` : "");
   const [mainCategory, setMainCategory] = useState("전체");
   const [subCategory, setSubCategory] = useState("전체");
-  const mains = ["전체", ...new Set(items.map((x) => x.mainCategory))];
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [displayLimit, setDisplayLimit] = useState(30);
+  const mains = MAIN_CATEGORY_ORDER;
   const subs = ["전체", ...new Set(items.filter((x) => mainCategory === "전체" || x.mainCategory === mainCategory).map((x) => x.subCategory))];
   const filtered = items.filter((item) => {
     const q = query.replace(/^#/, "").toLowerCase();
     return (mainCategory === "전체" || item.mainCategory === mainCategory) &&
       (subCategory === "전체" || item.subCategory === subCategory) &&
       (!q || [item.title, item.date, ...item.keywords].join(" ").toLowerCase().includes(q));
-  });
+  }).sort((a, b) => sortOrder === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
   const yearsAgo = items.filter((x) => x.date.slice(5) === formatDate(today).slice(5) && x.date !== formatDate(today));
 
   const pickKeyword = (tag) => { setQuery(`#${tag}`); setSubTab("archive"); onKeywordConsumed(); };
   return (
     <div>
-      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} /></div>
+      <div className="px-4 pt-4"><SearchBar value={query} onChange={(value) => { setQuery(value); setDisplayLimit(30); }} /></div>
       <div className="sticky top-0 z-20 mt-3 border-b border-white/10 bg-black/95 px-4 backdrop-blur-xl">
         <div className="grid grid-cols-3">
-          {[["archive", "아카이브"], ["keywords", "키워드"], ["today", "N년전 오늘"]].map(([key, label]) => (
+          {[["archive", Archive, "아카이브"], ["keywords", Heart, "키워드"], ["today", CalendarDays, "N년전 오늘"]].map(([key, Icon, label]) => (
             <button key={key} onClick={() => setSubTab(key)} className={cn("relative py-3 text-[13px] font-bold transition", subTab === key ? "text-white" : "text-neutral-600")}>
-              {label}{subTab === key && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-accent" />}
+              <span className="flex items-center justify-center gap-1.5"><Icon size={14}/>{label}</span>{subTab === key && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-accent" />}
             </button>
           ))}
         </div>
       </div>
       {subTab === "archive" && <div className="px-4 pt-4">
-        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); }} />
-        <div className="mt-2"><FilterRow values={subs} active={subCategory} onChange={setSubCategory} secondary /></div>
-        <SectionLabel label="ARCHIVE" count={filtered.length} />
-        <ArchiveGrid items={filtered} />
+        <p className="mb-2 text-[10px] font-bold text-neutral-600">← 좌우로 밀어서 카테고리를 확인하세요 →</p>
+        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); setDisplayLimit(30); }} />
+        {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={(value) => { setSubCategory(value); setDisplayLimit(30); }} secondary /></div>}
+        <SectionLabel label="전체" count={filtered.length} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} />
+        <ArchiveGrid items={filtered.slice(0, displayLimit)} />
+        {filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}
       </div>}
-      {subTab === "keywords" && <KeywordView onPick={pickKeyword} />}
+      {subTab === "keywords" && <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />}
       {subTab === "today" && <TodayView items={yearsAgo} />}
     </div>
   );
 }
 
 function FilterRow({ values, active, onChange, secondary = false }) {
-  return <div className="-mx-4 flex gap-2 overflow-x-auto px-4 no-scrollbar">{values.map((value) => (
-    <button key={value} onClick={() => onChange(value)} className={cn("shrink-0 rounded-full px-3.5 py-2 text-xs font-bold transition", active === value ? (secondary ? "bg-white text-black" : "bg-accent text-white") : "border border-white/10 bg-neutral-900 text-neutral-500")}>{value}</button>
+  return <div className={cn("flex gap-2", secondary ? "flex-wrap" : "-mx-4 overflow-x-auto px-4 no-scrollbar")}>{values.map((value) => (
+    <button key={value} onClick={() => onChange(value)} className={cn("shrink-0 px-3 py-2 text-xs font-bold transition", secondary ? "rounded-lg" : "rounded-full", active === value ? (secondary ? "bg-accent text-white" : "border border-white/30 bg-neutral-800 text-white") : "border border-white/10 bg-neutral-900 text-neutral-500")}>{value}</button>
   ))}</div>;
 }
 
-function SectionLabel({ label, count }) {
-  return <div className="mb-3 mt-6 flex items-end"><p className="text-[11px] font-black tracking-[.18em] text-neutral-500">{label}</p><p className="ml-auto text-xs font-bold text-neutral-600">{count}개</p></div>;
+function SectionLabel({ label, count, sortOrder, onSort }) {
+  return <div className="mb-3 mt-6 flex items-center"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}개</b></p>{onSort && <button onClick={onSort} className="ml-auto flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? "최신순" : "과거순"}</button>}</div>;
 }
 
 function ArchiveGrid({ items }) {
   if (!items.length) return <EmptyState text="조건에 맞는 기록이 없어요." />;
-  return <div className="grid grid-cols-2 gap-x-3 gap-y-6">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} />)}</div>;
+  return <div className="grid grid-cols-2 gap-x-3 gap-y-5">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} />)}</div>;
 }
 
 function ArchiveCard({ item, index = 0 }) {
   return <article onClick={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")} className={cn("group min-w-0 animate-fade-in", item.link && "cursor-pointer")} style={{ animationDelay: `${index * 35}ms` }}>
-    <div className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-neutral-900">
+    <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-neutral-900">
       {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover transition duration-500 group-active:scale-105" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800"><Archive size={22} className="text-neutral-700" /></div>}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-      <div className="absolute right-2 top-2 rounded-full bg-black/55 p-1.5 backdrop-blur"><Bookmark size={13} /></div>
     </div>
-    <div className="mt-2.5 flex items-center gap-2 text-[10px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto whitespace-nowrap text-neutral-600">{item.date}</time></div>
-    <h3 className="mt-1 line-clamp-2 text-[13px] font-bold leading-[1.45] tracking-[-.02em]">{item.title}</h3>
+    <div className="mt-2 flex items-center gap-2 text-[9px] font-bold"><span className="rounded border border-accent/60 px-1.5 py-0.5 text-accent">{item.subCategory}</span><time className="ml-auto whitespace-nowrap text-neutral-600">{item.date}</time></div>
+    <h3 className="mt-1.5 line-clamp-2 text-[12px] font-bold leading-[1.45] tracking-[-.02em]">{item.title}</h3>
   </article>;
 }
 
-function KeywordView({ onPick }) {
-  return <div className="px-4 pb-6 pt-5"><div className="rounded-3xl border border-accent/20 bg-gradient-to-br from-accent/15 to-transparent p-5"><Sparkles size={19} className="text-accent" /><h2 className="mt-3 text-xl font-black tracking-tight">기억은 키워드로<br />더 선명해지니까.</h2><p className="mt-2 text-xs leading-5 text-neutral-500">자주 찾는 순간을 태그로 빠르게 만나보세요.</p></div>
-    {keywordGroups.map((group) => <section key={group.label} className="mt-7"><h3 className="text-xs font-black text-neutral-500">{group.label}</h3><div className="mt-3 flex flex-wrap gap-2">{group.tags.map((tag) => <button key={tag} onClick={() => onPick(tag)} className="rounded-full border border-white/10 bg-neutral-900 px-3.5 py-2.5 text-[13px] font-bold text-neutral-300 active:border-accent active:text-accent">#{tag}</button>)}</div></section>)}
+function KeywordView({ items, tags, query }) {
+  const [active, setActive] = useState("전체");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [displayLimit, setDisplayLimit] = useState(30);
+  const filtered = items.filter((item) => (active === "전체" || item.keywords?.includes(active) || item.rawKeywords === active) && (!query || [item.title, item.date, ...(item.keywords || [])].join(" ").toLowerCase().includes(query.replace(/^#/, "").toLowerCase()))).sort((a,b) => sortOrder === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+  return <div className="px-4 pb-6 pt-4">
+    <p className="mb-2 text-[10px] font-bold text-neutral-600">← 좌우로 밀어서 키워드를 확인하세요 →</p>
+    <FilterRow values={["전체", ...tags]} active={active} onChange={(value) => { setActive(value); setDisplayLimit(30); }}/>
+    <SectionLabel label={active} count={filtered.length} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")}/>
+    <ArchiveGrid items={filtered.slice(0, displayLimit)}/>
+    {filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}
   </div>;
 }
 
 function TodayView({ items }) {
-  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">21</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">6월 21일의 기록</h2><p className="mt-1 text-xs text-white/70">오늘과 같은 날, 우리가 사랑했던 순간들</p></div>
+  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">21</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">6월 21일의 기록</h2></div>
     <div className="mt-6 space-y-3">{items.map((item) => { const ago = today.getFullYear() - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>
   </div>;
 }
@@ -242,6 +248,9 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   const [form, setForm] = useState(blank);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState("");
+  const filteredAdminItems = useMemo(() => items.filter((item) => !query || [item.title, item.date, item.mainCategory, item.subCategory, item.rawKeywords].join(" ").toLowerCase().includes(query.toLowerCase())), [items, query]);
+  const visibleAdminItems = filteredAdminItems.slice(0, 100);
   const openForm = (item = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : blank); setFormOpen(true); };
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const save = async (event) => {
@@ -259,6 +268,8 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   return <div className="pt-5">
     <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button><span className="ml-auto text-[10px] font-bold text-emerald-400">● Google Sheets</span></div>
     <button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button>
+    <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div>
+    <p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개 · 최대 100개 표시</p>
     {formOpen && <form onSubmit={save} className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4">
       <div className="mb-3 flex items-center"><h3 className="text-sm font-black">{editing ? "기록 수정" : "새 기록"}</h3><button type="button" onClick={() => {setEditing(null);setForm(blank);setFormOpen(false);}} className="ml-auto"><X size={16}/></button></div>
       <div className="grid grid-cols-2 gap-2">
@@ -270,7 +281,7 @@ function ArchiveAdmin({ items, onBack, onReload }) {
       <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><AdminInput label="썸네일 URL" type="url" value={form.thumbnailUrl} onChange={(v)=>update("thumbnailUrl",v)}/><AdminInput label="키워드 (쉼표 구분)" value={form.rawKeywords} onChange={(v)=>update("rawKeywords",v)}/></div>
       <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Google Sheets에 저장"}</button>
     </form>}
-    <div className="mt-5 space-y-2">{items.map((item)=><article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-12 rounded-xl object-cover"/> : <div className="h-12 w-12 rounded-xl bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 truncate text-xs font-bold">{item.title}</p></div><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></article>)}</div>
+    <div className="mt-5 space-y-2">{visibleAdminItems.map((item)=><article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-12 rounded-xl object-cover"/> : <div className="h-12 w-12 rounded-xl bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 truncate text-xs font-bold">{item.title}</p></div><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></article>)}</div>
   </div>;
 }
 
