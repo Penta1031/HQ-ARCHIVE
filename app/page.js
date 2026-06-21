@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
@@ -29,6 +29,7 @@ export default function Page() {
   const [tab, setTab] = useState("home");
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
+  const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
   const [adminArchives, setAdminArchives] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
@@ -39,6 +40,11 @@ export default function Page() {
     finally { setAdminLoading(false); }
   };
   const openAdmin = () => { setAdminOpen(true); if (!adminArchives.length && !adminLoading) loadAdminArchives(); };
+  const openPostypeAdmin = () => {
+    setAdminOpen(false);
+    setTab("postype");
+    setPostypeAdminRequest((request) => request + 1);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -54,11 +60,11 @@ export default function Page() {
             {tab === "home" && <HomeView initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
             {tab === "worldcup" && <WorldcupView />}
-            {tab === "postype" && <PostypeView />}
+            {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} />}
           </div>
         </section>
         <BottomNav tab={tab} onChange={navigate} />
-        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={() => setAdminOpen(false)} onReload={loadAdminArchives} />}
+        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={() => setAdminOpen(false)} onReload={loadAdminArchives} onOpenPostype={openPostypeAdmin} />}
       </div>
     </main>
   );
@@ -422,11 +428,20 @@ function WinnerView({winner,cup,onBack,onAgain}) {
   return <><AppOverlay><div className="relative mx-auto h-[100dvh] w-full max-w-md overflow-y-auto bg-black px-5 pt-8 text-center no-scrollbar"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><button onClick={()=>setPreview(winner)} aria-label={`${winner.name} 미디어 전체 보기`} className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="pointer-events-none absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></button><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div></AppOverlay>{preview&&<MediaPreviewModal item={winner} onClose={()=>setPreview(null)}/>}</>;
 }
 
-function PostypeView() {
-  return <iframe src="postype/index.html" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-[#f3f0e9]" />;
+function PostypeView({ adminRequest = 0 }) {
+  const frameRef = useRef(null);
+  useEffect(() => {
+    if (!adminRequest) return;
+    const openAdmin = () => frameRef.current?.contentDocument?.getElementById("adminToggle")?.click();
+    const frame = frameRef.current;
+    const timer = window.setTimeout(openAdmin, 0);
+    frame?.addEventListener("load", openAdmin);
+    return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
+  }, [adminRequest]);
+  return <iframe ref={frameRef} src="postype/index.html" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
-function AdminHub({ items, loading, onClose, onReload }) {
+function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -450,7 +465,7 @@ function AdminHub({ items, loading, onClose, onReload }) {
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
         <AdminPortalCard icon={Archive} label="아카이브" description="Google Sheets 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Trophy} label="월드컵" description="대회·후보·랭킹 데이터 관리" active onClick={() => setSection("worldcup")}/>
-        <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" badge="다음 연결" />
+        <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={onOpenPostype} />
       </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>}
     </div>
   </div>;
