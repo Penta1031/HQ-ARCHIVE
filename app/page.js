@@ -248,13 +248,15 @@ function AppOverlay({ children, className = "z-[70]" }) {
 }
 
 const mediaFromTweetData = (data = {}) => {
+  const asArray = (value) => Array.isArray(value) ? value : value ? [value] : [];
   const candidates = [
-    ...(data.media_extended || []),
-    ...(data.tweet?.media?.all || []),
-    ...(data.media?.all || [])
+    ...asArray(data.media_extended),
+    ...asArray(data.tweet?.media?.all),
+    ...asArray(data.media?.all)
   ];
   const detailed = candidates.find((media)=>media?.url || media?.thumbnail_url);
-  const url = detailed?.url || detailed?.thumbnail_url || data.mediaURLs?.[0] || data.media_urls?.[0] || data.video_url || data.tweet?.video?.url || "";
+  const vxMedia = asArray(data.mediaURLs)[0] || asArray(data.media_urls)[0];
+  const url = detailed?.url || detailed?.thumbnail_url || vxMedia || data.video_url || data.tweet?.video?.url || "";
   return url ? { url, isVideo: /video|gif/i.test(detailed?.type || "") || /\.(mp4|m3u8)(?:$|\?)/i.test(url) } : null;
 };
 
