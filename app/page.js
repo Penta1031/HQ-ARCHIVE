@@ -4,9 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
-  ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, UserRound, X
+  ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, X
 } from "lucide-react";
-import { postypeItems } from "../lib/data";
 import { archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -50,8 +49,8 @@ export default function Page() {
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
         <Header onAdmin={openAdmin} />
-        <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
-          <div key={tab} className="animate-fade-in">
+        <section className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? "overflow-hidden pb-[76px]" : "overflow-y-auto pb-28")}>
+          <div key={tab} className={cn("animate-fade-in", tab === "postype" && "h-full")}>
             {tab === "home" && <HomeView initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
             {tab === "worldcup" && <WorldcupView />}
@@ -424,10 +423,7 @@ function WinnerView({winner,cup,onBack,onAgain}) {
 }
 
 function PostypeView() {
-  const [query,setQuery]=useState(""); const [tag,setTag]=useState("전체"); const [sort,setSort]=useState("최신순");
-  const tags=["전체","현실기반","재회","청춘","판타지","오피스","완결"];
-  const items=useMemo(()=>postypeItems.filter((x)=>(tag==="전체"||x.tags.includes(tag))&&(!query||[x.title,x.author,x.excerpt,...x.tags].join(" ").toLowerCase().includes(query.toLowerCase()))).sort((a,b)=>sort==="작가순"?a.author.localeCompare(b.author):sort==="북마크순"?b.bookmarks-a.bookmarks:b.date.localeCompare(a.date)),[query,tag,sort]);
-  return <div className="px-4 pt-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">POSTYPE FINDER</p><h2 className="mt-1 text-2xl font-black">포타 검색기</h2><p className="mt-1 text-xs text-neutral-600">좋아했던 글을 다시 만나는 가장 빠른 방법</p></div><div className="mt-5"><SearchBar value={query} onChange={setQuery} placeholder="작가, 제목, 내용으로 검색"/></div><div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 no-scrollbar">{tags.map((x)=><button key={x} onClick={()=>setTag(x)} className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-bold",tag===x?"bg-accent text-white":"border border-white/10 bg-neutral-900 text-neutral-500")}>{x==="전체"?x:`#${x}`}</button>)}</div><div className="mt-6 flex items-center"><p className="text-xs font-black text-neutral-500">{items.length}개의 작품</p><select value={sort} onChange={(e)=>setSort(e.target.value)} className="ml-auto rounded-lg border border-white/10 bg-neutral-900 px-2.5 py-2 text-xs font-bold outline-none">{["최신순","작가순","북마크순"].map((x)=><option key={x}>{x}</option>)}</select></div><div className="mt-3 space-y-3">{items.map((item)=><article key={item.id} className="rounded-2xl border border-white/10 bg-neutral-900/70 p-4"><div className="flex items-center text-[11px]"><UserRound size={13} className="mr-1.5 text-neutral-600"/><span className="font-bold text-neutral-400">{item.author}</span><span className="ml-3 flex items-center gap-1 text-neutral-600"><Heart size={12} fill="#737373"/>{item.hearts.toLocaleString()}</span><time className="ml-auto font-bold text-neutral-600">{item.date}</time></div><h3 className="mt-3 text-base font-black tracking-tight">{item.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">{item.excerpt}</p><div className="mt-3 flex flex-wrap gap-1.5">{item.tags.map((t)=><span key={t} className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-bold text-neutral-500">#{t}</span>)}</div></article>)}</div></div>;
+  return <iframe src="postype/index.html" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-[#f3f0e9]" />;
 }
 
 function AdminHub({ items, loading, onClose, onReload }) {
