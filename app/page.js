@@ -245,19 +245,26 @@ function AdminPortalCard({ icon: Icon, label, description, active, onClick, badg
 
 function ArchiveAdmin({ items, onBack, onReload }) {
   const blank = { title: "", date: formatDate(new Date()), link: "", account: "", mainCategory: "무대영상", subCategory: "음악방송", rawKeywords: "", thumbnailUrl: "" };
+  const [adminTab, setAdminTab] = useState("list");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank);
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
+  const [adminDate, setAdminDate] = useState(formatDate(new Date()));
+  const [rawItems, setRawItems] = useState([]);
+  const [rawLoaded, setRawLoaded] = useState(false);
   const filteredAdminItems = useMemo(() => items.filter((item) => !query || [item.title, item.date, item.mainCategory, item.subCategory, item.rawKeywords].join(" ").toLowerCase().includes(query.toLowerCase())), [items, query]);
   const visibleAdminItems = filteredAdminItems.slice(0, 100);
-  const openForm = (item = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : blank); setFormOpen(true); };
+  const calendarItems = items.filter((item) => item.date === adminDate).slice(0, 100);
+  const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setFormOpen(true); };
   const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   const save = async (event) => {
     event.preventDefault(); setBusy(true);
     try {
-      if (editing) await archiveService.update(editing.link, form); else await archiveService.create(form);
+      if (editing?._raw) await archiveService.updateRaw(editing.link, form);
+      else if (editing) await archiveService.update(editing.link, form);
+      else await archiveService.create(form);
       await onReload(); setEditing(null); setForm(blank); setFormOpen(false); alert(editing ? "수정했습니다." : "추가했습니다.");
     } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
@@ -265,12 +272,17 @@ function ArchiveAdmin({ items, onBack, onReload }) {
     if (!confirm(`「${item.title}」 기록을 삭제할까요?`)) return;
     setBusy(true); try { await archiveService.remove(item.link); await onReload(); } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
+  const loadRaw = async () => { setBusy(true); try { setRawItems(await archiveService.rawList()); setRawLoaded(true); } catch (error) { alert(error.message); } finally { setBusy(false); } };
+  const publishRaw = async (item) => { setBusy(true); try { await archiveService.create(item); setRawItems((current) => current.filter((raw) => raw.id !== item.id)); await onReload(); alert("메인 시트에 게시했습니다."); } catch (error) { alert(error.message); } finally { setBusy(false); } };
+  const removeRaw = async (item) => { if (!confirm(`「${item.title}」 Raw 데이터를 삭제할까요?`)) return; setBusy(true); try { await archiveService.removeRaw(item.link); setRawItems((current) => current.filter((raw) => raw.id !== item.id)); } catch (error) { alert(error.message); } finally { setBusy(false); } };
+  const recordRows = (rows, raw = false) => <div className="mt-4 space-y-2">{rows.map((item)=><article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-16 rounded-lg object-cover"/> : <div className="h-12 w-16 rounded-lg bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 line-clamp-2 text-xs font-bold">{item.title}</p></div>{raw ? <><button disabled={busy} onClick={()=>publishRaw(item)} className="rounded-lg bg-accent px-2.5 py-2 text-[10px] font-black">게시</button><button disabled={busy} onClick={()=>removeRaw(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></> : <><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></>}</article>)}</div>;
 
   return <div className="pt-5">
-    <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button><span className="ml-auto text-[10px] font-bold text-emerald-400">● Google Sheets</span></div>
-    <button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button>
-    <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div>
-    <p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개 · 최대 100개 표시</p>
+    <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button></div>
+    <div className="mt-4 grid grid-cols-3 border-b border-white/10">{[["list","목록 관리"],["calendar","캘린더 관리"],["import","불러오기"]].map(([key,label])=><button key={key} onClick={()=>{setAdminTab(key);setFormOpen(false);}} className={cn("border-b-2 py-3 text-[11px] font-black",adminTab===key?"border-accent text-white":"border-transparent text-neutral-600")}>{label}</button>)}</div>
+    {adminTab === "list" && <><button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button><div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div><p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개 · 최대 100개 표시</p></>}
+    {adminTab === "calendar" && <div className="mt-4"><div className="flex gap-2"><input type="date" value={adminDate} onChange={(event)=>setAdminDate(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-xs"/><button onClick={()=>openForm(null,adminDate)} className="rounded-xl bg-accent px-4 py-3 text-xs font-black">+ 추가</button></div><p className="mt-3 text-xs font-bold text-neutral-500">{adminDate} · {calendarItems.length}개</p></div>}
+    {adminTab === "import" && <div className="mt-4"><button disabled={busy} onClick={loadRaw} className="w-full rounded-2xl bg-accent py-3.5 text-xs font-black">{busy ? "불러오는 중…" : "Raw 시트 데이터 불러오기"}</button>{rawLoaded && <p className="mt-3 text-xs font-bold text-neutral-500">Raw 데이터 {rawItems.length}개 · 최대 100개 표시</p>}</div>}
     {formOpen && <form onSubmit={save} className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4">
       <div className="mb-3 flex items-center"><h3 className="text-sm font-black">{editing ? "기록 수정" : "새 기록"}</h3><button type="button" onClick={() => {setEditing(null);setForm(blank);setFormOpen(false);}} className="ml-auto"><X size={16}/></button></div>
       <div className="grid grid-cols-2 gap-2">
@@ -282,7 +294,9 @@ function ArchiveAdmin({ items, onBack, onReload }) {
       <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><AdminInput label="썸네일 URL" type="url" value={form.thumbnailUrl} onChange={(v)=>update("thumbnailUrl",v)}/><AdminInput label="키워드 (쉼표 구분)" value={form.rawKeywords} onChange={(v)=>update("rawKeywords",v)}/></div>
       <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Google Sheets에 저장"}</button>
     </form>}
-    <div className="mt-5 space-y-2">{visibleAdminItems.map((item)=><article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.03] p-3">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-12 rounded-xl object-cover"/> : <div className="h-12 w-12 rounded-xl bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 truncate text-xs font-bold">{item.title}</p></div><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></article>)}</div>
+    {adminTab === "list" && recordRows(visibleAdminItems)}
+    {adminTab === "calendar" && recordRows(calendarItems)}
+    {adminTab === "import" && recordRows(rawItems.slice(0,100), true)}
   </div>;
 }
 
