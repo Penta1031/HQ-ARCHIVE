@@ -28,31 +28,32 @@ const mainCategoryFor = (subCategory) => Object.entries(CATEGORY_MAP).find(([, v
 export default function Page() {
   const [tab, setTab] = useState("home");
   const [selectedKeyword, setSelectedKeyword] = useState("");
-  const [archives, setArchives] = useState(archiveItems);
-  const [keywordData, setKeywordData] = useState({ items: [], tags: [] });
   const [adminOpen, setAdminOpen] = useState(false);
+  const [adminArchives, setAdminArchives] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
   const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
-  const loadArchives = async () => {
-    const result = await archiveService.list();
-    setArchives(result.items);
-    setKeywordData(await keywordService.list(result.items));
+  const loadAdminArchives = async () => {
+    setAdminLoading(true);
+    try { const result = await archiveService.listAll(); setAdminArchives(result.items); }
+    catch { setAdminArchives([]); }
+    finally { setAdminLoading(false); }
   };
-  useEffect(() => { loadArchives(); }, []);
+  const openAdmin = () => { setAdminOpen(true); if (!adminArchives.length && !adminLoading) loadAdminArchives(); };
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
-        <Header onAdmin={() => setAdminOpen(true)} />
+        <Header onAdmin={openAdmin} />
         <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
           <div key={tab} className="animate-fade-in">
-            {tab === "home" && <HomeView items={archives} keywordData={keywordData} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
-            {tab === "calendar" && <CalendarView items={archives} />}
+            {tab === "home" && <HomeView initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
+            {tab === "calendar" && <CalendarView />}
             {tab === "worldcup" && <WorldcupView />}
             {tab === "postype" && <PostypeView />}
           </div>
         </section>
         <BottomNav tab={tab} onChange={navigate} />
-        {adminOpen && <AdminHub items={archives} onClose={() => setAdminOpen(false)} onReload={loadArchives} />}
+        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={() => setAdminOpen(false)} onReload={loadAdminArchives} />}
       </div>
     </main>
   );
@@ -82,27 +83,63 @@ function SearchBar({ value, onChange, placeholder = "제목, 키워드, 날짜�
   );
 }
 
-function HomeView({ items, keywordData, initialKeyword, onKeywordConsumed }) {
-  const [subTab, setSubTab] = useState(initialKeyword ? "archive" : "archive");
+function HomeView({ initialKeyword, onKeywordConsumed }) {
+  const [subTab, setSubTab] = useState("archive");
   const [query, setQuery] = useState(initialKeyword ? `#${initialKeyword}` : "");
+  const [requestQuery, setRequestQuery] = useState(initialKeyword ? `#${initialKeyword}` : "");
   const [mainCategory, setMainCategory] = useState("전체");
   const [subCategory, setSubCategory] = useState("전체");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [displayLimit, setDisplayLimit] = useState(30);
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState("");
+  const [keywordData, setKeywordData] = useState({ items: [], tags: [] });
+  const [keywordLoading, setKeywordLoading] = useState(false);
+  const [keywordLoaded, setKeywordLoaded] = useState(false);
+  const [todayItems, setTodayItems] = useState([]);
+  const [todayLoading, setTodayLoading] = useState(false);
+  const [todayLoaded, setTodayLoaded] = useState(false);
   const mains = MAIN_CATEGORY_ORDER;
-  const subs = ["전체", ...new Set(items.filter((x) => mainCategory === "전체" || x.mainCategory === mainCategory).map((x) => x.subCategory))];
-  const filtered = items.filter((item) => {
-    const q = query.replace(/^#/, "").toLowerCase();
-    return (mainCategory === "전체" || item.mainCategory === mainCategory) &&
-      (subCategory === "전체" || item.subCategory === subCategory) &&
-      (!q || [item.title, item.date, ...item.keywords].join(" ").toLowerCase().includes(q));
-  }).sort((a, b) => sortOrder === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
-  const yearsAgo = items.filter((x) => x.date.slice(5) === formatDate(today).slice(5) && x.date !== formatDate(today));
+  const subs = ["전체", ...(mainCategory === "전체" ? SUB_CATEGORY_OPTIONS : (CATEGORY_MAP[mainCategory] || []))];
+
+  useEffect(() => { const timer = setTimeout(() => setRequestQuery(query), 350); return () => clearTimeout(timer); }, [query]);
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError(""); setItems([]); setPage(1);
+    archiveService.page({ page: 1, limit: 30, query: requestQuery, mainCategory, subCategory, sortOrder })
+      .then((result) => { if (!active) return; setItems(result.items); setTotal(result.total); setHasMore(result.hasMore); })
+      .catch((reason) => { if (!active) return; setError(reason.message || "기록을 불러오지 못했어요."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [requestQuery, mainCategory, subCategory, sortOrder]);
+  useEffect(() => {
+    if (subTab !== "keywords" || keywordLoaded || keywordLoading) return;
+    setKeywordLoading(true);
+    keywordService.list().then(setKeywordData).catch(() => setKeywordData({items:[],tags:[]})).finally(() => { setKeywordLoading(false); setKeywordLoaded(true); });
+  }, [subTab, keywordLoaded, keywordLoading]);
+  useEffect(() => {
+    if (subTab !== "today" || todayLoaded || todayLoading) return;
+    setTodayLoading(true);
+    archiveService.today({ monthDay: formatDate(today).slice(5) }).then((result) => setTodayItems(result.items.filter((item) => item.date !== formatDate(today)))).catch(() => setTodayItems([])).finally(() => { setTodayLoading(false); setTodayLoaded(true); });
+  }, [subTab, todayLoaded, todayLoading]);
+  useEffect(() => { if (initialKeyword) { setQuery(`#${initialKeyword}`); setSubTab("archive"); onKeywordConsumed(); } }, [initialKeyword, onKeywordConsumed]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try { const result = await archiveService.page({ page: page + 1, limit: 30, query: requestQuery, mainCategory, subCategory, sortOrder }); setItems((current) => [...current, ...result.items]); setPage(result.page); setHasMore(result.hasMore); setTotal(result.total); }
+    catch (reason) { setError(reason.message || "다음 기록을 불러오지 못했어요."); }
+    finally { setLoadingMore(false); }
+  };
 
   const pickKeyword = (tag) => { setQuery(`#${tag}`); setSubTab("archive"); onKeywordConsumed(); };
   return (
     <div>
-      <div className="px-4 pt-4"><SearchBar value={query} onChange={(value) => { setQuery(value); setDisplayLimit(30); }} /></div>
+      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} /></div>
       <div className="sticky top-0 z-20 mt-3 border-b border-white/10 bg-black/95 px-4 backdrop-blur-xl">
         <div className="grid grid-cols-3">
           {[["archive", Archive, "아카이브"], ["keywords", Heart, "키워드"], ["today", CalendarDays, "N년전 오늘"]].map(([key, Icon, label]) => (
@@ -114,14 +151,14 @@ function HomeView({ items, keywordData, initialKeyword, onKeywordConsumed }) {
       </div>
       {subTab === "archive" && <div className="px-4 pt-4">
         <p className="mb-2 text-[10px] font-bold text-neutral-600">← 좌우로 밀어서 카테고리를 확인하세요 →</p>
-        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); setDisplayLimit(30); }} />
-        {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={(value) => { setSubCategory(value); setDisplayLimit(30); }} secondary /></div>}
-        <SectionLabel label="전체" count={filtered.length} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} />
-        <ArchiveGrid items={filtered.slice(0, displayLimit)} />
-        {filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}
+        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); }} />
+        {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={setSubCategory} secondary /></div>}
+        <SectionLabel label="전체" count={total} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} />
+        {loading ? <ArchiveSkeleton /> : error && !items.length ? <LoadError message={error}/> : <ArchiveGrid items={items} />}
+        {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? "다음 30개 불러오는 중…" : "더보기 (+30)"}</button>}
       </div>}
-      {subTab === "keywords" && <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />}
-      {subTab === "today" && <TodayView items={yearsAgo} />}
+      {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
+      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} />}
     </div>
   );
 }
@@ -165,28 +202,32 @@ function KeywordView({ items, tags, query }) {
   </div>;
 }
 
-function TodayView({ items }) {
+function TodayView({ items, loading = false }) {
   return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">21</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">6월 21일의 기록</h2></div>
-    <div className="mt-6 space-y-3">{items.map((item) => { const ago = today.getFullYear() - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>
+    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = today.getFullYear() - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
   </div>;
 }
 
-function CalendarView({ items }) {
+function CalendarView() {
   const [year, setYear] = useState(2026); const [month, setMonth] = useState(6); const [day, setDay] = useState(null);
   const [displayLimit, setDisplayLimit] = useState(30);
+  const [monthly, setMonthly] = useState([]);
+  const [monthTotal, setMonthTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const monthKey = `${year}-${pad(month)}`;
-  const monthly = items.filter((x) => x.date.startsWith(monthKey));
   const filtered = (day ? monthly.filter((x) => x.date === `${monthKey}-${pad(day)}`) : monthly).sort((a,b) => b.date.localeCompare(a.date));
   const firstDay = new Date(year, month - 1, 1).getDay(); const days = new Date(year, month, 0).getDate();
   const changeMonth = (delta) => { const d = new Date(year, month - 1 + delta, 1); setYear(d.getFullYear()); setMonth(d.getMonth() + 1); setDay(null); setDisplayLimit(30); };
-  return <div className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CALENDAR</p><h2 className="mt-1 text-2xl font-black tracking-tight">캘린더</h2></div><span className="ml-auto text-sm font-black text-neutral-500">{monthly.length}개</span></div>
+  useEffect(() => { let active = true; setLoading(true); setError(""); setMonthly([]); archiveService.calendar({year,month}).then((result)=>{if(!active)return;setMonthly(result.items);setMonthTotal(result.total);}).catch((reason)=>{if(!active)return;setError(reason.message||"캘린더 기록을 불러오지 못했어요.");}).finally(()=>{if(active)setLoading(false);}); return()=>{active=false;}; },[year,month]);
+  return <div className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CALENDAR</p><h2 className="mt-1 text-2xl font-black tracking-tight">캘린더</h2></div><span className="ml-auto text-sm font-black text-neutral-500">{monthTotal}개</span></div>
     <div className="mt-5 rounded-3xl border border-white/10 bg-neutral-900/70 p-4">
       <div className="flex items-center justify-between"><button onClick={() => changeMonth(-1)} className="rounded-full bg-white/5 p-2"><ChevronLeft size={17} /></button><div className="flex gap-2"><select value={year} onChange={(e) => { setYear(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{[2023,2024,2025,2026].map((y) => <option key={y}>{y}</option>)}</select><select value={month} onChange={(e) => { setMonth(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{Array.from({length:12},(_,i)=>i+1).map((m) => <option key={m} value={m}>{pad(m)}</option>)}</select></div><button onClick={() => changeMonth(1)} className="rounded-full bg-white/5 p-2"><ChevronRight size={17} /></button></div>
       <div className="mt-5 grid grid-cols-7 text-center text-[10px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((x)=><span key={x}>{x}</span>)}</div>
       <div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:firstDay}).map((_,i)=><span key={`e${i}`} />)}{Array.from({length:days},(_,i)=>i+1).map((d)=>{const has=monthly.some((x)=>x.date===`${monthKey}-${pad(d)}`); return <button key={d} onClick={()=>{setDay(day===d?null:d);setDisplayLimit(30);}} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",day===d?"bg-accent text-white":d===21&&month===6&&year===2026?"bg-white text-black":"text-neutral-400")}>{d}{has&&day!==d&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div>
     </div>
     <div className="mt-6 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">{day ? "SELECTED DAY" : "MONTHLY ARCHIVE"}</p><h3 className="mt-1 text-lg font-black">{day ? `${month}월 ${day}일` : `${year}년 ${month}월`}</h3></div><button onClick={()=>{setDay(null);setDisplayLimit(30);}} className={cn("ml-auto text-xs font-bold text-accent",!day&&"invisible")}>전체 보기</button></div>
-    <div className="mt-4"><ArchiveGrid items={filtered.slice(0, displayLimit)} />{filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
+    <div className="mt-4">{loading ? <ArchiveSkeleton/> : error ? <LoadError message={error}/> : <ArchiveGrid items={filtered.slice(0, displayLimit)} />}{!loading && filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
   </div>;
 }
 
@@ -216,7 +257,7 @@ function PostypeView() {
   return <div className="px-4 pt-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">POSTYPE FINDER</p><h2 className="mt-1 text-2xl font-black">포타 검색기</h2><p className="mt-1 text-xs text-neutral-600">좋아했던 글을 다시 만나는 가장 빠른 방법</p></div><div className="mt-5"><SearchBar value={query} onChange={setQuery} placeholder="작가, 제목, 내용으로 검색"/></div><div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 no-scrollbar">{tags.map((x)=><button key={x} onClick={()=>setTag(x)} className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-bold",tag===x?"bg-accent text-white":"border border-white/10 bg-neutral-900 text-neutral-500")}>{x==="전체"?x:`#${x}`}</button>)}</div><div className="mt-6 flex items-center"><p className="text-xs font-black text-neutral-500">{items.length}개의 작품</p><select value={sort} onChange={(e)=>setSort(e.target.value)} className="ml-auto rounded-lg border border-white/10 bg-neutral-900 px-2.5 py-2 text-xs font-bold outline-none">{["최신순","작가순","북마크순"].map((x)=><option key={x}>{x}</option>)}</select></div><div className="mt-3 space-y-3">{items.map((item)=><article key={item.id} className="rounded-2xl border border-white/10 bg-neutral-900/70 p-4"><div className="flex items-center text-[11px]"><UserRound size={13} className="mr-1.5 text-neutral-600"/><span className="font-bold text-neutral-400">{item.author}</span><span className="ml-3 flex items-center gap-1 text-neutral-600"><Heart size={12} fill="#737373"/>{item.hearts.toLocaleString()}</span><time className="ml-auto font-bold text-neutral-600">{item.date}</time></div><h3 className="mt-3 text-base font-black tracking-tight">{item.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">{item.excerpt}</p><div className="mt-3 flex flex-wrap gap-1.5">{item.tags.map((t)=><span key={t} className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-bold text-neutral-500">#{t}</span>)}</div></article>)}</div></div>;
 }
 
-function AdminHub({ items, onClose, onReload }) {
+function AdminHub({ items, loading, onClose, onReload }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -241,7 +282,7 @@ function AdminHub({ items, onClose, onReload }) {
         <AdminPortalCard icon={Archive} label="아카이브" description="Google Sheets 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Trophy} label="월드컵" description="후보와 랭킹 데이터 관리" badge="다음 연결" />
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" badge="다음 연결" />
-      </div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>} 
+      </div> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>} 
     </div>
   </div>;
 }
@@ -377,6 +418,18 @@ function AdminInput({ label, value, onChange, type = "text", required = false })
 
 function AdminSelect({ label, value, onChange, options, emptyValue = false }) {
   return <label className="block min-w-0"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><select value={value} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-2 py-2.5 text-xs outline-none focus:border-accent">{options.map((option,index)=><option key={`${option}-${index}`} value={emptyValue&&index===0?"":option}>{option}</option>)}</select></label>;
+}
+
+function ArchiveSkeleton() {
+  return <div aria-label="기록 불러오는 중" className="grid grid-cols-2 gap-x-3 gap-y-5">{Array.from({length:6},(_,index)=><div key={index} className="animate-pulse"><div className="aspect-[16/9] rounded-xl bg-neutral-900"/><div className="mt-2 flex items-center"><span className="h-3 w-12 rounded bg-neutral-900"/><span className="ml-auto h-2.5 w-16 rounded bg-neutral-900"/></div><div className="mt-2 h-3 w-full rounded bg-neutral-900"/><div className="mt-1.5 h-3 w-2/3 rounded bg-neutral-900"/></div>)}</div>;
+}
+
+function ListSkeleton() {
+  return <div aria-label="데이터 불러오는 중" className="space-y-3">{Array.from({length:4},(_,index)=><div key={index} className="flex animate-pulse gap-3 rounded-2xl border border-white/5 bg-white/[.02] p-3"><div className="h-14 w-16 rounded-xl bg-neutral-900"/><div className="flex-1"><div className="h-3 w-1/3 rounded bg-neutral-900"/><div className="mt-3 h-3 w-full rounded bg-neutral-900"/><div className="mt-2 h-3 w-2/3 rounded bg-neutral-900"/></div></div>)}</div>;
+}
+
+function LoadError({ message }) {
+  return <div className="rounded-2xl border border-accent/20 bg-accent/5 px-4 py-10 text-center"><p className="text-xs font-bold text-neutral-400">{message}</p><p className="mt-2 text-[10px] text-neutral-600">잠시 후 다시 시도해주세요.</p></div>;
 }
 
 function EmptyState({text}) { return <div className="flex flex-col items-center py-20 text-center"><Archive size={28} className="text-neutral-800"/><p className="mt-3 text-xs font-bold text-neutral-600">{text}</p></div> }
