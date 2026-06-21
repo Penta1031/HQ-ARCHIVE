@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
   ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, UserRound, X
@@ -66,10 +67,10 @@ export default function Page() {
 
 function Header({ onAdmin }) {
   return (
-    <header className="z-30 flex h-[68px] shrink-0 items-center border-b border-white/10 bg-black/90 px-5 backdrop-blur-xl">
+    <header className="z-30 flex h-[58px] shrink-0 items-center border-b border-white/10 bg-black/90 px-4 backdrop-blur-xl">
       <div className="flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full bg-accent shadow-[0_0_18px_#e50000]" />
-        <h1 className="text-[19px] font-black tracking-[-.04em]">HQ ARCHIVE</h1>
+        <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_14px_#e50000]" />
+        <h1 className="text-[16px] font-black tracking-[-.03em]">HQ ARCHIVE</h1>
       </div>
       <div className="ml-auto">
         <button onClick={onAdmin} aria-label="관리자 모드" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><LockKeyhole size={16} /></button>
@@ -238,6 +239,49 @@ function CalendarView() {
 
 const shuffle = (items) => [...items].sort(() => Math.random() - 0.5);
 const itemKey = (item) => `${item.originalCupId || "cup"}-${item.id}`;
+const tweetMediaCache = new Map();
+
+function AppOverlay({ children, className = "z-[70]" }) {
+  const [mounted,setMounted]=useState(false);
+  useEffect(()=>setMounted(true),[]);
+  return mounted ? createPortal(<div className={cn("fixed inset-0",className)}>{children}</div>,document.body) : null;
+}
+
+const mediaFromTweetData = (data = {}) => {
+  const candidates = [
+    ...(data.media_extended || []),
+    ...(data.tweet?.media?.all || []),
+    ...(data.media?.all || [])
+  ];
+  const detailed = candidates.find((media)=>media?.url || media?.thumbnail_url);
+  const url = detailed?.url || detailed?.thumbnail_url || data.mediaURLs?.[0] || data.media_urls?.[0] || data.video_url || data.tweet?.video?.url || "";
+  return url ? { url, isVideo: /video|gif/i.test(detailed?.type || "") || /\.(mp4|m3u8)(?:$|\?)/i.test(url) } : null;
+};
+
+async function resolveTweetMedia(sourceUrl) {
+  if (!sourceUrl) return null;
+  if (tweetMediaCache.has(sourceUrl)) return tweetMediaCache.get(sourceUrl);
+  const request = (async()=>{
+    try {
+      const source = new URL(sourceUrl);
+      if (/pbs\.twimg\.com|video\.twimg\.com/i.test(source.hostname)) return { url: sourceUrl, isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(sourceUrl) };
+      const match = source.pathname.match(/\/([^/]+)\/(?:status|statuses)\/(\d+)/i);
+      if (!match) return null;
+      const path = `/${match[1]}/status/${match[2]}`;
+      for (const endpoint of [`https://api.vxtwitter.com${path}`,`https://api.fxtwitter.com${path}`]) {
+        try {
+          const response = await fetch(endpoint);
+          if (!response.ok) continue;
+          const resolved = mediaFromTweetData(await response.json());
+          if (resolved) return resolved;
+        } catch {}
+      }
+    } catch {}
+    return null;
+  })();
+  tweetMediaCache.set(sourceUrl,request);
+  return request;
+}
 
 function unifiedWorldcup(cups) {
   return {
@@ -249,25 +293,19 @@ function unifiedWorldcup(cups) {
 }
 
 function CandidateMedia({ item, className = "", controls = false }) {
-  const [media, setMedia] = useState(item.mediaUrl || "");
+  const [media, setMedia] = useState(item.mediaUrl ? {url:item.mediaUrl,isVideo:Boolean(item.isVideo||/\.(mp4|m3u8)(?:$|\?)/i.test(item.mediaUrl))} : null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let active = true;
-    setMedia(item.mediaUrl || ""); setFailed(false);
+    setMedia(item.mediaUrl ? {url:item.mediaUrl,isVideo:Boolean(item.isVideo||/\.(mp4|m3u8)(?:$|\?)/i.test(item.mediaUrl))} : null); setFailed(false);
     if (!item.mediaUrl && item.sourceUrl) {
-      try {
-        const source = new URL(item.sourceUrl);
-        fetch(`https://api.vxtwitter.com${source.pathname}`).then((response) => response.json()).then((data) => {
-          if (active && data.mediaURLs?.[0]) setMedia(data.mediaURLs[0]);
-        }).catch(() => {});
-      } catch {}
+      resolveTweetMedia(item.sourceUrl).then((resolved)=>{if(active&&resolved)setMedia(resolved);});
     }
     return () => { active = false; };
   }, [item.id, item.mediaUrl, item.sourceUrl]);
-  const isVideo = item.isVideo || /\.mp4(?:$|\?)/i.test(media);
   if (!media || failed) return <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-950 p-4 text-center text-sm font-black leading-5 text-neutral-300",className)}>{item.name}</div>;
-  if (isVideo) return <video src={media} autoPlay={!controls} controls={controls} loop muted={!controls} playsInline className={cn("h-full w-full object-cover",className)}/>;
-  return <img src={media} alt="" onError={()=>setFailed(true)} className={cn("h-full w-full object-cover",className)}/>;
+  if (media.isVideo) return <video src={media.url} autoPlay={!controls} controls={controls} loop muted={!controls} playsInline onError={()=>setFailed(true)} className={cn("h-full w-full object-cover",className)}/>;
+  return <img src={media.url} alt="" onError={()=>setFailed(true)} className={cn("h-full w-full object-cover",className)}/>;
 }
 
 function WorldcupView() {
@@ -288,7 +326,6 @@ function WorldcupView() {
   }, []);
 
   const unified = useMemo(() => unifiedWorldcup(cups), [cups]);
-  const globalRanking = useMemo(() => unified.items.filter((item) => item.winCount > 0).sort((a,b)=>b.winCount-a.winCount).slice(0,5), [unified]);
 
   useEffect(() => {
     if (loading || deepLinkHandled) return;
@@ -330,40 +367,46 @@ function WorldcupView() {
   if (winner) return <WinnerView winner={winner} cup={selected} onBack={()=>{setWinner(null);setSelected(null);}} onAgain={()=>{setWinner(null);setBracketCup(selected);}}/>;
   if (game) {
     const candidates = game.roundItems.slice(game.matchIndex, game.matchIndex + 2);
-    return <GameView candidates={candidates} total={game.roundItems.length} matchIndex={game.matchIndex} onChoose={choose} onClose={()=>{setGame(null);setSelected(null);}}/>;
+    return <GameView cup={selected} candidates={candidates} total={game.roundItems.length} matchIndex={game.matchIndex} onChoose={choose} onClose={()=>{setGame(null);setSelected(null);}}/>;
   }
 
-  return <div className="pb-6"><section className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">HALL OF FAME</p><h2 className="mt-1 text-2xl font-black">명예의 전당</h2></div><Trophy className="ml-auto text-accent" size={27}/></div>
-    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : globalRanking.length ? <div className="mt-4 space-y-2">{globalRanking.map((item,index)=><div key={itemKey(item)} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-2.5"><span className={cn("w-7 text-center text-lg font-black italic",index===0?"text-accent":"text-neutral-600")}>{index+1}</span><div className="h-12 w-12 overflow-hidden rounded-xl"><CandidateMedia item={item}/></div><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.name}</p><p className="mt-1 text-[10px] text-neutral-600">역대 우승 {Number(item.winCount||0).toLocaleString()}회</p></div>{index===0&&<Crown size={17} className="mr-2 text-accent"/>}</div>)}</div> : <p className="mt-4 rounded-2xl border border-white/10 bg-neutral-900/60 p-5 text-center text-xs text-neutral-500">아직 우승 기록이 없습니다.</p>}</section>
-    {!loading&&!error&&<section className="mt-8 px-4"><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">CHOOSE YOUR ONE</p><h2 className="mt-1 text-xl font-black">혚쾌 월드컵</h2><div className="mt-4 space-y-3">{[...(unified.items.length>=4?[unified]:[]),...cups].map((cup)=><article key={cup.id} className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-900"><button onClick={()=>setSelected(cup)} className="flex w-full items-center gap-4 p-4 text-left"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-3xl">{cup.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm font-black">{cup.title}</strong><span className="mt-1 block text-[11px] font-bold text-neutral-500">후보 {cup.items.length}개</span></span><Play size={17} className="text-accent" fill="#e50000"/></button><button onClick={()=>setRankingCup(cup)} className="w-full border-t border-white/10 py-3 text-[11px] font-black text-neutral-500"><Crown size={13} className="mr-1.5 inline text-accent"/>랭킹 보기</button></article>)}</div></section>}
+  return <div className="px-4 pb-6 pt-4"><p className="text-[10px] font-black tracking-[.18em] text-accent">CHOOSE YOUR ONE</p><h2 className="mt-1 text-xl font-black">혚쾌 월드컵</h2>
+    {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : <div className="mt-4 space-y-3">{[...(unified.items.length>=4?[unified]:[]),...cups].map((cup)=><article key={cup.id} className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-900"><button onClick={()=>setSelected(cup)} className="flex w-full items-center gap-4 p-4 text-left"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-3xl">{cup.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm font-black">{cup.title}</strong><span className="mt-1 block text-[11px] font-bold text-neutral-500">후보 {cup.items.length}개</span></span><Play size={17} className="text-accent" fill="#e50000"/></button><button onClick={()=>setRankingCup(cup)} className="w-full border-t border-white/10 py-3 text-[11px] font-black text-neutral-500"><Crown size={13} className="mr-1.5 inline text-accent"/>랭킹 보기</button></article>)}</div>}
     {selected&&<WorldcupSheet cup={selected} onClose={()=>setSelected(null)} onStart={()=>setBracketCup(selected)} onRanking={()=>setRankingCup(selected)}/>}
     {bracketCup&&<BracketSheet cup={bracketCup} onClose={()=>setBracketCup(null)} onStart={start}/>}
     {rankingCup&&<RankingSheet cup={rankingCup} onClose={()=>setRankingCup(null)}/>}
   </div>;
 }
 
-function WorldcupSheet({cup,onClose,onStart,onRanking}) { return <div className="absolute inset-0 z-50 flex items-end bg-black/80 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(e)=>e.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5"><div className="mx-auto h-1 w-10 rounded bg-neutral-700"/><div className="mt-5 flex aspect-[16/7] items-center justify-center rounded-2xl bg-[radial-gradient(circle,#e5000038,transparent_65%)] text-6xl">{cup.icon}</div><h3 className="mt-4 text-xl font-black">{cup.title}</h3><p className="mt-2 text-xs font-bold text-neutral-500">후보 {cup.items.length}개</p><button disabled={cup.items.length<2} onClick={onStart} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black disabled:bg-neutral-800 disabled:text-neutral-600"><Play size={16} fill="white"/>시작하기</button><button onClick={onRanking} className="mt-2 w-full rounded-2xl bg-white/5 py-4 text-sm font-bold text-neutral-400">이 월드컵 결과 보기</button></div></div> }
+function WorldcupSheet({cup,onClose,onStart,onRanking}) {
+  return <AppOverlay className="z-[50]"><div className="h-full bg-black/80 backdrop-blur-sm" onClick={onClose}><div className="mx-auto flex h-full w-full max-w-md items-end p-3"><div onClick={(event)=>event.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5 shadow-2xl"><div className="mx-auto h-1 w-10 rounded bg-neutral-700"/><div className="mt-5 flex aspect-[16/7] items-center justify-center rounded-2xl bg-[radial-gradient(circle,#e5000038,transparent_65%)] text-6xl">{cup.icon}</div><h3 className="mt-4 text-xl font-black">{cup.title}</h3><p className="mt-2 text-xs font-bold text-neutral-500">후보 {cup.items.length}개</p><button disabled={cup.items.length<2} onClick={onStart} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black disabled:bg-neutral-800 disabled:text-neutral-600"><Play size={16} fill="white"/>시작하기</button><button onClick={onRanking} className="mt-2 w-full rounded-2xl bg-white/5 py-4 text-sm font-bold text-neutral-400">이 월드컵 결과 보기</button></div></div></div></AppOverlay>;
+}
 
 function BracketSheet({cup,onClose,onStart}) {
   const sizes = [128,64,32,16,8,4].filter((size)=>size<cup.items.length);
-  return <div className="absolute inset-0 z-[60] flex items-end bg-black/85 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(event)=>event.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5"><h3 className="text-lg font-black">진행할 대진을 선택하세요</h3><p className="mt-1 text-xs text-neutral-500">후보를 무작위로 섞어 시작합니다.</p><div className="mt-5 grid grid-cols-2 gap-2"><button onClick={()=>onStart(cup,cup.items.length)} className="col-span-2 rounded-2xl bg-accent py-4 text-sm font-black">전체 ({cup.items.length}강)</button>{sizes.map((size)=><button key={size} onClick={()=>onStart(cup,size)} className="rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-black">{size}강</button>)}</div><button onClick={onClose} className="mt-3 w-full py-3 text-xs font-bold text-neutral-500">취소</button></div></div>;
+  return <AppOverlay className="z-[60]"><div className="h-full bg-black/85 backdrop-blur-sm" onClick={onClose}><div className="mx-auto flex h-full w-full max-w-md items-end p-3"><div onClick={(event)=>event.stopPropagation()} className="w-full animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-5 shadow-2xl"><h3 className="text-lg font-black">진행할 대진을 선택하세요</h3><p className="mt-1 text-xs text-neutral-500">후보를 무작위로 섞어 시작합니다.</p><div className="mt-5 grid grid-cols-2 gap-2"><button onClick={()=>onStart(cup,cup.items.length)} className="col-span-2 rounded-2xl bg-accent py-4 text-sm font-black">전체 ({cup.items.length}강)</button>{sizes.map((size)=><button key={size} onClick={()=>onStart(cup,size)} className="rounded-2xl border border-white/10 bg-white/5 py-3.5 text-sm font-black">{size}강</button>)}</div><button onClick={onClose} className="mt-3 w-full py-3 text-xs font-bold text-neutral-500">취소</button></div></div></div></AppOverlay>;
 }
 
 function RankingSheet({cup,onClose}) {
+  const [preview,setPreview]=useState(null);
   const ranking=[...cup.items].sort((a,b)=>Number(b.winCount||0)-Number(a.winCount||0));
-  return <div className="absolute inset-0 z-[60] flex items-end bg-black/85 p-3 backdrop-blur-sm" onClick={onClose}><div onClick={(event)=>event.stopPropagation()} className="max-h-[82dvh] w-full overflow-y-auto rounded-[28px] border border-white/10 bg-neutral-900 p-5 no-scrollbar animate-pop-in"><div className="flex items-start"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">LOCAL RANKING</p><h3 className="mt-1 text-lg font-black">{cup.title}</h3></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2"><X size={16}/></button></div><div className="mt-5 space-y-2">{ranking.map((item,index)=><div key={itemKey(item)} className="flex items-center gap-3 rounded-2xl bg-black/40 p-2.5"><span className={cn("w-6 text-center text-sm font-black",index<3?"text-accent":"text-neutral-600")}>{index+1}</span><div className="h-11 w-11 overflow-hidden rounded-xl"><CandidateMedia item={item}/></div><p className="min-w-0 flex-1 truncate text-xs font-bold">{item.name}</p><span className="text-[10px] font-black text-neutral-500">{Number(item.winCount||0)}승</span></div>)}</div></div></div>;
+  return <><AppOverlay className="z-[60]"><div className="h-full bg-black/85 backdrop-blur-sm" onClick={onClose}><div className="mx-auto flex h-full w-full max-w-md items-end p-3"><div onClick={(event)=>event.stopPropagation()} className="flex max-h-[88dvh] w-full flex-col rounded-[28px] border border-white/10 bg-neutral-900 p-5 shadow-2xl animate-pop-in"><div className="flex shrink-0 items-start"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">LOCAL RANKING</p><h3 className="mt-1 text-lg font-black">{cup.title}</h3><p className="mt-2 text-[10px] text-neutral-600">목록을 누르면 떡밥 미디어를 확인할 수 있어요.</p></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2"><X size={16}/></button></div><div className="mt-5 min-h-0 space-y-2 overflow-y-auto no-scrollbar">{ranking.map((item,index)=><button key={itemKey(item)} onClick={()=>setPreview(item)} className="flex w-full items-center gap-3 rounded-2xl bg-black/40 p-3 text-left active:bg-white/10"><span className={cn("w-6 text-center text-sm font-black",index<3?"text-accent":"text-neutral-600")}>{index+1}</span><p className="min-w-0 flex-1 truncate text-xs font-bold">{item.name}</p><span className="text-[10px] font-black text-neutral-500">{Number(item.winCount||0)}승</span></button>)}</div></div></div></div></AppOverlay>{preview&&<MediaPreviewModal item={preview} onClose={()=>setPreview(null)}/>}</>;
 }
 
-function GameView({candidates,total,matchIndex,onChoose,onClose}) {
+function MediaPreviewModal({item,onClose}) {
+  return <AppOverlay className="z-[80]"><div className="flex h-full items-center justify-center bg-black/90 p-4 backdrop-blur-md" onClick={onClose}><div onClick={(event)=>event.stopPropagation()} className="w-full max-w-sm animate-pop-in rounded-[28px] border border-white/10 bg-neutral-900 p-4 shadow-2xl"><div className="flex items-start gap-3"><div className="min-w-0 flex-1"><h3 className="text-balance text-sm font-black leading-5">{item.name}</h3>{item.date&&<time className="mt-1 block text-[10px] font-bold text-neutral-600">{item.date}</time>}</div><button onClick={onClose} className="rounded-full bg-white/5 p-2 text-neutral-500"><X size={16}/></button></div><div className="mt-4 aspect-[4/5] max-h-[65dvh] overflow-hidden rounded-2xl bg-black"><CandidateMedia item={item} controls className="!text-base"/></div>{item.sourceUrl&&<a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 block w-full rounded-xl bg-white/5 py-3 text-center text-xs font-black text-neutral-400">원본 링크 열기</a>}</div></div></AppOverlay>;
+}
+
+function GameView({cup,candidates,total,matchIndex,onChoose,onClose}) {
   const roundTitle=total===2?"결승전":`${total}강`;
-  if(candidates.length===1) return <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black p-6 text-center"><Flame size={32} className="text-accent"/><h2 className="mt-4 text-xl font-black">부전승 발생!</h2><p className="mt-2 text-sm leading-6 text-neutral-500"><b className="text-white">{candidates[0].name}</b>이(가)<br/>다음 라운드로 진출합니다.</p><button onClick={()=>onChoose(candidates[0])} className="mt-7 w-full rounded-2xl bg-accent py-4 text-sm font-black">다음 라운드 이동</button></div>;
-  return <div className="absolute inset-0 z-50 flex flex-col bg-black"><div className="flex h-12 shrink-0 items-center px-4"><button onClick={onClose}><ChevronLeft/></button><p className="mx-auto pr-6 text-xs font-black tracking-widest text-neutral-500">{roundTitle} {Math.floor(matchIndex/2)+1}/{Math.ceil(total/2)}</p></div><div className="relative grid min-h-0 flex-[3] grid-cols-2 gap-0.5">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="overflow-hidden"><CandidateMedia item={candidate}/></button>)}<div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 rotate-[-8deg] items-center justify-center rounded-full border-4 border-black bg-accent text-sm font-black italic shadow-2xl">VS</div></div><div className="flex min-h-0 flex-[2] flex-col justify-center gap-3 p-4">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4 text-balance text-sm font-black leading-5 active:border-accent active:bg-accent"><span>{candidate.name}</span>{candidate.date&&<time className="ml-2 text-[10px] font-bold text-neutral-500">{candidate.date}</time>}</button>)}</div></div>;
+  if(candidates.length===1) return <AppOverlay><div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col items-center justify-center bg-black p-6 text-center"><Flame size={32} className="text-accent"/><h2 className="mt-4 text-xl font-black">부전승 발생!</h2><p className="mt-2 text-sm leading-6 text-neutral-500"><b className="text-white">{candidates[0].name}</b>이(가)<br/>다음 라운드로 진출합니다.</p><button onClick={()=>onChoose(candidates[0])} className="mt-7 w-full rounded-2xl bg-accent py-4 text-sm font-black">다음 라운드 이동</button></div></AppOverlay>;
+  return <AppOverlay><div className="mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-black"><header className="flex h-14 shrink-0 items-center border-b border-white/5 px-4"><button onClick={onClose} className="rounded-full p-2 text-neutral-400"><ChevronLeft size={21}/></button><h2 className="mx-auto min-w-0 truncate pr-10 text-sm font-black">{cup?.title}</h2></header><div className="shrink-0 py-4 text-center"><p className="text-xs font-black tracking-widest text-neutral-500">{roundTitle} {Math.floor(matchIndex/2)+1}/{Math.ceil(total/2)}</p></div><div className="relative mx-4 grid h-[46dvh] min-h-[280px] grid-cols-2 gap-2">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-900"><CandidateMedia item={candidate} className="!text-base"/></button>)}<div className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-black bg-white text-xs font-black italic text-black shadow-2xl">VS</div></div><div className="flex flex-1 flex-col justify-start gap-3 p-4 pt-6">{candidates.map((candidate)=><button key={itemKey(candidate)} onClick={()=>onChoose(candidate)} className="flex min-h-16 w-full items-center rounded-2xl border border-white/10 bg-neutral-900 px-5 py-4 text-left text-sm font-black leading-5 active:border-accent active:bg-accent"><span className="text-balance">{candidate.name}</span>{candidate.date&&<time className="ml-auto shrink-0 pl-3 text-[10px] font-bold text-neutral-500">{candidate.date}</time>}</button>)}</div></div></AppOverlay>;
 }
 
 function WinnerView({winner,cup,onBack,onAgain}) {
   const shareUrl=()=>{const url=new URL(window.location.origin+window.location.pathname);url.searchParams.set("cupId",cup.id);url.searchParams.set("winnerId",winner.id);return url.toString();};
   const share=async()=>{const data={title:`${cup.title} 결과`,text:`🏆 나의 ${cup.title} 우승 떡밥은 [ ${winner.name} ].ᐟ`,url:shareUrl()};if(navigator.share) await navigator.share(data).catch(()=>{});else{await navigator.clipboard.writeText(data.url);alert("우승 결과 링크가 복사되었습니다!");}};
-  return <div className="relative min-h-[calc(100dvh-68px)] overflow-hidden px-5 pt-8 text-center"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><div className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></div><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div>;
+  return <AppOverlay><div className="relative mx-auto h-[100dvh] w-full max-w-md overflow-y-auto bg-black px-5 pt-8 text-center no-scrollbar"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><div className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></div><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div></AppOverlay>;
 }
 
 function PostypeView() {
