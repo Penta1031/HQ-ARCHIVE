@@ -1,4 +1,4 @@
-const channelUrls = [
+const defaultChannelUrls = [
   "https://www.youtube.com/@SeungHyub2",
   "https://www.youtube.com/@nflyingofficial/videos",
   "https://www.youtube.com/@YooHweSeung",
@@ -46,6 +46,10 @@ function channelReference(channelUrl: string) {
     throw new FunctionError(`채널 URL 형식이 올바르지 않습니다: ${channelUrl}`, 400);
   }
 
+  if (!['youtube.com', 'www.youtube.com'].includes(url.hostname.toLowerCase())) {
+    throw new FunctionError(`YouTube 채널 URL만 지원합니다: ${channelUrl}`, 400);
+  }
+
   const segments = url.pathname.split("/").filter(Boolean);
   if (segments[0]?.startsWith("@")) return { handle: segments[0] };
   if (segments[0] === "channel" && segments[1]) return { channelId: segments[1] };
@@ -77,6 +81,15 @@ Deno.serve(async (request) => {
     if (request.headers.get("authorization") !== `Bearer ${serviceRoleKey}`) {
       throw new FunctionError("이 수집 Function을 실행할 권한이 없습니다.", 401);
     }
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const requestedChannelUrls = Array.isArray(body.channel_urls)
+      ? [...new Set(body.channel_urls.map((value) => String(value || "").trim()).filter(Boolean))]
+      : [];
+    if (requestedChannelUrls.length > 10) {
+      throw new FunctionError("한 번에 수집할 채널은 10개 이하여야 합니다.", 400);
+    }
+    const channelUrls = requestedChannelUrls.length ? requestedChannelUrls : defaultChannelUrls;
 
     async function youtubeRequest(resource: string, params: Record<string, string>) {
       const url = new URL(`https://www.googleapis.com/youtube/v3/${resource}`);
@@ -136,6 +149,20 @@ Deno.serve(async (request) => {
       return Array.isArray(result) ? result.length : 0;
     }
 
+    async function existingYoutubeIds(videoIds: string[]) {
+      if (!videoIds.length) return new Set<string>();
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/recommended_videos?select=youtube_id&youtube_id=in.(${videoIds.join(",")})&limit=50`,
+        { headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` } }
+      );
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = detailFrom(result);
+        throw new FunctionError(`기존 추천 영상 조회에 실패했습니다 (${response.status})${detail ? `: ${detail}` : ""}`);
+      }
+      return new Set((Array.isArray(result) ? result : []).map((row) => row?.youtube_id).filter((value): value is string => typeof value === "string"));
+    }
+
     const summaries: Array<Record<string, unknown>> = [];
     let totalDiscovered = 0;
     let totalInserted = 0;
@@ -158,6 +185,7 @@ Deno.serve(async (request) => {
       let pages = 0;
       let discovered = 0;
       let inserted = 0;
+      let stoppedAtExisting = false;
 
       do {
         const playlistResult = await youtubeRequest("playlistItems", {
@@ -195,10 +223,16 @@ Deno.serve(async (request) => {
           }];
         });
 
+        const existingIds = await existingYoutubeIds(rows.map((row) => String(row.youtube_id || "")).filter(Boolean));
+        const newRows = rows.filter((row) => !existingIds.has(String(row.youtube_id || "")));
         discovered += rows.length;
-        inserted += await saveNewVideos(rows);
+        inserted += await saveNewVideos(newRows);
         pages += 1;
         pageToken = typeof playlistResult.nextPageToken === "string" ? playlistResult.nextPageToken : "";
+        if (existingIds.size) {
+          stoppedAtExisting = true;
+          pageToken = "";
+        }
       } while (pageToken);
 
       totalDiscovered += discovered;
@@ -210,7 +244,8 @@ Deno.serve(async (request) => {
         pages,
         discovered,
         inserted,
-        skipped_existing: discovered - inserted
+        skipped_existing: discovered - inserted,
+        stopped_at_existing: stoppedAtExisting
       });
     }
 

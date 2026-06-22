@@ -218,8 +218,10 @@ Deno.serve(async (request) => {
 
     if (action === "recommended-video-list") {
       const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_active,source,channel_id,channel_title,created_at,updated_at";
-      const result = await rest(`recommended_videos?select=${fields}&order=published_at.desc.nullslast&limit=1000`);
-      return json(request, { ok: true, items: result.rows });
+      const offset = Math.max(0, Number(payload.offset || 0));
+      const limit = Math.min(1000, Math.max(1, Number(payload.limit || 1000)));
+      const result = await rest(`recommended_videos?select=${fields}&order=published_at.desc.nullslast,id.desc&offset=${offset}&limit=${limit}`, {}, true);
+      return json(request, { ok: true, items: result.rows, total: result.total, hasMore: offset + result.rows.length < result.total });
     }
     if (action === "recommended-video-update") {
       const id = text(payload.id);
@@ -256,7 +258,8 @@ Deno.serve(async (request) => {
       return json(request, { ok: true, item: result.data || null });
     }
     if (action === "recommended-video-channel-sync") {
-      const result = await invokeFunction("recommended-videos-channel-sync", {});
+      const channelUrl = text(payload.channelUrl);
+      const result = await invokeFunction("recommended-videos-channel-sync", channelUrl ? { channel_urls: [channelUrl] } : {});
       return json(request, { ok: true, totalInserted: Number(result.total_inserted || 0), channels: result.channels || [] });
     }
 

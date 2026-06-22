@@ -695,6 +695,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const [savingId, setSavingId] = useState("");
   const [savedId, setSavedId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [channelUrl, setChannelUrl] = useState("");
   const [collectBusy, setCollectBusy] = useState("");
   const [collectNotice, setCollectNotice] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -738,17 +739,25 @@ function RecommendedVideosAdmin({ onBack }) {
       setCollectBusy("");
     }
   };
-  const collectChannelVideos = async () => {
-    setCollectBusy("channels"); setCollectNotice(""); setSaveError("");
+  const collectChannelVideos = async (customChannelUrl = "") => {
+    const value = String(customChannelUrl || "").trim();
+    setCollectBusy(value ? "custom-channel" : "channels"); setCollectNotice(""); setSaveError("");
     try {
-      const result = await recommendedVideoService.collectChannels();
-      setCollectNotice(`채널에서 신규 영상 ${Number(result.totalInserted || 0)}개를 수집했습니다. 신규 영상은 노출 OFF 상태입니다.`);
+      const result = await recommendedVideoService.collectChannels(value);
+      if (value) setChannelUrl("");
+      setCollectNotice(`${value ? "입력한 채널" : "기본 채널"}에서 신규 영상 ${Number(result.totalInserted || 0)}개를 수집했습니다. 기존 영상은 건너뛰며 신규 영상은 노출 OFF 상태입니다.`);
       await refreshAfterCollection();
     } catch (reason) {
       setSaveError(reason.message || "채널 영상을 수집하지 못했습니다.");
     } finally {
       setCollectBusy("");
     }
+  };
+  const collectCustomChannel = async (event) => {
+    event.preventDefault();
+    const value = channelUrl.trim();
+    if (!value) { setSaveError("수집할 YouTube 채널 링크를 입력해주세요."); return; }
+    await collectChannelVideos(value);
   };
 
   const updateItem = (id, changes) => {
@@ -880,8 +889,9 @@ function RecommendedVideosAdmin({ onBack }) {
     {adminQuery.trim() && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개</p>}
     <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
       <form onSubmit={addYoutubeVideo} className="flex gap-2"><input type="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="YouTube 영상 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !youtubeUrl.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{collectBusy === "manual" ? "추가 중…" : "링크 추가"}</button></form>
-      <button type="button" onClick={collectChannelVideos} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-accent/30 bg-accent/10 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "channels" ? "채널 영상 수집 중…" : "채널 영상 수집"}</button>
-      <p className="text-[9px] leading-4 text-neutral-600">신규 수집 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
+      <form onSubmit={collectCustomChannel} className="flex gap-2"><input type="url" value={channelUrl} onChange={(event) => setChannelUrl(event.target.value)} placeholder="YouTube 채널 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !channelUrl.trim()} className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "custom-channel" ? "수집 중…" : "채널 수집"}</button></form>
+      <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
+      <p className="text-[9px] leading-4 text-neutral-600">기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 신규 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
     </div>
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
     {!loading && !error && <div className={cn("mt-4 rounded-2xl border p-3", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}><div className="flex items-center"><p className="text-[10px] font-black text-neutral-500">노출 중인 오늘의 PICK</p><strong className={cn("ml-auto text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount}개</strong></div>{featuredActiveCount < 3 && <p className="mt-2 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}</div>}
