@@ -3872,6 +3872,10 @@
       "스포일러": ["해피엔딩", "새드엔딩", "오픈엔딩", "사망"]
     };
 
+    const PUBLIC_FILTER_GROUPS = ["장르", "키워드", "스포일러"];
+    const PUBLIC_TAG_GROUPS = ["장르", "키워드"];
+    const PUBLIC_HIDDEN_FILTER_GROUPS = new Set(["공", "수"]);
+
     const ADMIN_TAG_GROUPS = {
       "시리즈여부": ["시리즈", "단편"],
       "연재상태": ["단편", "연재중", "완결"],
@@ -4687,7 +4691,9 @@
 
     function buildFilters() {
       els.filterMount.innerHTML = "";
-      Object.entries(TAG_GROUPS).forEach(([group, options]) => {
+      PUBLIC_HIDDEN_FILTER_GROUPS.forEach((group) => delete state.active[group]);
+      PUBLIC_FILTER_GROUPS.forEach((group) => {
+        const options = TAG_GROUPS[group] || [];
         const box = document.createElement("div");
         box.className = "filter-group";
         box.dataset.group = group;
@@ -4799,6 +4805,7 @@
     function matchesPost(post, activeGroups = state.active, query = normalize(state.query).toLowerCase()) {
       if (query && !searchText(post).includes(query)) return false;
       return Object.entries(activeGroups).every(([group, selected]) => {
+        if (PUBLIC_HIDDEN_FILTER_GROUPS.has(group)) return true;
         if (!selected || !selected.size) return true;
         const tags = tagsFor(post, group);
         return [...selected].every((tag) => tags.includes(tag));
@@ -4807,7 +4814,9 @@
 
     function cloneActiveGroups() {
       return Object.fromEntries(
-        Object.entries(state.active).map(([group, selected]) => [group, new Set(selected)])
+        Object.entries(state.active)
+          .filter(([group]) => !PUBLIC_HIDDEN_FILTER_GROUPS.has(group))
+          .map(([group, selected]) => [group, new Set(selected)])
       );
     }
 
@@ -5243,8 +5252,8 @@
       badges.appendChild(makeBadge(ageLabel(post), truthyMark(post["성인"]) ? "age adult" : "age"));
       badges.appendChild(makeBadge(priceLabel(post), truthyMark(post["유료"]) ? "price paid" : "price free"));
 
-      ["장르", "키워드", "공", "수"].forEach((group) => {
-        splitTags(post[group]).forEach((tag) => tagRow.appendChild(makeTag(tag)));
+      PUBLIC_TAG_GROUPS.forEach((group) => {
+        splitTags(post[group]).filter(Boolean).forEach((tag) => tagRow.appendChild(makeTag(tag)));
       });
       renderEndingTags(post, tagRow);
       renderLibraryButtons(post, bookmarkButton, noteButton);
@@ -6441,8 +6450,8 @@
         .map((value) => value === "성인" ? `<span class="random-adult">${escapeHtml(value)}</span>` : escapeHtml(value))
         .join(" · ");
       els.randomResultTags.innerHTML = "";
-      ["장르", "키워드", "공", "수"].forEach((group) => {
-        splitTags(post[group]).slice(0, 10).forEach((tag) => els.randomResultTags.appendChild(makeTag(tag)));
+      PUBLIC_TAG_GROUPS.forEach((group) => {
+        splitTags(post[group]).filter(Boolean).slice(0, 10).forEach((tag) => els.randomResultTags.appendChild(makeTag(tag)));
       });
       renderEndingTags(post, els.randomResultTags);
       els.randomOpen.disabled = !normalize(post["링크"]);
