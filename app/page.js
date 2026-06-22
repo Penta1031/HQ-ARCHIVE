@@ -342,6 +342,9 @@ function AppOverlay({ children, className = "z-[70]" }) {
 
 const mediaFromTweetData = (data = {}) => {
   const asArray = (value) => Array.isArray(value) ? value : value ? [value] : [];
+  const vxMedia = asArray(data.mediaURLs)[0] || asArray(data.media_urls)[0];
+  const vxUrl = typeof vxMedia === "string" ? vxMedia : vxMedia?.url || "";
+  if (vxUrl) return { url: vxUrl, isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(vxUrl) };
   const candidates = [
     ...asArray(data.media_extended),
     ...asArray(data.tweet?.media?.all),
@@ -349,8 +352,7 @@ const mediaFromTweetData = (data = {}) => {
   ];
   const detailed = candidates.find((media)=>/video|gif/i.test(media?.type || "") && (media?.url || media?.thumbnail_url))
     || candidates.find((media)=>media?.url || media?.thumbnail_url);
-  const vxMedia = asArray(data.mediaURLs)[0] || asArray(data.media_urls)[0];
-  const url = detailed?.url || detailed?.thumbnail_url || vxMedia || data.video_url || data.tweet?.video?.url || "";
+  const url = detailed?.url || detailed?.thumbnail_url || data.video_url || data.tweet?.video?.url || "";
   return url ? { url, isVideo: /video|gif/i.test(detailed?.type || "") || /\.(mp4|m3u8)(?:$|\?)/i.test(url) } : null;
 };
 
@@ -361,13 +363,6 @@ async function resolveTweetMedia(sourceUrl) {
     try {
       const source = new URL(sourceUrl);
       if (/pbs\.twimg\.com|video\.twimg\.com/i.test(source.hostname)) return { url: sourceUrl, isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(sourceUrl) };
-      try {
-        const serverMedia = await Promise.race([
-          tweetMediaService.resolve(sourceUrl),
-          new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),8000))
-        ]);
-        if (serverMedia?.url) return { ...serverMedia, isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
-      } catch {}
       const match = source.pathname.match(/\/([^/]+)\/(?:status|statuses)\/(\d+)/i);
       if (!match) return null;
       const path = `/${match[1]}/status/${match[2]}`;
@@ -379,6 +374,13 @@ async function resolveTweetMedia(sourceUrl) {
           if (resolved) return resolved;
         } catch {}
       }
+      try {
+        const serverMedia = await Promise.race([
+          tweetMediaService.resolve(sourceUrl),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),8000))
+        ]);
+        if (serverMedia?.url) return { ...serverMedia, isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
+      } catch {}
     } catch {}
     return null;
   })();
