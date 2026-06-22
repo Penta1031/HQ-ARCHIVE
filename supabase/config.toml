@@ -2,3 +2,15 @@ project_id = "aiuwbwtknaceghkzporx"
 
 [functions.hq-worldcup-admin]
 verify_jwt = true
+
+[functions.hq-archive-admin]
+verify_jwt = true
+
+[functions.hq-twitter-media]
+verify_jwt = true
+
+[functions.recommended-videos]
+verify_jwt = true
+
+[functions.recommended-videos-channel-sync]
+verify_jwt = true
