@@ -62,8 +62,13 @@ export default function Page() {
     finally { setAdminLoading(false); }
   };
   const openAdmin = () => { setAdminOpen(true); };
-  const openPostypeAdmin = () => {
+  const closeAdmin = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setAdminOpen(false);
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+  };
+  const openPostypeAdmin = () => {
+    closeAdmin();
     setTab("postype");
     setPostypeAdminRequest((request) => request + 1);
   };
@@ -86,7 +91,7 @@ export default function Page() {
           </div>
         </section>
         <BottomNav tab={tab} onChange={navigate} />
-        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={() => setAdminOpen(false)} onReload={loadAdminArchives} onOpenPostype={openPostypeAdmin} />}
+        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={closeAdmin} onReload={loadAdminArchives} onOpenPostype={openPostypeAdmin} />}
       </div>
     </main>
   );
@@ -256,7 +261,7 @@ function CalendarView() {
   const firstDay = new Date(year, month - 1, 1).getDay(); const days = new Date(year, month, 0).getDate();
   const changeMonth = (delta) => { const d = new Date(year, month - 1 + delta, 1); setYear(d.getFullYear()); setMonth(d.getMonth() + 1); setDay(null); setDisplayLimit(30); };
   useEffect(() => { let active = true; setLoading(true); setError(""); setMonthly([]); archiveService.calendar({year,month}).then((result)=>{if(!active)return;setMonthly(result.items);setMonthTotal(result.total);}).catch((reason)=>{if(!active)return;setError(reason.message||"캘린더 기록을 불러오지 못했어요.");}).finally(()=>{if(active)setLoading(false);}); return()=>{active=false;}; },[year,month]);
-  return <div className="px-4 pt-4"><div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CALENDAR</p><h2 className="mt-1 text-2xl font-black tracking-tight">캘린더</h2></div><span className="ml-auto text-sm font-black text-neutral-500">{monthTotal}개</span></div>
+  return <div className="px-4 pt-4"><div className="flex items-center"><h2 className="text-2xl font-black tracking-tight">캘린더</h2><span className="ml-auto text-sm font-black text-neutral-500">{monthTotal}개</span></div>
     <div className="mt-5 rounded-3xl border border-white/10 bg-neutral-900/70 p-4">
       <div className="flex items-center justify-between"><button onClick={() => changeMonth(-1)} className="rounded-full bg-white/5 p-2"><ChevronLeft size={17} /></button><div className="flex gap-2"><select value={year} onChange={(e) => { setYear(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{[2023,2024,2025,2026].map((y) => <option key={y}>{y}</option>)}</select><select value={month} onChange={(e) => { setMonth(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{Array.from({length:12},(_,i)=>i+1).map((m) => <option key={m} value={m}>{pad(m)}</option>)}</select></div><button onClick={() => changeMonth(1)} className="rounded-full bg-white/5 p-2"><ChevronRight size={17} /></button></div>
       <div className="mt-5 grid grid-cols-7 text-center text-[10px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((x)=><span key={x}>{x}</span>)}</div>
@@ -412,7 +417,7 @@ function WorldcupView() {
     return <GameView cup={selected} candidates={candidates} total={game.roundItems.length} matchIndex={game.matchIndex} onChoose={choose} onClose={()=>{setGame(null);setSelected(null);}}/>;
   }
 
-  return <div className="px-4 pb-6 pt-4"><p className="text-[10px] font-black tracking-[.18em] text-accent">CHOOSE YOUR ONE</p><h2 className="mt-1 text-xl font-black">혚쾌 월드컵</h2>
+  return <div className="px-4 pb-6 pt-4"><h2 className="text-xl font-black">혚쾌 월드컵</h2>
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : <div className="mt-4 space-y-3">{[...(unified.items.length>=4?[unified]:[]),...cups].map((cup)=><article key={cup.id} className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-900"><button onClick={()=>setSelected(cup)} className="flex w-full items-center gap-4 p-4 text-left"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent/10 text-3xl">{cup.icon}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm font-black">{cup.title}</strong><span className="mt-1 block text-[11px] font-bold text-neutral-500">후보 {cup.items.length}개</span></span><Play size={17} className="text-accent" fill="#e50000"/></button><button onClick={()=>setRankingCup(cup)} className="w-full border-t border-white/10 py-3 text-[11px] font-black text-neutral-500"><Crown size={13} className="mr-1.5 inline text-accent"/>랭킹 보기</button></article>)}</div>}
     {selected&&<WorldcupSheet cup={selected} onClose={()=>setSelected(null)} onStart={()=>setBracketCup(selected)} onRanking={()=>setRankingCup(selected)}/>}
     {bracketCup&&<BracketSheet cup={bracketCup} onClose={()=>setBracketCup(null)} onStart={start}/>}
@@ -493,7 +498,7 @@ function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
       {!authenticated ? <form onSubmit={authenticate} className="py-10">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent"><LockKeyhole size={24}/></div>
         <p className="mt-4 text-center text-sm font-bold">관리자 비밀번호를 입력하세요.</p>
-        <input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={cn("mt-5 w-full rounded-2xl border bg-black p-4 text-center text-sm outline-none", error ? "border-accent" : "border-white/10")} placeholder="Password" />
+        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={cn("mt-5 w-full rounded-2xl border bg-black p-4 text-center text-sm outline-none", error ? "border-accent" : "border-white/10")} placeholder="Password" />
         {error && <p className="mt-2 text-center text-xs font-bold text-accent">{error}</p>}
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
