@@ -96,6 +96,25 @@ function mappedArchive(row: Record<string, unknown>) {
     rawKeywords: Array.isArray(row.keywords) ? row.keywords.join(", ") : "", thumbnailUrl: row.thumbnail_url || "", status: row.status
   };
 }
+const recommendedVideoCategories = new Set(["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"]);
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>) {
+  if (!uuidPattern.test(id)) throw new Error("추천 영상 ID가 올바르지 않습니다.");
+  if (typeof updates.isActive !== "boolean" || typeof updates.isFeatured !== "boolean") throw new Error("노출 및 PICK 설정이 올바르지 않습니다.");
+  if (!Array.isArray(updates.categories)) throw new Error("카테고리 값이 올바르지 않습니다.");
+  const categories = [...new Set(updates.categories.map(text).filter(Boolean))];
+  if (categories.some((category) => !recommendedVideoCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
+  const sortOrder = Number(updates.sortOrder); const featuredOrder = Number(updates.featuredOrder);
+  if (!Number.isInteger(sortOrder) || !Number.isInteger(featuredOrder)) throw new Error("목록 순서는 정수로 입력해주세요.");
+  return {
+    is_active: updates.isActive,
+    is_featured: updates.isFeatured,
+    categories,
+    sort_order: sortOrder,
+    featured_order: featuredOrder,
+    admin_comment: text(updates.adminComment) || null
+  };
+}
 async function twitterSearch(payload: Record<string, unknown>) {
   const bearer = text(Deno.env.get("X_BEARER_TOKEN"));
   if (!bearer) throw new Error("X_BEARER_TOKEN is not configured.");
@@ -205,25 +224,30 @@ Deno.serve(async (request) => {
     if (action === "recommended-video-update") {
       const id = text(payload.id);
       const updates = payload.updates && typeof payload.updates === "object" ? payload.updates : {};
-      const allowedCategories = new Set(["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"]);
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error("추천 영상 ID가 올바르지 않습니다.");
-      if (typeof updates.isActive !== "boolean" || typeof updates.isFeatured !== "boolean") throw new Error("노출 및 PICK 설정이 올바르지 않습니다.");
-      if (!Array.isArray(updates.categories)) throw new Error("카테고리 값이 올바르지 않습니다.");
-      const categories = [...new Set(updates.categories.map(text).filter(Boolean))];
-      if (categories.some((category) => !allowedCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
-      const sortOrder = Number(updates.sortOrder); const featuredOrder = Number(updates.featuredOrder);
-      if (!Number.isInteger(sortOrder) || !Number.isInteger(featuredOrder)) throw new Error("목록 순서는 정수로 입력해주세요.");
-      const row = {
-        is_active: updates.isActive,
-        is_featured: updates.isFeatured,
-        categories,
-        sort_order: sortOrder,
-        featured_order: featuredOrder,
-        admin_comment: text(updates.adminComment) || null
-      };
+      const row = recommendedVideoUpdateRow(id, updates as Record<string, unknown>);
       const result = await rest(`recommended_videos?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=representation" } });
       if (!result.rows[0]) throw new Error("수정할 추천 영상을 찾을 수 없습니다.");
       return json(request, { ok: true, item: result.rows[0] });
+    }
+    if (action === "recommended-video-bulk-update") {
+      const entries = Array.isArray(payload.items) ? payload.items as Record<string, unknown>[] : [];
+      if (!entries.length || entries.length > 100) throw new Error("한 번에 저장할 추천 영상은 1개 이상 100개 이하여야 합니다.");
+      const saved = await Promise.all(entries.map(async (entry) => {
+        const id = text(entry.id);
+        const updates = entry.updates && typeof entry.updates === "object" ? entry.updates as Record<string, unknown> : {};
+        const row = recommendedVideoUpdateRow(id, updates);
+        const result = await rest(`recommended_videos?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=representation" } });
+        if (!result.rows[0]) throw new Error("수정할 추천 영상을 찾을 수 없습니다.");
+        return result.rows[0];
+      }));
+      return json(request, { ok: true, items: saved });
+    }
+    if (action === "recommended-video-delete") {
+      const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map(text).filter(Boolean))];
+      if (!ids.length || ids.length > 100) throw new Error("한 번에 삭제할 추천 영상은 1개 이상 100개 이하여야 합니다.");
+      if (ids.some((id) => !uuidPattern.test(id))) throw new Error("추천 영상 ID가 올바르지 않습니다.");
+      const result = await rest(`recommended_videos?id=in.(${ids.join(",")})`, { method: "DELETE", headers: { Prefer: "return=representation" } });
+      return json(request, { ok: true, deletedCount: result.rows.length });
     }
     if (action === "recommended-video-add") {
       const youtubeUrl = text(payload.youtubeUrl);
