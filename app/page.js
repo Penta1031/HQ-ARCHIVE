@@ -111,8 +111,8 @@ function Header({ onAdmin, showLanguage = false, language = "ko", onLanguage }) 
       <div className="ml-auto flex items-center gap-2">
         {showLanguage && <div className="relative">
           <button onClick={() => setLanguageOpen((open) => !open)} aria-label="아카이브 번역" aria-expanded={languageOpen} className={cn("rounded-xl border p-2 transition", languageOpen ? "border-accent/50 bg-accent/10 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}><Languages size={16}/></button>
-          {languageOpen && <div className="absolute right-0 top-11 z-50 grid min-w-36 grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-neutral-950 p-2 shadow-2xl">
-            {ARCHIVE_LANGUAGE_OPTIONS.map((option) => <button key={option.code} onClick={() => { onLanguage(option.code); setLanguageOpen(false); }} className={cn("rounded-xl px-3 py-2 text-left text-[11px] font-black", language === option.code ? "bg-accent text-white" : "bg-white/5 text-neutral-400")}><span className="mr-1.5 text-[9px] opacity-60">{option.short}</span>{option.label}</button>)}
+          {languageOpen && <div className="absolute right-0 top-11 z-50 flex gap-1 rounded-xl border border-white/10 bg-neutral-950 p-1.5 shadow-2xl">
+            {ARCHIVE_LANGUAGE_OPTIONS.map((option) => <button key={option.code} onClick={() => { onLanguage(option.code); setLanguageOpen(false); }} aria-label={option.label} title={option.label} className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[10px] font-black", language === option.code ? "bg-accent text-white" : "bg-white/5 text-neutral-400")}>{option.short}</button>)}
           </div>}
         </div>}
         <button onClick={onAdmin} aria-label="관리자 모드" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><LockKeyhole size={16} /></button>
@@ -220,12 +220,13 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
         <p className="mb-2 text-[10px] font-bold text-neutral-600">{t("categoryHint")}</p>
         <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); }} getLabel={categoryLabel} />
         {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={setSubCategory} getLabel={categoryLabel} secondary /></div>}
-        <SectionLabel label={t("all")} count={total} unit={t("unit")} sortOrder={sortOrder} sortLabels={{ desc: t("latest"), asc: t("oldest") }} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} onRandom={pickRandom} randomLabel={t("random")} randomLoading={randomLoading} />
+        <SectionLabel label={t("all")} count={total} unit={t("unit")} sortOrder={sortOrder} sortLabels={{ desc: t("latest"), asc: t("oldest") }} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} />
         {loading ? <ArchiveSkeleton /> : error && !items.length ? <LoadError message={error}/> : <ArchiveGrid items={items} categoryLabel={categoryLabel} emptyText={t("empty")} />}
         {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? t("loadingMore") : t("more")}</button>}
       </div>}
       {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
       {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} language={language} />}
+      {subTab === "archive" && <button disabled={randomLoading || !total} onClick={pickRandom} className="absolute bottom-24 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-full border border-accent/40 bg-[#120000]/95 px-4 text-[11px] font-black text-[#ff5a5a] shadow-[0_10px_30px_rgba(0,0,0,.38)] backdrop-blur-md transition active:border-accent active:bg-accent active:text-white disabled:opacity-50"><Shuffle size={13}/>{t("random")}</button>}
       {randomItem && <RandomArchiveModal item={randomItem} language={language} onAgain={pickRandom} loading={randomLoading} onClose={() => setRandomItem(null)} />}
     </div>
   );
@@ -238,9 +239,9 @@ function ArchiveGuide({ language = "ko" }) {
     [CalendarDays, t("guideCalendarLabel"), t("guideCalendar")],
     [Info, t("guideFilterLabel"), t("guideFilter")]
   ];
-  return <details className="group mt-3 rounded-2xl border border-white/10 bg-neutral-900/60">
-    <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-black text-neutral-400"><Info size={14} className="text-accent"/>{t("guideTitle")}<ChevronRight size={14} className="ml-auto transition group-open:rotate-90"/></summary>
-    <div className="space-y-3 border-t border-white/10 px-4 py-4">{rows.map(([Icon, label, text]) => <div key={label} className="flex gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><Icon size={15}/></span><p className="text-[11px] leading-relaxed text-neutral-500"><strong className="mb-0.5 block text-neutral-300">{label}</strong>{text}</p></div>)}<p className="border-t border-white/10 pt-3 text-[10px] italic leading-relaxed text-neutral-600">{t("guideContact")}</p></div>
+  return <details className="group mt-2 rounded-xl border border-white/10 bg-neutral-900/50">
+    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-neutral-500"><Info size={12} className="text-accent"/>{t("guideTitle")}<ChevronRight size={12} className="ml-auto transition group-open:rotate-90"/></summary>
+    <div className="space-y-2.5 border-t border-white/10 px-3 py-3">{rows.map(([Icon, label, text]) => <div key={label} className="flex gap-2.5"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><Icon size={13}/></span><p className="text-[10px] leading-relaxed text-neutral-500"><strong className="block text-neutral-300">{label}</strong>{text}</p></div>)}<p className="border-t border-white/10 pt-2.5 text-[9px] italic leading-relaxed text-neutral-600">{t("guideContact")}</p></div>
   </details>;
 }
 
@@ -260,8 +261,8 @@ function FilterRow({ values, active, onChange, secondary = false, getLabel = (va
   ))}</div>;
 }
 
-function SectionLabel({ label, count, unit = "개", sortOrder, sortLabels = { desc: "최신순", asc: "과거순" }, onSort, onRandom, randomLabel = "랜덤 추천", randomLoading = false }) {
-  return <div className="mb-3 mt-6 flex items-center gap-3"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}{unit}</b></p><div className="ml-auto flex items-center gap-3">{onRandom && <button disabled={randomLoading || !count} onClick={onRandom} className="flex items-center gap-1 text-xs font-bold text-accent disabled:text-neutral-700"><Shuffle size={13}/>{randomLabel}</button>}{onSort && <button onClick={onSort} className="flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? sortLabels.desc : sortLabels.asc}</button>}</div></div>;
+function SectionLabel({ label, count, unit = "개", sortOrder, sortLabels = { desc: "최신순", asc: "과거순" }, onSort }) {
+  return <div className="mb-3 mt-6 flex items-center gap-3"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}{unit}</b></p>{onSort && <button onClick={onSort} className="ml-auto flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? sortLabels.desc : sortLabels.asc}</button>}</div>;
 }
 
 function ArchiveGrid({ items, categoryLabel, emptyText = "조건에 맞는 기록이 없어요." }) {
