@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
-  ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Shuffle, Trash2, Trophy, X
+  ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, RefreshCw, Search, Share2, Shuffle, Trash2, Trophy, X
 } from "lucide-react";
 import { adminService, archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
 import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
@@ -54,15 +54,7 @@ export default function Page() {
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
-  const [adminArchives, setAdminArchives] = useState([]);
-  const [adminLoading, setAdminLoading] = useState(false);
   const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
-  const loadAdminArchives = async () => {
-    setAdminLoading(true);
-    try { const result = await archiveService.adminPage({ page: 1, limit: 100, status: "published" }); setAdminArchives(result.items); }
-    catch { setAdminArchives([]); }
-    finally { setAdminLoading(false); }
-  };
   const openAdmin = () => { setAdminOpen(true); };
   const closeAdmin = () => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -93,7 +85,7 @@ export default function Page() {
           </div>
         </section>
         <BottomNav tab={tab} onChange={navigate} />
-        {adminOpen && <AdminHub items={adminArchives} loading={adminLoading} onClose={closeAdmin} onReload={loadAdminArchives} onOpenPostype={openPostypeAdmin} />}
+        {adminOpen && <AdminHub onClose={closeAdmin} onOpenPostype={openPostypeAdmin} />}
       </div>
     </main>
   );
@@ -115,6 +107,7 @@ function Header({ onAdmin, showLanguage = false, language = "ko", onLanguage }) 
             {ARCHIVE_LANGUAGE_OPTIONS.map((option) => <button key={option.code} onClick={() => { onLanguage(option.code); setLanguageOpen(false); }} aria-label={option.label} title={option.label} className={cn("flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[10px] font-black", language === option.code ? "bg-accent text-white" : "bg-white/5 text-neutral-400")}>{option.short}</button>)}
           </div>}
         </div>}
+        <button onClick={() => window.location.reload()} aria-label="데이터 새로고침" title="데이터 새로고침" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><RefreshCw size={16}/></button>
         <button onClick={onAdmin} aria-label="관리자 모드" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><LockKeyhole size={16} /></button>
       </div>
     </header>
@@ -542,7 +535,7 @@ function PostypeView({ adminRequest = null }) {
   return <iframe ref={frameRef} src="postype/index.html?v=20260622-3" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
-function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
+function AdminHub({ onClose, onOpenPostype }) {
   const [authenticated, setAuthenticated] = useState(() => adminService.hasSession());
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -553,15 +546,10 @@ function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
       await adminService.login(password);
       setAuthenticated(true);
       setError("");
-      await onReload();
     } catch (reason) {
       setError(reason.message || "비밀번호가 맞지 않습니다.");
     }
   };
-
-  useEffect(() => {
-    if (authenticated && !items.length && !loading) onReload();
-  }, []);
 
   return <div className="absolute inset-0 z-[80] flex items-end bg-black/80 p-3 backdrop-blur-md" onClick={onClose}>
     <div onClick={(event) => event.stopPropagation()} className="max-h-[92dvh] w-full overflow-y-auto rounded-[28px] border border-white/10 bg-neutral-950 p-5 shadow-2xl no-scrollbar animate-pop-in">
@@ -576,7 +564,7 @@ function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Trophy} label="월드컵" description="대회·후보·랭킹 데이터 관리" active onClick={() => setSection("worldcup")}/>
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
-      </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>}
+      </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
     </div>
   </div>;
 }
@@ -625,11 +613,17 @@ function WorldcupAdmin({ onBack }) {
   </div>;
 }
 
-function ArchiveAdmin({ items, onBack, onReload }) {
+function ArchiveAdmin({ onBack }) {
   const adminToday = getKstDate();
   const [adminTodayYear, adminTodayMonth] = adminToday.split("-").map(Number);
   const blank = { title: "", date: adminToday, link: "", account: "", mainCategory: "무대영상", subCategory: "음악방송", rawKeywords: "", thumbnailUrl: "" };
   const [adminTab, setAdminTab] = useState("list");
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const listRequestRef = useRef(0);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blank);
   const [formOpen, setFormOpen] = useState(false);
@@ -645,6 +639,10 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   const [adminYear, setAdminYear] = useState(adminTodayYear);
   const [adminMonth, setAdminMonth] = useState(adminTodayMonth);
   const [adminDate, setAdminDate] = useState(adminToday);
+  const [calendarMonthItems, setCalendarMonthItems] = useState([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState("");
+  const calendarRequestRef = useRef(0);
   const [rawItems, setRawItems] = useState([]);
   const [rawLoaded, setRawLoaded] = useState(false);
   const [selectedRaw, setSelectedRaw] = useState([]);
@@ -656,18 +654,41 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   const [twitterId, setTwitterId] = useState("");
   const [twitterFrom, setTwitterFrom] = useState("");
   const [twitterTo, setTwitterTo] = useState("");
-  const filteredAdminItems = useMemo(() => items.filter((item) => {
-    const matchesQuery = !query || [item.title, item.date, item.account, item.mainCategory, item.subCategory, item.rawKeywords].join(" ").toLowerCase().includes(query.toLowerCase());
-    return matchesQuery && (mainFilter === "전체" || item.mainCategory === mainFilter) && (subFilter === "전체" || item.subCategory === subFilter) && (!dateFrom || item.date >= dateFrom) && (!dateTo || item.date <= dateTo);
-  }), [items, query, mainFilter, subFilter, dateFrom, dateTo]);
-  const visibleAdminItems = filteredAdminItems.slice(0, 100);
   const calendarMonthKey = `${adminYear}-${pad(adminMonth)}`;
-  const calendarMonthItems = items.filter((item) => item.date?.startsWith(calendarMonthKey));
-  const calendarItems = items.filter((item) => item.date === adminDate).slice(0, 100);
+  const calendarItems = calendarMonthItems.filter((item) => item.date === adminDate);
   const rawFiltered = rawItems.filter((item) => (!rawAccount || item.account.toLowerCase().includes(rawAccount.toLowerCase())) && (!rawFrom || item.date >= rawFrom) && (!rawTo || item.date <= rawTo));
   const selectedMainItems = items.filter((item) => selectedMain.includes(item.id));
   const selectedRawItems = rawItems.filter((item) => selectedRaw.includes(item.id));
-  const adminYears = [...new Set([...Array.from({ length: 12 }, (_, index) => 2017 + index), ...items.map((item) => Number(item.date?.slice(0, 4))).filter(Boolean)])].sort();
+  const adminYears = Array.from({ length: 12 }, (_, index) => 2017 + index);
+  const loadList = async (nextPage = page) => {
+    const requestId = ++listRequestRef.current;
+    setLoading(true); setLoadError("");
+    try {
+      const result = await archiveService.adminPage({ page: nextPage, limit: 100, query, mainCategory: mainFilter, subCategory: subFilter, dateFrom, dateTo, status: "published" });
+      if (requestId !== listRequestRef.current) return;
+      setItems(result.items || []); setTotal(result.total || 0); setPage(nextPage); setSelectedMain([]);
+    } catch (error) { if (requestId === listRequestRef.current) setLoadError(error.message || "관리자 기록을 불러오지 못했습니다."); }
+    finally { if (requestId === listRequestRef.current) setLoading(false); }
+  };
+  const loadCalendar = async () => {
+    const requestId = ++calendarRequestRef.current;
+    const start = `${adminYear}-${pad(adminMonth)}-01`;
+    const end = `${adminYear}-${pad(adminMonth)}-${pad(new Date(adminYear, adminMonth, 0).getDate())}`;
+    setCalendarLoading(true); setCalendarError("");
+    try {
+      const result = await archiveService.adminAll({ dateFrom: start, dateTo: end, status: "published" });
+      if (requestId !== calendarRequestRef.current) return;
+      setCalendarMonthItems(result.items || []);
+    } catch (error) { if (requestId === calendarRequestRef.current) { setCalendarError(error.message || "관리자 캘린더를 불러오지 못했습니다."); setCalendarMonthItems([]); } }
+    finally { if (requestId === calendarRequestRef.current) setCalendarLoading(false); }
+  };
+  useEffect(() => {
+    if (adminTab !== "list") return undefined;
+    const timer = window.setTimeout(() => loadList(1), 250);
+    return () => window.clearTimeout(timer);
+  }, [adminTab, query, mainFilter, subFilter, dateFrom, dateTo]);
+  useEffect(() => { if (adminTab === "calendar") loadCalendar(); }, [adminTab, adminYear, adminMonth]);
+  const reloadCurrent = async () => { if (adminTab === "calendar") await loadCalendar(); else await loadList(page); };
   const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setFormOpen(true); };
   const update = (key, value) => setForm((current) => key === "subCategory" ? { ...current, subCategory: value, mainCategory: mainCategoryFor(value) } : { ...current, [key]: value });
   const save = async (event) => {
@@ -677,13 +698,13 @@ function ArchiveAdmin({ items, onBack, onReload }) {
       if (wasRaw) await archiveService.updateRaw(editing.id, form);
       else if (editing) await archiveService.update(editing.id, form);
       else await archiveService.create(form);
-      if (wasRaw) await loadRaw(); else await onReload();
+      if (wasRaw) await loadRaw(); else await reloadCurrent();
       setEditing(null); setForm(blank); setFormOpen(false); alert(editing ? "수정했습니다." : "추가했습니다.");
     } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
   const remove = async (item) => {
     if (!confirm(`「${item.title}」 기록을 삭제할까요?`)) return;
-    setBusy(true); try { await archiveService.remove(item.id); await onReload(); } catch (error) { alert(error.message); } finally { setBusy(false); }
+    setBusy(true); try { await archiveService.remove(item.id); await reloadCurrent(); } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
   const loadRaw = async () => { setBusy(true); try { setRawItems(await archiveService.rawList()); setRawLoaded(true); setSelectedRaw([]); } catch (error) { alert(error.message); } finally { setBusy(false); } };
   const runMany = async (targets, action) => { let success = 0; let failed = 0; for (const item of targets) { try { await action(item); success++; } catch { failed++; } } return { success, failed }; };
@@ -694,17 +715,17 @@ function ArchiveAdmin({ items, onBack, onReload }) {
     if (!confirm(`선택한 ${targets.length}개 항목을 일괄 수정할까요?`)) return;
     setBusy(true);
     const result = await runMany(targets, (item) => { const updated = { ...item, date: nextDate || item.date, subCategory: nextSub || item.subCategory, mainCategory: nextSub ? mainCategoryFor(nextSub) : item.mainCategory }; return isRaw ? archiveService.updateRaw(item.id, updated) : archiveService.update(item.id, updated); });
-    if (isRaw) { await loadRaw(); setRawBulkDate(""); setRawBulkSub(""); } else { await onReload(); setSelectedMain([]); setBulkDate(""); setBulkSub(""); }
+    if (isRaw) { await loadRaw(); setRawBulkDate(""); setRawBulkSub(""); } else { await reloadCurrent(); setSelectedMain([]); setBulkDate(""); setBulkSub(""); }
     setBusy(false); alert(`완료 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
   };
   const removeSelectedMain = async () => {
     if (!selectedMainItems.length || !confirm(`선택한 ${selectedMainItems.length}개 기록을 영구 삭제할까요?`)) return;
-    setBusy(true); const result = await runMany(selectedMainItems, (item) => archiveService.remove(item.id)); await onReload(); setSelectedMain([]); setBusy(false); alert(`삭제 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
+    setBusy(true); const result = await runMany(selectedMainItems, (item) => archiveService.remove(item.id)); await reloadCurrent(); setSelectedMain([]); setBusy(false); alert(`삭제 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
   };
-  const publishRaw = async (item) => { setBusy(true); try { await archiveService.publishRaw(item.id); setRawItems((current) => current.filter((raw) => raw.id !== item.id)); setSelectedRaw((current) => current.filter((id) => id !== item.id)); await onReload(); alert("메인 아카이브에 게시했습니다."); } catch (error) { alert(error.message); } finally { setBusy(false); } };
+  const publishRaw = async (item) => { setBusy(true); try { await archiveService.publishRaw(item.id); setRawItems((current) => current.filter((raw) => raw.id !== item.id)); setSelectedRaw((current) => current.filter((id) => id !== item.id)); await loadList(1); alert("메인 아카이브에 게시했습니다."); } catch (error) { alert(error.message); } finally { setBusy(false); } };
   const publishSelectedRaw = async () => {
     if (!selectedRawItems.length || !confirm(`선택한 ${selectedRawItems.length}개를 메인 시트에 게시할까요?`)) return;
-    setBusy(true); const result = await runMany(selectedRawItems, (item) => archiveService.publishRaw(item.id)); const done = new Set(selectedRawItems.map((item) => item.id)); setRawItems((current) => current.filter((item) => !done.has(item.id))); setSelectedRaw([]); await onReload(); setBusy(false); alert(`게시 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
+    setBusy(true); const result = await runMany(selectedRawItems, (item) => archiveService.publishRaw(item.id)); const done = new Set(selectedRawItems.map((item) => item.id)); setRawItems((current) => current.filter((item) => !done.has(item.id))); setSelectedRaw([]); await loadList(1); setBusy(false); alert(`게시 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
   };
   const removeRaw = async (item) => { if (!confirm(`「${item.title}」 임시 데이터를 삭제할까요?`)) return; setBusy(true); try { await archiveService.removeRaw(item.id); setRawItems((current) => current.filter((raw) => raw.id !== item.id)); } catch (error) { alert(error.message); } finally { setBusy(false); } };
   const removeSelectedRaw = async () => {
@@ -724,7 +745,7 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   return <div className="pt-5">
     <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button></div>
     <div className="mt-4 grid grid-cols-3 border-b border-white/10">{[["list","목록 관리"],["calendar","캘린더 관리"],["import","불러오기"]].map(([key,label])=><button key={key} onClick={()=>{setAdminTab(key);setFormOpen(false);}} className={cn("border-b-2 py-3 text-[11px] font-black",adminTab===key?"border-accent text-white":"border-transparent text-neutral-600")}>{label}</button>)}</div>
-    {adminTab === "list" && <><button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button><div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div><div className="mt-3 grid grid-cols-2 gap-2"><AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체",...Object.keys(CATEGORY_MAP)]}/><AdminSelect label="소분류 필터" value={subFilter} onChange={(value)=>{setSubFilter(value);if(value!=="전체")setMainFilter(mainCategoryFor(value));}} options={["전체",...SUB_CATEGORY_OPTIONS]}/><AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/><AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/></div><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={visibleAdminItems.length>0&&visibleAdminItems.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(visibleAdminItems)} className="h-4 w-4 accent-[#e50000]"/>현재 결과 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>{bulkPanel()}<p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개 · 최대 100개 표시</p></>}
+    {adminTab === "list" && <><button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button><div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div><div className="mt-3 grid grid-cols-2 gap-2"><AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체",...Object.keys(CATEGORY_MAP)]}/><AdminSelect label="소분류 필터" value={subFilter} onChange={(value)=>{setSubFilter(value);if(value!=="전체")setMainFilter(mainCategoryFor(value));}} options={["전체",...SUB_CATEGORY_OPTIONS]}/><AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/><AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/></div><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>{bulkPanel()}<p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {total}개 · {page}페이지</p></>}
     {adminTab === "calendar" && <div className="mt-4"><div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-center justify-center gap-2"><AdminSelect label="년도" value={String(adminYear)} onChange={(value)=>{setAdminYear(+value);setAdminDate(`${value}-${pad(adminMonth)}-01`);}} options={adminYears.map(String)}/><AdminSelect label="월" value={String(adminMonth)} onChange={(value)=>{setAdminMonth(+value);setAdminDate(`${adminYear}-${pad(value)}-01`);}} options={Array.from({length:12},(_,i)=>String(i+1))}/></div><div className="mt-4 grid grid-cols-7 text-center text-[9px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((value)=><span key={value}>{value}</span>)}</div><div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:new Date(adminYear,adminMonth-1,1).getDay()}).map((_,i)=><span key={`admin-empty-${i}`}/>)}{Array.from({length:new Date(adminYear,adminMonth,0).getDate()},(_,i)=>i+1).map((value)=>{const date=`${calendarMonthKey}-${pad(value)}`;const has=calendarMonthItems.some((item)=>item.date===date);return <button key={value} onClick={()=>setAdminDate(date)} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",adminDate===date?"bg-accent text-white":"text-neutral-400")}>{value}{has&&adminDate!==date&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div></div><div className="mt-4 flex items-center"><p className="text-xs font-black">{adminDate} <span className="text-neutral-500">{calendarItems.length}개</span></p><button onClick={()=>openForm(null,adminDate)} className="ml-auto rounded-lg bg-accent px-3 py-2 text-[10px] font-black">+ 추가</button></div></div>}
     {adminTab === "import" && <div className="mt-4"><div className="rounded-2xl border border-[#1DA1F2]/30 bg-[#1DA1F2]/5 p-4"><h3 className="text-sm font-black text-[#55acee]">트위터 데이터 수집</h3><AdminInput label="트위터 계정 ID (@ 제외)" value={twitterId} onChange={setTwitterId}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={twitterFrom} onChange={setTwitterFrom}/><AdminInput label="종료 날짜" type="date" value={twitterTo} onChange={setTwitterTo}/></div><button disabled={busy} onClick={fetchTwitter} className="mt-3 w-full rounded-xl bg-[#1DA1F2] py-3 text-xs font-black disabled:opacity-50">{busy?"수집 중…":"트윗 수집하여 Raw 시트에 추가"}</button></div><div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4"><h3 className="text-sm font-black">Raw 데이터 조회 및 게시</h3><AdminInput label="계정 필터 (선택)" value={rawAccount} onChange={setRawAccount}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={rawFrom} onChange={setRawFrom}/><AdminInput label="종료 날짜" type="date" value={rawTo} onChange={setRawTo}/></div><button disabled={busy} onClick={loadRaw} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black">{busy?"불러오는 중…":"Raw 데이터 조회하기"}</button></div>{rawLoaded&&<><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={rawFiltered.length>0&&rawFiltered.every((item)=>selectedRaw.includes(item.id))} onChange={()=>toggleAll(rawFiltered,true)} className="h-4 w-4 accent-[#e50000]"/>전체 선택</label><span className="ml-2 text-[10px] font-bold text-neutral-600">{rawFiltered.length}개</span><button disabled={!selectedRaw.length||busy} onClick={removeSelectedRaw} className="ml-auto rounded-lg bg-accent/10 px-2.5 py-2 text-[10px] font-black text-accent disabled:opacity-40">삭제</button><button disabled={!selectedRaw.length||busy} onClick={publishSelectedRaw} className="ml-2 rounded-lg bg-accent px-2.5 py-2 text-[10px] font-black disabled:opacity-40">게시 ({selectedRaw.length})</button></div>{bulkPanel(true)}</>}</div>}
     {formOpen && <form onSubmit={save} className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4">
@@ -738,8 +759,8 @@ function ArchiveAdmin({ items, onBack, onReload }) {
       <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><AdminInput label="썸네일 URL" type="url" value={form.thumbnailUrl} onChange={(v)=>update("thumbnailUrl",v)}/><AdminInput label="키워드 (쉼표 구분)" value={form.rawKeywords} onChange={(v)=>update("rawKeywords",v)}/></div>
       <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Supabase에 저장"}</button>
     </form>}
-    {adminTab === "list" && recordRows(visibleAdminItems,false,true)}
-    {adminTab === "calendar" && recordRows(calendarItems)}
+    {adminTab === "list" && (loading ? <div className="mt-4"><ListSkeleton/></div> : loadError ? <LoadError message={loadError}/> : <>{recordRows(items,false,true)}<div className="mt-4 grid grid-cols-2 gap-2"><button disabled={page<=1||loading} onClick={()=>loadList(page-1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">이전</button><button disabled={page*100>=total||loading} onClick={()=>loadList(page+1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">다음</button></div></>)}
+    {adminTab === "calendar" && (calendarLoading ? <div className="mt-4"><ListSkeleton/></div> : calendarError ? <LoadError message={calendarError}/> : recordRows(calendarItems))}
     {adminTab === "import" && rawLoaded && recordRows(rawFiltered.slice(0,100), true, true)}
   </div>;
 }
