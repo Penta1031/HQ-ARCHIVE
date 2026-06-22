@@ -96,14 +96,17 @@ function mappedArchive(row: Record<string, unknown>) {
     rawKeywords: Array.isArray(row.keywords) ? row.keywords.join(", ") : "", thumbnailUrl: row.thumbnail_url || "", status: row.status
   };
 }
-const recommendedVideoCategories = new Set(["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>) {
+async function allowedRecommendedVideoCategories() {
+  const result = await rest("recommended_video_categories?select=name&order=sort_order.asc,created_at.asc");
+  return new Set(result.rows.map((row) => text(row.name)).filter(Boolean));
+}
+function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>, allowedCategories: Set<string>) {
   if (!uuidPattern.test(id)) throw new Error("추천 영상 ID가 올바르지 않습니다.");
   if (typeof updates.isActive !== "boolean" || typeof updates.isFeatured !== "boolean") throw new Error("노출 및 PICK 설정이 올바르지 않습니다.");
   if (!Array.isArray(updates.categories)) throw new Error("카테고리 값이 올바르지 않습니다.");
   const categories = [...new Set(updates.categories.map(text).filter(Boolean))];
-  if (categories.some((category) => !recommendedVideoCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
+  if (categories.some((category) => !allowedCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
   const sortOrder = Number(updates.sortOrder); const featuredOrder = Number(updates.featuredOrder);
   if (!Number.isInteger(sortOrder) || !Number.isInteger(featuredOrder)) throw new Error("목록 순서는 정수로 입력해주세요.");
   return {
@@ -226,7 +229,7 @@ Deno.serve(async (request) => {
     if (action === "recommended-video-update") {
       const id = text(payload.id);
       const updates = payload.updates && typeof payload.updates === "object" ? payload.updates : {};
-      const row = recommendedVideoUpdateRow(id, updates as Record<string, unknown>);
+      const row = recommendedVideoUpdateRow(id, updates as Record<string, unknown>, await allowedRecommendedVideoCategories());
       const result = await rest(`recommended_videos?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=representation" } });
       if (!result.rows[0]) throw new Error("수정할 추천 영상을 찾을 수 없습니다.");
       return json(request, { ok: true, item: result.rows[0] });
@@ -234,10 +237,11 @@ Deno.serve(async (request) => {
     if (action === "recommended-video-bulk-update") {
       const entries = Array.isArray(payload.items) ? payload.items as Record<string, unknown>[] : [];
       if (!entries.length || entries.length > 100) throw new Error("한 번에 저장할 추천 영상은 1개 이상 100개 이하여야 합니다.");
+      const allowedCategories = await allowedRecommendedVideoCategories();
       const saved = await Promise.all(entries.map(async (entry) => {
         const id = text(entry.id);
         const updates = entry.updates && typeof entry.updates === "object" ? entry.updates as Record<string, unknown> : {};
-        const row = recommendedVideoUpdateRow(id, updates);
+        const row = recommendedVideoUpdateRow(id, updates, allowedCategories);
         const result = await rest(`recommended_videos?id=eq.${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=representation" } });
         if (!result.rows[0]) throw new Error("수정할 추천 영상을 찾을 수 없습니다.");
         return result.rows[0];
@@ -250,6 +254,29 @@ Deno.serve(async (request) => {
       if (ids.some((id) => !uuidPattern.test(id))) throw new Error("추천 영상 ID가 올바르지 않습니다.");
       const result = await rest(`recommended_videos?id=in.(${ids.join(",")})`, { method: "DELETE", headers: { Prefer: "return=representation" } });
       return json(request, { ok: true, deletedCount: result.rows.length });
+    }
+    if (action === "recommended-video-category-create") {
+      const name = text(payload.name);
+      if (!name) throw new Error("추가할 카테고리 이름을 입력해주세요.");
+      const existing = await rest(`recommended_video_categories?select=id&name=eq.${encodeURIComponent(name)}&limit=1`);
+      if (existing.rows.length) throw new Error("이미 등록된 카테고리입니다.");
+      const last = await rest("recommended_video_categories?select=sort_order&order=sort_order.desc&limit=1");
+      const sortOrder = Math.max(0, Number(last.rows[0]?.sort_order || 0)) + 1;
+      const result = await rest("recommended_video_categories", { method: "POST", body: JSON.stringify({ name, sort_order: sortOrder }), headers: { Prefer: "return=representation" } });
+      return json(request, { ok: true, category: result.rows[0] });
+    }
+    if (action === "recommended-video-category-update") {
+      const id = text(payload.id); const name = text(payload.name);
+      if (!uuidPattern.test(id)) throw new Error("카테고리 ID가 올바르지 않습니다.");
+      if (!name) throw new Error("카테고리 이름을 입력해주세요.");
+      const result = await rest("rpc/hq_rename_recommended_video_category", { method: "POST", body: JSON.stringify({ p_id: id, p_name: name }) });
+      return json(request, { ok: true, category: result.rows[0] || result.rows });
+    }
+    if (action === "recommended-video-category-delete") {
+      const id = text(payload.id);
+      if (!uuidPattern.test(id)) throw new Error("카테고리 ID가 올바르지 않습니다.");
+      const result = await rest("rpc/hq_delete_recommended_video_category", { method: "POST", body: JSON.stringify({ p_id: id }) });
+      return json(request, { ok: true, category: result.rows[0] || result.rows });
     }
     if (action === "recommended-video-add") {
       const youtubeUrl = text(payload.youtubeUrl);

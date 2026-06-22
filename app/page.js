@@ -581,6 +581,7 @@ function normalizeRecommendedDateQuery(value) {
 
 function RecommendedView() {
   const [items, setItems] = useState([]);
+  const [videoCategories, setVideoCategories] = useState(DEFAULT_RECOMMENDED_VIDEO_CATEGORIES);
   const [featuredItems, setFeaturedItems] = useState([]);
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [query, setQuery] = useState("");
@@ -597,6 +598,18 @@ function RecommendedView() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    recommendedVideoService.categories()
+      .then((rows) => { if (active) setVideoCategories(rows.map((item) => item.name)); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (category !== "전체" && !videoCategories.includes(category)) setCategory("전체");
+  }, [category, videoCategories]);
 
   useEffect(() => {
     let active = true;
@@ -627,18 +640,18 @@ function RecommendedView() {
   }, [items, query]);
 
   const categorySections = useMemo(() => {
-    const categories = category === "전체" ? RECOMMENDED_VIDEO_CATEGORIES : [category];
+    const categories = category === "전체" ? videoCategories : [category];
     const sections = categories.map((value) => ({
       key: value,
       title: `${value} 모아보기`,
       items: searchedItems.filter((item) => item.categories.includes(value))
     })).filter((section) => section.items.length);
     if (category === "전체") {
-      const uncategorized = searchedItems.filter((item) => !item.categories.some((value) => RECOMMENDED_VIDEO_CATEGORIES.includes(value)));
+      const uncategorized = searchedItems.filter((item) => !item.categories.some((value) => videoCategories.includes(value)));
       if (uncategorized.length) sections.push({ key: "미분류", title: "기타 영상 모아보기", items: uncategorized });
     }
     return sections;
-  }, [searchedItems, category]);
+  }, [searchedItems, category, videoCategories]);
 
   const displayDate = (value) => {
     const date = String(value || "").slice(0, 10);
@@ -661,7 +674,7 @@ function RecommendedView() {
   return <div className="px-4 pb-6 pt-4">
     <h2 className="text-xl font-black">추천 영상</h2>
     <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="제목 또는 날짜로 검색"/></div>
-    <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...RECOMMENDED_VIDEO_CATEGORIES].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
+    <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...videoCategories].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
     {featuredItem && <section className="mt-5"><div className="mb-2 flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
       <article key={featuredItem.id} onTouchStart={(event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={finishFeaturedSwipe} onTouchCancel={() => { pickTouchStartX.current = null; }} className="touch-pan-y select-none overflow-hidden rounded-3xl border border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014] animate-fade-in">
         <a href={featuredItem.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video overflow-hidden bg-black">{featuredItem.thumbnailUrl ? <img src={featuredItem.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
@@ -685,10 +698,11 @@ function RecommendedView() {
   </div>;
 }
 
-const RECOMMENDED_VIDEO_CATEGORIES = ["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"];
+const DEFAULT_RECOMMENDED_VIDEO_CATEGORIES = ["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"];
 
 function RecommendedVideosAdmin({ onBack }) {
   const [items, setItems] = useState([]);
+  const [videoCategories, setVideoCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
@@ -704,11 +718,14 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
   const [bulkComment, setBulkComment] = useState("");
   const [adminQuery, setAdminQuery] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryBusy, setCategoryBusy] = useState("");
+  const [categoryDrafts, setCategoryDrafts] = useState({});
 
   useEffect(() => {
     let active = true;
-    recommendedVideoService.list()
-      .then((rows) => { if (active) setItems(rows); })
+    Promise.all([recommendedVideoService.list(), recommendedVideoService.categories()])
+      .then(([rows, categories]) => { if (active) { setItems(rows); setVideoCategories(categories); } })
       .catch((reason) => { if (active) setError(reason.message || "추천 영상 목록을 불러오지 못했습니다."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -753,11 +770,61 @@ function RecommendedVideosAdmin({ onBack }) {
       setCollectBusy("");
     }
   };
+  const refreshCategories = async () => {
+    const categories = await recommendedVideoService.categories();
+    setVideoCategories(categories);
+    setCategoryDrafts({});
+  };
   const collectCustomChannel = async (event) => {
     event.preventDefault();
     const value = channelUrl.trim();
     if (!value) { setSaveError("수집할 YouTube 채널 링크를 입력해주세요."); return; }
     await collectChannelVideos(value);
+  };
+  const updateCategoryDraft = (id, name) => setCategoryDrafts((current) => ({ ...current, [id]: name }));
+  const createCategory = async (event) => {
+    event.preventDefault();
+    const name = newCategoryName.trim();
+    if (!name) { setSaveError("추가할 카테고리 이름을 입력해주세요."); return; }
+    setCategoryBusy("create"); setSaveError(""); setCollectNotice("");
+    try {
+      await recommendedVideoService.createCategory(name);
+      setNewCategoryName("");
+      await refreshCategories();
+      setCollectNotice(`'${name}' 카테고리를 추가했습니다.`);
+    } catch (reason) {
+      setSaveError(reason.message || "카테고리를 추가하지 못했습니다.");
+    } finally {
+      setCategoryBusy("");
+    }
+  };
+  const saveCategory = async (categoryItem) => {
+    const name = String(categoryDrafts[categoryItem.id] ?? categoryItem.name).trim();
+    if (!name) { setSaveError("카테고리 이름을 입력해주세요."); return; }
+    setCategoryBusy(categoryItem.id); setSaveError(""); setCollectNotice("");
+    try {
+      await recommendedVideoService.updateCategory(categoryItem.id, name);
+      await Promise.all([refreshCategories(), refreshItems()]);
+      setCollectNotice(`카테고리 이름을 '${name}'(으)로 수정했습니다. 기존 영상에도 반영됐습니다.`);
+    } catch (reason) {
+      setSaveError(reason.message || "카테고리를 수정하지 못했습니다.");
+      await refreshCategories().catch(() => {});
+    } finally {
+      setCategoryBusy("");
+    }
+  };
+  const deleteCategory = async (categoryItem) => {
+    if (!window.confirm(`'${categoryItem.name}' 카테고리를 삭제할까요? 기존 영상에서도 이 카테고리가 제거됩니다.`)) return;
+    setCategoryBusy(categoryItem.id); setSaveError(""); setCollectNotice("");
+    try {
+      await recommendedVideoService.removeCategory(categoryItem.id);
+      await Promise.all([refreshCategories(), refreshItems()]);
+      setCollectNotice(`'${categoryItem.name}' 카테고리를 삭제했습니다.`);
+    } catch (reason) {
+      setSaveError(reason.message || "카테고리를 삭제하지 못했습니다.");
+    } finally {
+      setCategoryBusy("");
+    }
   };
 
   const updateItem = (id, changes) => {
@@ -797,6 +864,7 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
 
+  const categoryNames = useMemo(() => videoCategories.map((item) => item.name).filter(Boolean), [videoCategories]);
   const filteredAdminItems = useMemo(() => {
     const needle = adminQuery.trim().toLocaleLowerCase("ko-KR");
     if (!needle) return items;
@@ -893,13 +961,18 @@ function RecommendedVideosAdmin({ onBack }) {
       <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
       <p className="text-[9px] leading-4 text-neutral-600">기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 신규 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
     </div>
+    <section className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-3">
+      <div><p className="text-xs font-black">추천 영상 카테고리 관리</p><p className="mt-1 text-[9px] font-bold leading-4 text-neutral-600">이름 수정과 삭제는 기존 영상의 카테고리에도 함께 반영됩니다.</p></div>
+      <form onSubmit={createCategory} className="mt-3 flex gap-2"><input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="새 카테고리 이름" disabled={Boolean(categoryBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newCategoryName.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create" ? "추가 중…" : "추가"}</button></form>
+      <div className="mt-3 space-y-2">{videoCategories.map((categoryItem) => { const draftName = categoryDrafts[categoryItem.id] ?? categoryItem.name; return <div key={categoryItem.id} className="flex gap-2"><input value={draftName} onChange={(event) => updateCategoryDraft(categoryItem.id, event.target.value)} disabled={Boolean(categoryBusy)} aria-label="카테고리 이름" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><button type="button" onClick={() => saveCategory(categoryItem)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-xl border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === categoryItem.id ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteCategory(categoryItem)} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 카테고리 삭제`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-40"><Trash2 size={14}/></button></div>; })}</div>
+    </section>
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
     {!loading && !error && <div className={cn("mt-4 rounded-2xl border p-3", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}><div className="flex items-center"><p className="text-[10px] font-black text-neutral-500">노출 중인 오늘의 PICK</p><strong className={cn("ml-auto text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount}개</strong></div>{featuredActiveCount < 3 && <p className="mt-2 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}</div>}
     {!loading && !error && filteredAdminItems.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-4 w-4 accent-accent"/>{adminQuery.trim() ? "검색 결과 전체 선택" : "전체 선택"}</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <div className="flex items-center"><div><p className="text-xs font-black">선택 항목 일괄 설정</p><p className="mt-1 text-[9px] font-bold text-neutral-500">수정 후 아래 ‘선택 설정 저장’을 눌러 반영하세요.</p></div><button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg border border-white/10 px-2 py-1 text-[9px] font-black text-neutral-500">선택 해제</button></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => applyToSelected({ isActive: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">노출 ON</button><button type="button" onClick={() => applyToSelected({ isActive: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">노출 OFF</button><button type="button" onClick={() => applyToSelected({ isFeatured: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">PICK 지정</button><button type="button" onClick={() => applyToSelected({ isFeatured: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">PICK 해제</button></div>
-      <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">카테고리 전체 추가/해제</p><div className="mt-2 flex flex-wrap gap-1.5">{RECOMMENDED_VIDEO_CATEGORIES.map((value) => { const selected = selectedItems.every((item) => item.categories.includes(value)); return <button type="button" key={value} onClick={() => applyBulkCategory(value)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{value}</button>; })}</div></div>
+      <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">카테고리 전체 추가/해제</p><div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((value) => { const selected = selectedItems.every((item) => item.categories.includes(value)); return <button type="button" key={value} onClick={() => applyBulkCategory(value)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{value}</button>; })}</div></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={bulkSortOrder} onChange={(event) => setBulkSortOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={bulkFeaturedOrder} onChange={(event) => setBulkFeaturedOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label></div>
       <button type="button" onClick={applyBulkOrders} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">입력한 순서 일괄 적용</button>
       <label className="mt-3 block rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">운영자 코멘트 일괄 입력</span><textarea rows={2} value={bulkComment} onChange={(event) => setBulkComment(event.target.value)} placeholder="비워서 적용하면 코멘트가 삭제됩니다." className="mt-1 w-full resize-none bg-transparent text-[10px] leading-4 outline-none placeholder:text-neutral-700"/></label>
@@ -917,7 +990,7 @@ function RecommendedVideosAdmin({ onBack }) {
           <button type="button" aria-pressed={item.isActive} onClick={() => updateItem(item.id, { isActive: !item.isActive })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isActive ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">노출 여부</span><span className={cn("mt-1 block text-[10px] font-black", item.isActive ? "text-accent" : "text-neutral-400")}>{item.isActive ? "ON" : "OFF"}</span></button>
           <button type="button" aria-pressed={item.isFeatured} onClick={() => updateItem(item.id, { isFeatured: !item.isFeatured })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isFeatured ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">오늘의 PICK</span><span className={cn("mt-1 block text-[10px] font-black", item.isFeatured ? "text-accent" : "text-neutral-400")}>{item.isFeatured ? "지정" : "해제"}</span></button>
         </div>
-        <div className="mt-3"><p className="text-[9px] font-black text-neutral-600">카테고리</p><div className="mt-2 flex flex-wrap gap-1.5">{RECOMMENDED_VIDEO_CATEGORIES.map((category) => { const selected = item.categories.includes(category); return <button type="button" aria-pressed={selected} key={category} onClick={() => toggleCategory(item, category)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}>{category}</button>; })}</div></div>
+        <div className="mt-3"><p className="text-[9px] font-black text-neutral-600">카테고리</p><div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => { const selected = item.categories.includes(category); return <button type="button" aria-pressed={selected} key={category} onClick={() => toggleCategory(item, category)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}>{category}</button>; })}</div></div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={item.sortOrder} onChange={(event) => updateItem(item.id, { sortOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={item.featuredOrder} onChange={(event) => updateItem(item.id, { featuredOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
