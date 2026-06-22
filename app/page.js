@@ -702,6 +702,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkSortOrder, setBulkSortOrder] = useState("");
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
   const [bulkComment, setBulkComment] = useState("");
+  const [adminQuery, setAdminQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -787,14 +788,30 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
 
+  const filteredAdminItems = useMemo(() => {
+    const needle = adminQuery.trim().toLocaleLowerCase("ko-KR");
+    if (!needle) return items;
+    const compactNeedle = needle.replace(/[^0-9a-z가-힣]/gi, "");
+    return items.filter((item) => {
+      const searchable = [item.title, item.channelTitle, item.youtubeId, item.publishedAt, item.adminComment, ...item.categories]
+        .join(" ").toLocaleLowerCase("ko-KR");
+      const compactDate = String(item.publishedAt || "").slice(0, 10).replace(/\D/g, "");
+      return searchable.includes(needle) || Boolean(compactNeedle && compactDate.includes(compactNeedle));
+    });
+  }, [items, adminQuery]);
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.has(item.id)), [items, selectedIds]);
-  const allSelected = items.length > 0 && selectedItems.length === items.length;
+  const visibleSelectedCount = filteredAdminItems.filter((item) => selectedIds.has(item.id)).length;
+  const allVisibleSelected = filteredAdminItems.length > 0 && visibleSelectedCount === filteredAdminItems.length;
   const toggleSelected = (id) => setSelectedIds((current) => {
     const next = new Set(current);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
-  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(items.map((item) => item.id)));
+  const toggleAllVisible = () => setSelectedIds((current) => {
+    const next = new Set(current);
+    filteredAdminItems.forEach((item) => allVisibleSelected ? next.delete(item.id) : next.add(item.id));
+    return next;
+  });
   const applyToSelected = (changes) => {
     if (!selectedIds.size) return;
     setItems((current) => current.map((item) => {
@@ -859,14 +876,16 @@ function RecommendedVideosAdmin({ onBack }) {
   return <div className="pt-5">
     <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>
     <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{items.length}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
-    <div className="mt-4 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
+    <div className="mt-4"><SearchBar value={adminQuery} onChange={setAdminQuery} placeholder="제목, 채널명, 날짜, 카테고리로 검색"/></div>
+    {adminQuery.trim() && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개</p>}
+    <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
       <form onSubmit={addYoutubeVideo} className="flex gap-2"><input type="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="YouTube 영상 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !youtubeUrl.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{collectBusy === "manual" ? "추가 중…" : "링크 추가"}</button></form>
       <button type="button" onClick={collectChannelVideos} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-accent/30 bg-accent/10 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "channels" ? "채널 영상 수집 중…" : "채널 영상 수집"}</button>
       <p className="text-[9px] leading-4 text-neutral-600">신규 수집 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
     </div>
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
     {!loading && !error && <div className={cn("mt-4 rounded-2xl border p-3", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}><div className="flex items-center"><p className="text-[10px] font-black text-neutral-500">노출 중인 오늘의 PICK</p><strong className={cn("ml-auto text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount}개</strong></div>{featuredActiveCount < 3 && <p className="mt-2 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}</div>}
-    {!loading && !error && items.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-accent"/>전체 선택</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
+    {!loading && !error && filteredAdminItems.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-4 w-4 accent-accent"/>{adminQuery.trim() ? "검색 결과 전체 선택" : "전체 선택"}</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <div className="flex items-center"><div><p className="text-xs font-black">선택 항목 일괄 설정</p><p className="mt-1 text-[9px] font-bold text-neutral-500">수정 후 아래 ‘선택 설정 저장’을 눌러 반영하세요.</p></div><button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg border border-white/10 px-2 py-1 text-[9px] font-black text-neutral-500">선택 해제</button></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => applyToSelected({ isActive: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">노출 ON</button><button type="button" onClick={() => applyToSelected({ isActive: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">노출 OFF</button><button type="button" onClick={() => applyToSelected({ isFeatured: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">PICK 지정</button><button type="button" onClick={() => applyToSelected({ isFeatured: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">PICK 해제</button></div>
@@ -878,7 +897,7 @@ function RecommendedVideosAdmin({ onBack }) {
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" disabled={Boolean(bulkBusy)} onClick={saveSelected} className="rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{bulkBusy === "save" ? "저장 중…" : `선택 설정 저장 (${selectedItems.length})`}</button><button type="button" disabled={Boolean(bulkBusy)} onClick={deleteSelected} aria-label="선택 영상 삭제" className="flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-red-400 disabled:opacity-50">{bulkBusy === "delete" ? <RefreshCw size={16} className="animate-spin"/> : <Trash2 size={16}/>}</button></div>
     </section>}
     {saveError && <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[10px] font-bold text-accent">{saveError}</p>}
-    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : items.length ? <div className="mt-4 space-y-3">{items.map((item) => <article key={item.id} className={cn("overflow-hidden rounded-2xl border bg-white/[.03]", selectedIds.has(item.id) ? "border-accent/50" : "border-white/10")}>
+    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : filteredAdminItems.length ? <div className="mt-4 space-y-3">{filteredAdminItems.map((item) => <article key={item.id} className={cn("overflow-hidden rounded-2xl border bg-white/[.03]", selectedIds.has(item.id) ? "border-accent/50" : "border-white/10")}>
       <div className="flex gap-3 p-3"><label className="flex shrink-0 cursor-pointer items-start pt-1" aria-label={`${item.title || "제목 없음"} 선택`}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelected(item.id)} className="h-4 w-4 accent-accent"/></label>
         <div className="flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={20}/>}</div>
         <div className="min-w-0 flex-1"><h3 className="line-clamp-2 text-xs font-black leading-5">{item.title || "제목 없음"}</h3><p className="mt-1 truncate text-[10px] font-bold text-neutral-500">{item.channelTitle || "채널명 없음"}</p><p className="mt-1 text-[9px] text-neutral-600">{uploadDate(item.publishedAt)}</p></div>
@@ -896,7 +915,7 @@ function RecommendedVideosAdmin({ onBack }) {
         <label className="mt-2 block rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">운영자 코멘트</span><textarea rows={3} value={item.adminComment} onChange={(event) => updateItem(item.id, { adminComment: event.target.value })} placeholder="운영자 코멘트 입력" className="mt-1 w-full resize-none bg-transparent text-[10px] leading-4 text-neutral-300 outline-none placeholder:text-neutral-700"/></label>
         <button type="button" disabled={Boolean(savingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button>
       </div>
-    </article>)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">등록된 추천 영상이 없습니다.</div>}
+    </article>)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{adminQuery.trim() ? "검색 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
   </div>;
 }
 
