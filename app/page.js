@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
-  ArrowUpDown, ExternalLink, Home, Info, Languages, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Shuffle, Trash2, Trophy, X
+  ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Shuffle, Trash2, Trophy, X
 } from "lucide-react";
 import { adminService, archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
-import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveText } from "../lib/archive-i18n";
+import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
 
 const pad = (n) => String(n).padStart(2, "0");
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -69,7 +69,7 @@ export default function Page() {
     setAdminOpen(false);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   };
-  const openPostypeAdmin = () => {
+  const openPostypeAdmin = (credential = "") => {
     closeAdmin();
     setTab("postype");
     setPostypeAdminRequest({ id: Date.now(), credential });
@@ -206,7 +206,7 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
   const pickKeyword = (tag) => { setQuery(`#${tag}`); setSubTab("archive"); onKeywordConsumed(); };
   return (
     <div>
-      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} placeholder={t("searchPlaceholder")} />{subTab === "archive" && <ArchiveGuide language={language} />}</div>
+      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} placeholder={t("searchPlaceholder")} /></div>
       <div className="sticky top-0 z-20 mt-3 border-b border-white/10 bg-black/95 px-4 backdrop-blur-xl">
         <div className="grid grid-cols-3">
           {[["archive", Archive, t("archive")], ["keywords", Heart, t("keywords")], ["today", CalendarDays, t("today")]].map(([key, Icon, label]) => (
@@ -224,25 +224,12 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
         {loading ? <ArchiveSkeleton /> : error && !items.length ? <LoadError message={error}/> : <ArchiveGrid items={items} categoryLabel={categoryLabel} emptyText={t("empty")} />}
         {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? t("loadingMore") : t("more")}</button>}
       </div>}
-      {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
+      {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} language={language} />)}
       {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} language={language} />}
       {subTab === "archive" && <FloatingPortal><button disabled={randomLoading || !total} onClick={pickRandom} className="fixed bottom-24 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-full border border-accent/40 bg-[#120000]/95 px-4 text-[11px] font-black text-[#ff5a5a] shadow-[0_10px_30px_rgba(0,0,0,.38)] backdrop-blur-md transition active:border-accent active:bg-accent active:text-white disabled:opacity-50 md:right-[calc((100vw-28rem)/2+1rem)]"><Shuffle size={13}/>{t("random")}</button></FloatingPortal>}
       {randomItem && <RandomArchiveModal item={randomItem} language={language} onAgain={pickRandom} loading={randomLoading} onClose={() => setRandomItem(null)} />}
     </div>
   );
-}
-
-function ArchiveGuide({ language = "ko" }) {
-  const t = (key) => archiveText(language, key);
-  const rows = [
-    [Search, t("guideSearchLabel"), t("guideSearch")],
-    [CalendarDays, t("guideCalendarLabel"), t("guideCalendar")],
-    [Info, t("guideFilterLabel"), t("guideFilter")]
-  ];
-  return <details className="group mt-2 rounded-xl border border-white/10 bg-neutral-900/50">
-    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-neutral-500"><Info size={12} className="text-accent"/>{t("guideTitle")}<ChevronRight size={12} className="ml-auto transition group-open:rotate-90"/></summary>
-    <div className="space-y-2.5 border-t border-white/10 px-3 py-3">{rows.map(([Icon, label, text]) => <div key={label} className="flex gap-2.5"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><Icon size={13}/></span><p className="text-[10px] leading-relaxed text-neutral-500"><strong className="block text-neutral-300">{label}</strong>{text}</p></div>)}<p className="border-t border-white/10 pt-2.5 text-[9px] italic leading-relaxed text-neutral-600">{t("guideContact")}</p></div>
-  </details>;
 }
 
 function FloatingPortal({ children }) {
@@ -546,12 +533,12 @@ function PostypeView({ adminRequest = null }) {
   const frameRef = useRef(null);
   useEffect(() => {
     if (!adminRequest) return;
-    const openAdmin = () => frameRef.current?.contentDocument?.getElementById("adminDirectToggle")?.click();
+    const openAdmin = () => frameRef.current?.contentWindow?.postMessage({ type: "hq-open-postype-admin", credential: adminRequest.credential || "" }, window.location.origin);
     const frame = frameRef.current;
     const timer = window.setTimeout(openAdmin, 0);
     frame?.addEventListener("load", openAdmin);
     return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
-  }, [adminRequest]);
+  }, [adminRequest?.id, adminRequest?.credential]);
   return <iframe ref={frameRef} src="postype/index.html?v=20260622-3" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
@@ -588,7 +575,7 @@ function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Trophy} label="월드컵" description="대회·후보·랭킹 데이터 관리" active onClick={() => setSection("worldcup")}/>
-        <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={onOpenPostype} />
+        <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
       </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : loading ? <div className="py-12"><ListSkeleton/><p className="mt-4 text-center text-xs font-bold text-neutral-500">관리자용 전체 데이터를 불러오는 중…</p></div> : <ArchiveAdmin items={items} onBack={() => setSection("hub")} onReload={onReload}/>}
     </div>
   </div>;
@@ -680,7 +667,7 @@ function ArchiveAdmin({ items, onBack, onReload }) {
   const rawFiltered = rawItems.filter((item) => (!rawAccount || item.account.toLowerCase().includes(rawAccount.toLowerCase())) && (!rawFrom || item.date >= rawFrom) && (!rawTo || item.date <= rawTo));
   const selectedMainItems = items.filter((item) => selectedMain.includes(item.id));
   const selectedRawItems = rawItems.filter((item) => selectedRaw.includes(item.id));
-  const adminYears = [...new Set([2023, 2024, 2025, 2026, ...items.map((item) => Number(item.date?.slice(0, 4))).filter(Boolean)])].sort();
+  const adminYears = [...new Set([...Array.from({ length: 12 }, (_, index) => 2017 + index), ...items.map((item) => Number(item.date?.slice(0, 4))).filter(Boolean)])].sort();
   const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setFormOpen(true); };
   const update = (key, value) => setForm((current) => key === "subCategory" ? { ...current, subCategory: value, mainCategory: mainCategoryFor(value) } : { ...current, [key]: value });
   const save = async (event) => {
