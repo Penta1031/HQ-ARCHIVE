@@ -347,7 +347,8 @@ const mediaFromTweetData = (data = {}) => {
     ...asArray(data.tweet?.media?.all),
     ...asArray(data.media?.all)
   ];
-  const detailed = candidates.find((media)=>media?.url || media?.thumbnail_url);
+  const detailed = candidates.find((media)=>/video|gif/i.test(media?.type || "") && (media?.url || media?.thumbnail_url))
+    || candidates.find((media)=>media?.url || media?.thumbnail_url);
   const vxMedia = asArray(data.mediaURLs)[0] || asArray(data.media_urls)[0];
   const url = detailed?.url || detailed?.thumbnail_url || vxMedia || data.video_url || data.tweet?.video?.url || "";
   return url ? { url, isVideo: /video|gif/i.test(detailed?.type || "") || /\.(mp4|m3u8)(?:$|\?)/i.test(url) } : null;
@@ -363,7 +364,7 @@ async function resolveTweetMedia(sourceUrl) {
       try {
         const serverMedia = await Promise.race([
           tweetMediaService.resolve(sourceUrl),
-          new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),2500))
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),8000))
         ]);
         if (serverMedia?.url) return { ...serverMedia, isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
       } catch {}
@@ -382,7 +383,9 @@ async function resolveTweetMedia(sourceUrl) {
     return null;
   })();
   tweetMediaCache.set(sourceUrl,request);
-  return request;
+  const resolved = await request;
+  if (!resolved) tweetMediaCache.delete(sourceUrl);
+  return resolved;
 }
 
 function unifiedWorldcup(cups) {
@@ -397,20 +400,38 @@ function unifiedWorldcup(cups) {
 function CandidateMedia({ item, className = "", controls = false, fit = "cover" }) {
   const [media, setMedia] = useState(item.mediaUrl ? {url:item.mediaUrl,isVideo:Boolean(item.isVideo||/\.(mp4|m3u8)(?:$|\?)/i.test(item.mediaUrl))} : null);
   const [failed, setFailed] = useState(false);
-  const tweetId = String(item.sourceUrl || "").match(/\/(?:status|statuses)\/(\d+)/i)?.[1] || "";
+  const [resolving, setResolving] = useState(false);
+  const [refreshAttempted, setRefreshAttempted] = useState(false);
+  const resolveSequence = useRef(0);
   useEffect(() => {
     let active = true;
-    setMedia(item.mediaUrl ? {url:item.mediaUrl,isVideo:Boolean(item.isVideo||/\.(mp4|m3u8)(?:$|\?)/i.test(item.mediaUrl))} : null); setFailed(false);
+    const sequence = ++resolveSequence.current;
+    setMedia(item.mediaUrl ? {url:item.mediaUrl,isVideo:Boolean(item.isVideo||/\.(mp4|m3u8)(?:$|\?)/i.test(item.mediaUrl))} : null);
+    setFailed(false); setResolving(false); setRefreshAttempted(false);
     if (!item.mediaUrl && item.sourceUrl) {
-      resolveTweetMedia(item.sourceUrl).then((resolved)=>{if(active&&resolved)setMedia(resolved);});
+      setResolving(true);
+      resolveTweetMedia(item.sourceUrl).then((resolved)=>{
+        if (!active || sequence !== resolveSequence.current) return;
+        if (resolved) setMedia(resolved); else setFailed(true);
+      }).finally(()=>{if(active&&sequence===resolveSequence.current)setResolving(false);});
     }
-    return () => { active = false; };
+    return () => { active = false; resolveSequence.current += 1; };
   }, [item.id, item.mediaUrl, item.sourceUrl]);
+  const refreshMedia = () => {
+    if (!item.sourceUrl || resolving || refreshAttempted) { setFailed(true); return; }
+    const sequence = ++resolveSequence.current;
+    setRefreshAttempted(true); setResolving(true); setFailed(false);
+    tweetMediaCache.delete(item.sourceUrl);
+    resolveTweetMedia(item.sourceUrl).then((resolved)=>{
+      if (sequence !== resolveSequence.current) return;
+      if (resolved) setMedia(resolved); else setFailed(true);
+    }).finally(()=>{if(sequence===resolveSequence.current)setResolving(false);});
+  };
   const mediaClass = fit === "contain" ? "max-h-[72dvh] h-auto w-full object-contain" : "h-full w-full object-cover";
-  if ((!media || failed) && tweetId) return <div data-source-url={item.sourceUrl} className={cn("relative h-full min-h-[260px] w-full overflow-hidden bg-gradient-to-br from-neutral-800 to-neutral-950",className)}><div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm font-black leading-5 text-neutral-300">{item.name}</div><iframe title={`${item.name} X 미디어`} src={`https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=dark&dnt=true`} loading="eager" className={cn("absolute inset-0 h-full w-full border-0 bg-neutral-950",controls?"pointer-events-auto":"pointer-events-none")}/></div>;
+  if (resolving) return <div className={cn("flex h-full w-full items-center justify-center bg-neutral-950 p-4 text-center text-xs font-black text-neutral-500",className)}>미디어 불러오는 중…</div>;
   if (!media || failed) return <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-950 p-4 text-center text-sm font-black leading-5 text-neutral-300",className)}>{item.name}</div>;
-  if (media.isVideo) return <video src={media.url} autoPlay={!controls} controls={controls} loop muted={!controls} playsInline onError={()=>setFailed(true)} className={cn(mediaClass,className)}/>;
-  return <img src={media.url} alt="" onError={()=>setFailed(true)} className={cn(mediaClass,className)}/>;
+  if (media.isVideo) return <video src={media.url} autoPlay={!controls} controls={controls} loop muted={!controls} playsInline onError={refreshMedia} className={cn(mediaClass,className)}/>;
+  return <img src={media.url} alt="" onError={refreshMedia} className={cn(mediaClass,className)}/>;
 }
 
 function WorldcupView() {
