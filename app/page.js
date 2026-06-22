@@ -226,7 +226,7 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
       </div>}
       {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
       {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} language={language} />}
-      {subTab === "archive" && <button disabled={randomLoading || !total} onClick={pickRandom} className="absolute bottom-24 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-full border border-accent/40 bg-[#120000]/95 px-4 text-[11px] font-black text-[#ff5a5a] shadow-[0_10px_30px_rgba(0,0,0,.38)] backdrop-blur-md transition active:border-accent active:bg-accent active:text-white disabled:opacity-50"><Shuffle size={13}/>{t("random")}</button>}
+      {subTab === "archive" && <button disabled={randomLoading || !total} onClick={pickRandom} className="fixed bottom-24 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-full border border-accent/40 bg-[#120000]/95 px-4 text-[11px] font-black text-[#ff5a5a] shadow-[0_10px_30px_rgba(0,0,0,.38)] backdrop-blur-md transition active:border-accent active:bg-accent active:text-white disabled:opacity-50 md:right-[calc((100vw-28rem)/2+1rem)]"><Shuffle size={13}/>{t("random")}</button>}
       {randomItem && <RandomArchiveModal item={randomItem} language={language} onAgain={pickRandom} loading={randomLoading} onClose={() => setRandomItem(null)} />}
     </div>
   );
@@ -240,7 +240,7 @@ function ArchiveGuide({ language = "ko" }) {
     [Info, t("guideFilterLabel"), t("guideFilter")]
   ];
   return <details className="group mt-2 rounded-xl border border-white/10 bg-neutral-900/50">
-    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[10px] font-bold text-neutral-500"><Info size={12} className="text-accent"/>{t("guideTitle")}<ChevronRight size={12} className="ml-auto transition group-open:rotate-90"/></summary>
+    <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-neutral-500"><Info size={12} className="text-accent"/>{t("guideTitle")}<ChevronRight size={12} className="ml-auto transition group-open:rotate-90"/></summary>
     <div className="space-y-2.5 border-t border-white/10 px-3 py-3">{rows.map(([Icon, label, text]) => <div key={label} className="flex gap-2.5"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><Icon size={13}/></span><p className="text-[10px] leading-relaxed text-neutral-500"><strong className="block text-neutral-300">{label}</strong>{text}</p></div>)}<p className="border-t border-white/10 pt-2.5 text-[9px] italic leading-relaxed text-neutral-600">{t("guideContact")}</p></div>
   </details>;
 }
