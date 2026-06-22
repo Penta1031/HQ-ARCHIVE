@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
-  ArrowUpDown, Home, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Trash2, Trophy, X
+  ArrowUpDown, ExternalLink, Home, Info, Languages, LockKeyhole, Medal, Pencil, Play, Plus, Search, Share2, Shuffle, Trash2, Trophy, X
 } from "lucide-react";
 import { adminService, archiveService, keywordService, tweetMediaService, worldcupService } from "../lib/services";
+import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveText } from "../lib/archive-i18n";
 
 const pad = (n) => String(n).padStart(2, "0");
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -49,6 +50,7 @@ const mainCategoryFor = (subCategory) => Object.entries(CATEGORY_MAP).find(([, v
 
 export default function Page() {
   const [tab, setTab] = useState("home");
+  const [archiveLanguage, setArchiveLanguage] = useState("ko");
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
@@ -81,10 +83,10 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
-        <Header onAdmin={openAdmin} />
+        <Header onAdmin={openAdmin} showLanguage={tab === "home"} language={archiveLanguage} onLanguage={setArchiveLanguage} />
         <section className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? "overflow-hidden pb-[76px]" : "overflow-y-auto pb-28")}>
           <div key={tab} className={cn("animate-fade-in", tab === "postype" && "h-full")}>
-            {tab === "home" && <HomeView initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
+            {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
             {tab === "worldcup" && <WorldcupView />}
             {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} />}
@@ -97,14 +99,22 @@ export default function Page() {
   );
 }
 
-function Header({ onAdmin }) {
+function Header({ onAdmin, showLanguage = false, language = "ko", onLanguage }) {
+  const [languageOpen, setLanguageOpen] = useState(false);
+  useEffect(() => { if (!showLanguage) setLanguageOpen(false); }, [showLanguage]);
   return (
-    <header className="z-30 flex h-[58px] shrink-0 items-center border-b border-white/10 bg-black/90 px-4 backdrop-blur-xl">
+    <header className="relative z-30 flex h-[58px] shrink-0 items-center border-b border-white/10 bg-black/90 px-4 backdrop-blur-xl">
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 rounded-full bg-accent shadow-[0_0_14px_#e50000]" />
         <h1 className="text-[16px] font-black tracking-[-.03em]">HQ ARCHIVE</h1>
       </div>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        {showLanguage && <div className="relative">
+          <button onClick={() => setLanguageOpen((open) => !open)} aria-label="아카이브 번역" aria-expanded={languageOpen} className={cn("rounded-xl border p-2 transition", languageOpen ? "border-accent/50 bg-accent/10 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}><Languages size={16}/></button>
+          {languageOpen && <div className="absolute right-0 top-11 z-50 grid min-w-36 grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-neutral-950 p-2 shadow-2xl">
+            {ARCHIVE_LANGUAGE_OPTIONS.map((option) => <button key={option.code} onClick={() => { onLanguage(option.code); setLanguageOpen(false); }} className={cn("rounded-xl px-3 py-2 text-left text-[11px] font-black", language === option.code ? "bg-accent text-white" : "bg-white/5 text-neutral-400")}><span className="mr-1.5 text-[9px] opacity-60">{option.short}</span>{option.label}</button>)}
+          </div>}
+        </div>}
         <button onClick={onAdmin} aria-label="관리자 모드" className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-500 transition active:text-accent"><LockKeyhole size={16} /></button>
       </div>
     </header>
@@ -121,7 +131,7 @@ function SearchBar({ value, onChange, placeholder = "제목, 키워드, 날짜�
   );
 }
 
-function HomeView({ initialKeyword, onKeywordConsumed }) {
+function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
   const [subTab, setSubTab] = useState("archive");
   const [query, setQuery] = useState(initialKeyword ? `#${initialKeyword}` : "");
   const [requestQuery, setRequestQuery] = useState(initialKeyword ? `#${initialKeyword}` : "");
@@ -141,7 +151,11 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
   const [todayItems, setTodayItems] = useState([]);
   const [todayLoading, setTodayLoading] = useState(false);
   const [todayLoadedDate, setTodayLoadedDate] = useState("");
+  const [randomItem, setRandomItem] = useState(null);
+  const [randomLoading, setRandomLoading] = useState(false);
   const todayDate = useKstToday();
+  const t = (key, values) => archiveText(language, key, values);
+  const categoryLabel = (value) => archiveCategoryLabel(language, value);
   const mains = MAIN_CATEGORY_ORDER;
   const subs = ["전체", ...(mainCategory === "전체" ? SUB_CATEGORY_OPTIONS : (CATEGORY_MAP[mainCategory] || []))];
 
@@ -176,13 +190,26 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
     finally { setLoadingMore(false); }
   };
 
+  const pickRandom = async () => {
+    if (!total || randomLoading) return;
+    setRandomLoading(true);
+    try {
+      const result = await archiveService.page({ page: Math.floor(Math.random() * total) + 1, limit: 1, query: requestQuery, mainCategory, subCategory, sortOrder });
+      setRandomItem(result.items[0] || null);
+    } catch (reason) {
+      setError(reason.message || "랜덤 기록을 불러오지 못했어요.");
+    } finally {
+      setRandomLoading(false);
+    }
+  };
+
   const pickKeyword = (tag) => { setQuery(`#${tag}`); setSubTab("archive"); onKeywordConsumed(); };
   return (
     <div>
-      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} /></div>
+      <div className="px-4 pt-4"><SearchBar value={query} onChange={setQuery} placeholder={t("searchPlaceholder")} />{subTab === "archive" && <ArchiveGuide language={language} />}</div>
       <div className="sticky top-0 z-20 mt-3 border-b border-white/10 bg-black/95 px-4 backdrop-blur-xl">
         <div className="grid grid-cols-3">
-          {[["archive", Archive, "아카이브"], ["keywords", Heart, "키워드"], ["today", CalendarDays, "N년전 오늘"]].map(([key, Icon, label]) => (
+          {[["archive", Archive, t("archive")], ["keywords", Heart, t("keywords")], ["today", CalendarDays, t("today")]].map(([key, Icon, label]) => (
             <button key={key} onClick={() => setSubTab(key)} className={cn("relative py-3 text-[13px] font-bold transition", subTab === key ? "text-white" : "text-neutral-600")}>
               <span className="flex items-center justify-center gap-1.5"><Icon size={14}/>{label}</span>{subTab === key && <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-accent" />}
             </button>
@@ -190,40 +217,64 @@ function HomeView({ initialKeyword, onKeywordConsumed }) {
         </div>
       </div>
       {subTab === "archive" && <div className="px-4 pt-4">
-        <p className="mb-2 text-[10px] font-bold text-neutral-600">← 좌우로 밀어서 카테고리를 확인하세요 →</p>
-        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); }} />
-        {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={setSubCategory} secondary /></div>}
-        <SectionLabel label="전체" count={total} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} />
-        {loading ? <ArchiveSkeleton /> : error && !items.length ? <LoadError message={error}/> : <ArchiveGrid items={items} />}
-        {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? "다음 30개 불러오는 중…" : "더보기 (+30)"}</button>}
+        <p className="mb-2 text-[10px] font-bold text-neutral-600">{t("categoryHint")}</p>
+        <FilterRow values={mains} active={mainCategory} onChange={(v) => { setMainCategory(v); setSubCategory("전체"); }} getLabel={categoryLabel} />
+        {mainCategory !== "전체" && <div className="mt-3"><FilterRow values={subs} active={subCategory} onChange={setSubCategory} getLabel={categoryLabel} secondary /></div>}
+        <SectionLabel label={t("all")} count={total} unit={t("unit")} sortOrder={sortOrder} sortLabels={{ desc: t("latest"), asc: t("oldest") }} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")} onRandom={pickRandom} randomLabel={t("random")} randomLoading={randomLoading} />
+        {loading ? <ArchiveSkeleton /> : error && !items.length ? <LoadError message={error}/> : <ArchiveGrid items={items} categoryLabel={categoryLabel} emptyText={t("empty")} />}
+        {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? t("loadingMore") : t("more")}</button>}
       </div>}
       {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} />)}
-      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} />}
+      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} language={language} />}
+      {randomItem && <RandomArchiveModal item={randomItem} language={language} onAgain={pickRandom} loading={randomLoading} onClose={() => setRandomItem(null)} />}
     </div>
   );
 }
 
-function FilterRow({ values, active, onChange, secondary = false }) {
+function ArchiveGuide({ language = "ko" }) {
+  const t = (key) => archiveText(language, key);
+  const rows = [
+    [Search, t("guideSearchLabel"), t("guideSearch")],
+    [CalendarDays, t("guideCalendarLabel"), t("guideCalendar")],
+    [Info, t("guideFilterLabel"), t("guideFilter")]
+  ];
+  return <details className="group mt-3 rounded-2xl border border-white/10 bg-neutral-900/60">
+    <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-black text-neutral-400"><Info size={14} className="text-accent"/>{t("guideTitle")}<ChevronRight size={14} className="ml-auto transition group-open:rotate-90"/></summary>
+    <div className="space-y-3 border-t border-white/10 px-4 py-4">{rows.map(([Icon, label, text]) => <div key={label} className="flex gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><Icon size={15}/></span><p className="text-[11px] leading-relaxed text-neutral-500"><strong className="mb-0.5 block text-neutral-300">{label}</strong>{text}</p></div>)}<p className="border-t border-white/10 pt-3 text-[10px] italic leading-relaxed text-neutral-600">{t("guideContact")}</p></div>
+  </details>;
+}
+
+function RandomArchiveModal({ item, language = "ko", onAgain, loading = false, onClose }) {
+  const t = (key) => archiveText(language, key);
+  const categoryLabel = (value) => archiveCategoryLabel(language, value);
+  return <AppOverlay className="z-[75]"><div onClick={onClose} className="flex h-full items-end justify-center bg-black/80 p-3 backdrop-blur-md"><div onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[28px] border border-white/10 bg-neutral-950 p-5 shadow-2xl animate-pop-in">
+    <div className="flex items-center"><h2 className="text-xl font-black">{t("randomTitle")}</h2><button onClick={onClose} aria-label="랜덤 추천 닫기" className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
+    <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="aspect-video w-full object-cover"/> : <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800"><Archive size={28} className="text-neutral-700"/></div>}<div className="p-4"><div className="flex items-center text-[10px] font-bold"><span className="rounded border border-accent/60 px-1.5 py-0.5 text-accent">{categoryLabel(item.subCategory)}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><h3 className="mt-3 text-sm font-black leading-6">{item.title}</h3></div></div>
+    <div className="mt-4 grid grid-cols-2 gap-2"><button disabled={loading} onClick={onAgain} className="flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-xs font-black text-neutral-300 disabled:opacity-50"><Shuffle size={14}/>{t("randomAgain")}</button>{item.link ? <a href={item.link} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-accent py-3 text-xs font-black"><ExternalLink size={14}/>{t("openOriginal")}</a> : <button disabled className="rounded-xl bg-neutral-900 py-3 text-xs font-black text-neutral-700">{t("openOriginal")}</button>}</div>
+  </div></div></AppOverlay>;
+}
+
+function FilterRow({ values, active, onChange, secondary = false, getLabel = (value) => value }) {
   return <div className={cn("flex gap-2", secondary ? "flex-wrap" : "-mx-4 overflow-x-auto px-4 no-scrollbar")}>{values.map((value) => (
-    <button key={value} onClick={() => onChange(value)} className={cn("shrink-0 font-bold transition", secondary ? "rounded-md px-2 py-1 text-[10px] leading-none" : "rounded-full px-3 py-2 text-xs", active === value ? (secondary ? "bg-accent text-white" : "border border-white/30 bg-neutral-800 text-white") : "border border-white/10 bg-neutral-900 text-neutral-500")}>{value}</button>
+    <button key={value} onClick={() => onChange(value)} className={cn("shrink-0 font-bold transition", secondary ? "rounded-md px-2 py-1 text-[10px] leading-none" : "rounded-full px-3 py-2 text-xs", active === value ? (secondary ? "bg-accent text-white" : "border border-white/30 bg-neutral-800 text-white") : "border border-white/10 bg-neutral-900 text-neutral-500")}>{getLabel(value)}</button>
   ))}</div>;
 }
 
-function SectionLabel({ label, count, sortOrder, onSort }) {
-  return <div className="mb-3 mt-6 flex items-center"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}개</b></p>{onSort && <button onClick={onSort} className="ml-auto flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? "최신순" : "과거순"}</button>}</div>;
+function SectionLabel({ label, count, unit = "개", sortOrder, sortLabels = { desc: "최신순", asc: "과거순" }, onSort, onRandom, randomLabel = "랜덤 추천", randomLoading = false }) {
+  return <div className="mb-3 mt-6 flex items-center gap-3"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}{unit}</b></p><div className="ml-auto flex items-center gap-3">{onRandom && <button disabled={randomLoading || !count} onClick={onRandom} className="flex items-center gap-1 text-xs font-bold text-accent disabled:text-neutral-700"><Shuffle size={13}/>{randomLabel}</button>}{onSort && <button onClick={onSort} className="flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? sortLabels.desc : sortLabels.asc}</button>}</div></div>;
 }
 
-function ArchiveGrid({ items }) {
-  if (!items.length) return <EmptyState text="조건에 맞는 기록이 없어요." />;
-  return <div className="grid grid-cols-2 gap-x-3 gap-y-5">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} />)}</div>;
+function ArchiveGrid({ items, categoryLabel, emptyText = "조건에 맞는 기록이 없어요." }) {
+  if (!items.length) return <EmptyState text={emptyText} />;
+  return <div className="grid grid-cols-2 gap-x-3 gap-y-5">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} categoryLabel={categoryLabel} />)}</div>;
 }
 
-function ArchiveCard({ item, index = 0 }) {
+function ArchiveCard({ item, index = 0, categoryLabel = (value) => value }) {
   return <article onClick={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")} className={cn("group min-w-0 animate-fade-in", item.link && "cursor-pointer")} style={{ animationDelay: `${index * 35}ms` }}>
     <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-neutral-900">
       {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover transition duration-500 group-active:scale-105" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800"><Archive size={22} className="text-neutral-700" /></div>}
     </div>
-    <div className="mt-2 flex items-center gap-2 text-[9px] font-bold"><span className="rounded border border-accent/60 px-1 py-px leading-none text-accent">{item.subCategory}</span><time className="ml-auto whitespace-nowrap text-neutral-600">{item.date}</time></div>
+    <div className="mt-2 flex items-center gap-2 text-[9px] font-bold"><span className="rounded border border-accent/60 px-1 py-px leading-none text-accent">{categoryLabel(item.subCategory)}</span><time className="ml-auto whitespace-nowrap text-neutral-600">{item.date}</time></div>
     <h3 className="mt-1.5 line-clamp-2 text-[12px] font-bold leading-[1.45] tracking-[-.02em]">{item.title}</h3>
   </article>;
 }
@@ -242,10 +293,10 @@ function KeywordView({ items, tags, query }) {
   </div>;
 }
 
-function TodayView({ items, loading = false, todayDate = "" }) {
+function TodayView({ items, loading = false, todayDate = "", language = "ko" }) {
   const [year, month, day] = (todayDate || "0-0-0").split("-").map(Number);
-  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? `${month}월 ${day}일의 기록` : "오늘의 기록"}</h2></div>
-    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); return <article key={item.id} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{ago}년 전 오늘</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
+  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? archiveText(language, "todayTitle", { month, day }) : archiveText(language, "today")}</h2></div>
+    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); return <article key={item.id} onClick={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")} onKeyDown={(event) => { if (item.link && (event.key === "Enter" || event.key === " ")) window.open(item.link, "_blank", "noopener,noreferrer"); }} role={item.link ? "link" : undefined} tabIndex={item.link ? 0 : undefined} className={cn("flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3 transition", item.link && "cursor-pointer active:border-accent/60")}><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{archiveText(language, "yearsAgo", { years: ago })}</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
   </div>;
 }
 
