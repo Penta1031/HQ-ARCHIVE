@@ -494,7 +494,7 @@ function AdminHub({ items, loading, onClose, onReload, onOpenPostype }) {
 
   return <div className="absolute inset-0 z-[80] flex items-end bg-black/80 p-3 backdrop-blur-md" onClick={onClose}>
     <div onClick={(event) => event.stopPropagation()} className="max-h-[92dvh] w-full overflow-y-auto rounded-[28px] border border-white/10 bg-neutral-950 p-5 shadow-2xl no-scrollbar animate-pop-in">
-      <div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">ADMIN CENTER</p><h2 className="mt-1 text-xl font-black">{section === "hub" ? "관리자 모드" : section === "worldcup" ? "월드컵 관리" : "아카이브 관리"}</h2></div><button onClick={onClose} className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
+      <div className="flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">ADMIN CENTER</p><h2 className="mt-1 text-xl font-black">{section === "hub" ? "관리자 모드" : section === "worldcup" ? "월드컵 관리" : "아카이브 관리"}</h2></div><button onClick={onClose} aria-label="관리자 닫기" className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
       {!authenticated ? <form onSubmit={authenticate} className="py-10">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/15 text-accent"><LockKeyhole size={24}/></div>
         <p className="mt-4 text-center text-sm font-bold">관리자 비밀번호를 입력하세요.</p>
