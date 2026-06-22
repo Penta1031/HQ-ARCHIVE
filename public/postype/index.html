@@ -3165,6 +3165,16 @@
       color: #ff4d4d;
     }
 
+    .bookmark-action.just-changed {
+      animation: bookmark-feedback .28s ease-out;
+    }
+
+    @keyframes bookmark-feedback {
+      0% { transform: scale(.82); }
+      65% { transform: scale(1.16); }
+      100% { transform: scale(1); }
+    }
+
     .random-toggle {
       min-height: 42px;
       padding: 0 16px;
@@ -3541,21 +3551,6 @@
       </div>
     </section>
 
-    <details class="guide panel">
-      <summary>이용 가이드</summary>
-      <div class="guide-body">
-        <ul class="guide-list">
-          <li><strong>필터</strong>: 장르·키워드·공·수·연재상태 등을 선택해 원하는 글만 모아볼 수 있습니다.</li>
-          <li><strong>메모</strong>: 각 글에 개인 메모를 남깁니다. 현재 기기의 해당 브라우저 저장공간에만 저장됩니다.</li>
-          <li><strong>발췌</strong>: 발췌문·작품명·작가명을 넣어 이미지를 만들고 저장하거나 공유합니다. 만든 이미지는 자동 보관되지 않습니다.</li>
-          <li><strong>북마크</strong>: 다시 보고 싶은 글을 내 서재에 보관합니다. 현재 기기의 해당 브라우저 저장공간에만 저장됩니다.</li>
-          <li><strong>내 서재</strong>: 이 기기에서 열어본 글과 북마크한 글을 한곳에서 확인합니다.</li>
-        </ul>
-        <p>서재·메모·북마크는 브라우저 데이터를 삭제하거나 다른 기기·브라우저를 사용하면 이어지지 않습니다.</p>
-        <p>오류나 문의사항은 디엠 혹은 큐리어스로 문의 부탁드립니다.</p>
-      </div>
-    </details>
-
             <details class="contact-panel panel">
                 <summary>문의 창구</summary>
                 <div class="contact-body">
@@ -3863,6 +3858,7 @@
     };
     Object.assign(CONFIG, window.POSTYPE_CONFIG || {});
     const LIBRARY_STORAGE_KEY = "hq-postype-library-v1";
+    const POSTYPE_ADMIN_SESSION_KEY = "hq-postype-admin-session";
 
     const TAG_GROUPS = {
       "카테고리": ["글", "그림", "기타"],
@@ -3951,7 +3947,7 @@
       excerptPointers: new Map(),
       excerptPinch: null,
       excerptDragPoint: null,
-      adminToken: "",
+      adminToken: sessionStorage.getItem(POSTYPE_ADMIN_SESSION_KEY) || "",
       adminSelected: new Set(),
       adminVisiblePosts: [],
       adminBulkValues: new Set(),
@@ -4109,6 +4105,25 @@
         els.adminToastStack.lastElementChild.remove();
       }
       setTimeout(() => toast.remove(), type === "error" ? 9000 : 5500);
+    }
+
+    function showLibraryFeedback(message) {
+      const text = normalize(message);
+      if (!text || !els.adminToastStack) return;
+      const toast = document.createElement("div");
+      toast.className = "admin-toast info";
+      toast.setAttribute("role", "status");
+      const content = document.createElement("span");
+      content.textContent = text;
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "×";
+      close.setAttribute("aria-label", "알림 닫기");
+      const remove = () => toast.remove();
+      close.addEventListener("click", remove);
+      toast.append(content, close);
+      els.adminToastStack.prepend(toast);
+      setTimeout(remove, 1800);
     }
 
     function canonicalPostUrl(value) {
@@ -5237,9 +5252,14 @@
       excerptButton.addEventListener("click", () => openExcerptModal(post));
       bookmarkButton.addEventListener("click", () => {
         const entry = postLibraryEntry(post);
-        updateLibraryEntry(post, { bookmarked: !entry.bookmarked, updatedAt: new Date().toISOString() });
+        const bookmarked = !Boolean(entry.bookmarked);
+        entry.bookmarked = bookmarked;
         renderLibraryButtons(post, bookmarkButton, noteButton);
-        renderLibraryList();
+        bookmarkButton.classList.remove("just-changed");
+        void bookmarkButton.offsetWidth;
+        bookmarkButton.classList.add("just-changed");
+        showLibraryFeedback(bookmarked ? "북마크에 저장했습니다." : "북마크에서 해제했습니다.");
+        updateLibraryEntry(post, { bookmarked, updatedAt: new Date().toISOString() });
       });
       edit.addEventListener("click", () => fillAdminForm(post));
       node.addEventListener("click", (event) => {
@@ -5252,6 +5272,7 @@
     function renderLibraryButtons(post, bookmarkButton, noteButton) {
       const entry = state.library[postKey(post)] || {};
       bookmarkButton.classList.toggle("active", Boolean(entry.bookmarked));
+      bookmarkButton.setAttribute("aria-pressed", String(Boolean(entry.bookmarked)));
       bookmarkButton.setAttribute("aria-label", entry.bookmarked ? "북마크 해제" : "북마크");
       bookmarkButton.title = entry.bookmarked ? "북마크 해제" : "북마크";
       if (noteButton) {
@@ -6201,20 +6222,35 @@
       openAuthorUploadModal();
     }
 
+    async function activateAdminMode(credential = "") {
+      if (document.body.classList.contains("admin-on")) return true;
+      if (!state.adminToken && credential) {
+        const result = await requestAdminFunction("auth", {}, credential);
+        if (!result.token) throw new Error("관리자 보안 함수가 아직 최신 버전으로 배포되지 않았습니다.");
+        state.adminToken = result.token;
+        sessionStorage.setItem(POSTYPE_ADMIN_SESSION_KEY, result.token);
+      }
+      if (!state.adminToken) return false;
+      document.body.classList.add("admin-on");
+      await loadData();
+      return true;
+    }
+
     async function toggleAdminMode() {
       if (document.body.classList.contains("admin-on")) {
         document.body.classList.remove("admin-on");
-        state.adminToken = "";
         closeAdminEditor();
         await loadData();
+        return;
+      }
+      if (state.adminToken) {
+        await activateAdminMode();
         return;
       }
       const password = await requestAdminPassword();
       if (password === null) return;
       try {
-        const result = await requestAdminFunction("auth", {}, password);
-        if (!result.token) throw new Error("관리자 보안 함수가 아직 최신 버전으로 배포되지 않았습니다.");
-        state.adminToken = result.token;
+        await activateAdminMode(password);
       } catch (error) {
         const detail = normalize(error.message);
         const connectionFailed = /failed to fetch|networkerror|load failed/i.test(detail);
@@ -6223,8 +6259,6 @@
           : `비밀번호를 확인해 주세요. ${detail}`);
         return;
       }
-      document.body.classList.add("admin-on");
-      await loadData();
     }
 
     function formData() {
@@ -6427,6 +6461,17 @@
       }
       window.open(link, "_blank", "noopener");
     }
+
+    window.addEventListener("message", async (event) => {
+      if (event.origin !== window.location.origin || event.source !== window.parent) return;
+      if (event.data?.type !== "hq-open-postype-admin") return;
+      try {
+        const opened = await activateAdminMode(normalize(event.data.credential));
+        if (!opened) await toggleAdminMode();
+      } catch (error) {
+        alert(`포타 관리자 모드를 열지 못했습니다. ${normalize(error.message)}`);
+      }
+    });
 
     els.search.addEventListener("input", (event) => {
       state.query = event.target.value;

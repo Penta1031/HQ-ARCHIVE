@@ -72,7 +72,7 @@ export default function Page() {
   const openPostypeAdmin = () => {
     closeAdmin();
     setTab("postype");
-    setPostypeAdminRequest((request) => request + 1);
+    setPostypeAdminRequest({ id: Date.now(), credential });
   };
 
   useEffect(() => {
@@ -286,17 +286,20 @@ function ArchiveCard({ item, index = 0, categoryLabel = (value) => value }) {
   </article>;
 }
 
-function KeywordView({ items, tags, query }) {
+function KeywordView({ items, tags, query, language = "ko" }) {
   const [active, setActive] = useState("전체");
   const [sortOrder, setSortOrder] = useState("desc");
   const [displayLimit, setDisplayLimit] = useState(30);
+  const t = (key) => archiveText(language, key);
+  const keywordLabel = (value) => value === "전체" ? t("all") : archiveKeywordLabel(language, value);
+  const categoryLabel = (value) => archiveCategoryLabel(language, value);
   const filtered = items.filter((item) => (active === "전체" || item.keywords?.includes(active) || item.rawKeywords === active) && (!query || [item.title, item.date, ...(item.keywords || [])].join(" ").toLowerCase().includes(query.replace(/^#/, "").toLowerCase()))).sort((a,b) => sortOrder === "desc" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
   return <div className="px-4 pb-6 pt-4">
-    <p className="mb-2 text-[10px] font-bold text-neutral-600">← 좌우로 밀어서 키워드를 확인하세요 →</p>
-    <FilterRow values={["전체", ...tags]} active={active} onChange={(value) => { setActive(value); setDisplayLimit(30); }}/>
-    <SectionLabel label={active} count={filtered.length} sortOrder={sortOrder} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")}/>
-    <ArchiveGrid items={filtered.slice(0, displayLimit)}/>
-    {filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}
+    <p className="mb-2 text-[10px] font-bold text-neutral-600">{t("keywordHint")}</p>
+    <FilterRow values={["전체", ...tags]} active={active} onChange={(value) => { setActive(value); setDisplayLimit(30); }} getLabel={keywordLabel}/>
+    <SectionLabel label={keywordLabel(active)} count={filtered.length} unit={t("unit")} sortOrder={sortOrder} sortLabels={{ desc: t("latest"), asc: t("oldest") }} onSort={() => setSortOrder((order) => order === "desc" ? "asc" : "desc")}/>
+    <ArchiveGrid items={filtered.slice(0, displayLimit)} categoryLabel={categoryLabel} emptyText={t("empty")}/>
+    {filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">{t("more")}</button>}
   </div>;
 }
 
@@ -321,7 +324,7 @@ function CalendarView() {
   useEffect(() => { let active = true; setLoading(true); setError(""); setMonthly([]); archiveService.calendar({year,month}).then((result)=>{if(!active)return;setMonthly(result.items);setMonthTotal(result.total);}).catch((reason)=>{if(!active)return;setError(reason.message||"캘린더 기록을 불러오지 못했어요.");}).finally(()=>{if(active)setLoading(false);}); return()=>{active=false;}; },[year,month]);
   return <div className="px-4 pt-4"><div className="flex items-center"><h2 className="text-2xl font-black tracking-tight">캘린더</h2><span className="ml-auto text-sm font-black text-neutral-500">{monthTotal}개</span></div>
     <div className="mt-5 rounded-3xl border border-white/10 bg-neutral-900/70 p-4">
-      <div className="flex items-center justify-between"><button onClick={() => changeMonth(-1)} className="rounded-full bg-white/5 p-2"><ChevronLeft size={17} /></button><div className="flex gap-2"><select value={year} onChange={(e) => { setYear(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{[2023,2024,2025,2026].map((y) => <option key={y}>{y}</option>)}</select><select value={month} onChange={(e) => { setMonth(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{Array.from({length:12},(_,i)=>i+1).map((m) => <option key={m} value={m}>{pad(m)}</option>)}</select></div><button onClick={() => changeMonth(1)} className="rounded-full bg-white/5 p-2"><ChevronRight size={17} /></button></div>
+      <div className="flex items-center justify-between"><button onClick={() => changeMonth(-1)} className="rounded-full bg-white/5 p-2"><ChevronLeft size={17} /></button><div className="flex gap-2"><select value={year} onChange={(e) => { setYear(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{Array.from({length:12},(_,i)=>2017+i).map((y) => <option key={y}>{y}</option>)}</select><select value={month} onChange={(e) => { setMonth(+e.target.value); setDay(null); setDisplayLimit(30); }} className="rounded-lg bg-black px-2 py-1.5 text-sm font-black outline-none">{Array.from({length:12},(_,i)=>i+1).map((m) => <option key={m} value={m}>{pad(m)}</option>)}</select></div><button onClick={() => changeMonth(1)} className="rounded-full bg-white/5 p-2"><ChevronRight size={17} /></button></div>
       <div className="mt-5 grid grid-cols-7 text-center text-[10px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((x)=><span key={x}>{x}</span>)}</div>
       <div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:firstDay}).map((_,i)=><span key={`e${i}`} />)}{Array.from({length:days},(_,i)=>i+1).map((d)=>{const has=monthly.some((x)=>x.date===`${monthKey}-${pad(d)}`); return <button key={d} onClick={()=>{setDay(day===d?null:d);setDisplayLimit(30);}} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",day===d?"bg-accent text-white":d===21&&month===6&&year===2026?"bg-white text-black":"text-neutral-400")}>{d}{has&&day!==d&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div>
     </div>
@@ -539,7 +542,7 @@ function WinnerView({winner,cup,onBack,onAgain}) {
   return <><AppOverlay><div className="relative mx-auto h-[100dvh] w-full max-w-md overflow-y-auto bg-black px-5 pt-8 text-center no-scrollbar"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><button onClick={()=>setPreview(winner)} aria-label={`${winner.name} 미디어 전체 보기`} className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="pointer-events-none absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></button><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div></AppOverlay>{preview&&<MediaPreviewModal item={winner} onClose={()=>setPreview(null)}/>}</>;
 }
 
-function PostypeView({ adminRequest = 0 }) {
+function PostypeView({ adminRequest = null }) {
   const frameRef = useRef(null);
   useEffect(() => {
     if (!adminRequest) return;
