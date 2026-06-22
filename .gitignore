@@ -6,4 +6,5 @@ node_modules
 .env*
 !.env.example
 .vercel
+supabase/.temp/
 npm-debug.log*

@@ -1,0 +1,4 @@
+project_id = "aiuwbwtknaceghkzporx"
+
+[functions.hq-worldcup-admin]
+verify_jwt = true

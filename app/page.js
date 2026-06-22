@@ -457,7 +457,7 @@ function WorldcupView() {
     const updatedCup = originCup ? { ...originCup, items: originCup.items.map((item) => String(item.id) === String(picked.id) ? { ...item, winCount: Number(item.winCount || 0) + 1 } : item) } : null;
     if (updatedCup) setCups((current) => current.map((cup) => String(cup.id) === String(originId) ? updatedCup : cup));
     setWinner({ ...picked, winCount: Number(picked.winCount || 0) + 1 }); setGame(null);
-    if (updatedCup) worldcupService.save(updatedCup).catch(() => {});
+    worldcupService.incrementWin(picked.supabaseId || picked.id).catch(() => {});
   };
 
   const choose = (picked) => {
