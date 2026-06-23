@@ -535,7 +535,7 @@ function AdminHub({ onClose, onOpenPostype }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [section, setSection] = useState("hub");
-  const sectionTitle = { hub: "관리자 모드", archive: "아카이브 관리", worldcup: "월드컵 관리", recommended: "추천 영상 관리" }[section] || "관리자 모드";
+  const sectionTitle = { hub: "관리자 모드", archive: "아카이브 관리", recommended: "추천 영상 관리" }[section] || "관리자 모드";
   const authenticate = async (event) => {
     event.preventDefault();
     try {
@@ -558,10 +558,9 @@ function AdminHub({ onClose, onOpenPostype }) {
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
-        <AdminPortalCard icon={Trophy} label="월드컵" description="대회·후보·랭킹 데이터 관리" active onClick={() => setSection("worldcup")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
-      </div> : section === "worldcup" ? <WorldcupAdmin onBack={() => setSection("hub")}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
+      </div> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
     </div>
   </div>;
 }
@@ -584,11 +583,14 @@ function RecommendedView() {
   const [videoCategories, setVideoCategories] = useState(DEFAULT_RECOMMENDED_VIDEO_CATEGORIES);
   const [featuredItems, setFeaturedItems] = useState([]);
   const [featuredIndex, setFeaturedIndex] = useState(0);
+  const [previousFeaturedIndex, setPreviousFeaturedIndex] = useState(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("전체");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const pickTouchStartX = useRef(null);
+  const featuredTransitionTimer = useRef(null);
+  const featuredIndexRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -614,7 +616,7 @@ function RecommendedView() {
   useEffect(() => {
     let active = true;
     recommendedVideoService.featuredList()
-      .then((rows) => { if (active) { setFeaturedItems(rows.slice(0, 10)); setFeaturedIndex(0); } })
+      .then((rows) => { if (active) { setFeaturedItems(rows.slice(0, 10)); featuredIndexRef.current = 0; setFeaturedIndex(0); } })
       .catch(() => { if (active) setFeaturedItems([]); });
     return () => { active = false; };
   }, []);
@@ -622,10 +624,18 @@ function RecommendedView() {
   useEffect(() => {
     if (featuredItems.length < 3) return undefined;
     const timer = window.setInterval(() => {
-      setFeaturedIndex((current) => (current + 1) % featuredItems.length);
-    }, 5000);
+      const current = featuredIndexRef.current;
+      const next = (current + 1) % featuredItems.length;
+      setPreviousFeaturedIndex(current);
+      featuredIndexRef.current = next;
+      setFeaturedIndex(next);
+      window.clearTimeout(featuredTransitionTimer.current);
+      featuredTransitionTimer.current = window.setTimeout(() => setPreviousFeaturedIndex(null), 520);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [featuredItems.length]);
+
+  useEffect(() => () => window.clearTimeout(featuredTransitionTimer.current), []);
 
   const searchedItems = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ko-KR");
@@ -659,7 +669,21 @@ function RecommendedView() {
   };
   const moveFeatured = (direction) => {
     if (featuredItems.length < 3) return;
-    setFeaturedIndex((current) => (current + direction + featuredItems.length) % featuredItems.length);
+    const current = featuredIndexRef.current;
+    const next = (current + direction + featuredItems.length) % featuredItems.length;
+    setPreviousFeaturedIndex(current);
+    featuredIndexRef.current = next;
+    setFeaturedIndex(next);
+    window.clearTimeout(featuredTransitionTimer.current);
+    featuredTransitionTimer.current = window.setTimeout(() => setPreviousFeaturedIndex(null), 520);
+  };
+  const selectFeatured = (index) => {
+    if (index === featuredIndex) return;
+    setPreviousFeaturedIndex(featuredIndex);
+    featuredIndexRef.current = index;
+    setFeaturedIndex(index);
+    window.clearTimeout(featuredTransitionTimer.current);
+    featuredTransitionTimer.current = window.setTimeout(() => setPreviousFeaturedIndex(null), 520);
   };
   const finishFeaturedSwipe = (event) => {
     if (pickTouchStartX.current === null) return;
@@ -670,20 +694,21 @@ function RecommendedView() {
   };
   const showFeatured = featuredItems.length >= 3;
   const featuredItem = showFeatured ? featuredItems[featuredIndex % featuredItems.length] : null;
+  const previousFeaturedItem = showFeatured && previousFeaturedIndex !== null ? featuredItems[previousFeaturedIndex % featuredItems.length] : null;
+  const featuredCard = (item, leaving = false) => <article key={`${leaving ? "leaving" : "active"}-${item.id}`} aria-hidden={leaving || undefined} onTouchStart={leaving ? undefined : (event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={leaving ? undefined : finishFeaturedSwipe} onTouchCancel={leaving ? undefined : () => { pickTouchStartX.current = null; }} className={cn("col-start-1 row-start-1 touch-pan-y select-none overflow-hidden rounded-3xl border border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014]", leaving ? "pointer-events-none animate-banner-out" : "relative z-10 animate-banner-in")}>
+    <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video overflow-hidden bg-black">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
+    <div className="p-4"><a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block text-sm font-black leading-5 active:text-accent">{item.title || "제목 없음"}</a><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p>
+      <div className="mt-3 flex flex-wrap gap-1.5">{item.categories.length ? item.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[9px] font-bold text-neutral-400">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
+    </div>
+  </article>;
 
   return <div className="px-4 pb-6 pt-4">
     <h2 className="text-xl font-black">추천 영상</h2>
     <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="제목 또는 날짜로 검색"/></div>
     <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...videoCategories].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
     {featuredItem && <section className="mt-5"><div className="mb-2 flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
-      <article key={featuredItem.id} onTouchStart={(event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={finishFeaturedSwipe} onTouchCancel={() => { pickTouchStartX.current = null; }} className="touch-pan-y select-none overflow-hidden rounded-3xl border border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014] animate-fade-in">
-        <a href={featuredItem.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video overflow-hidden bg-black">{featuredItem.thumbnailUrl ? <img src={featuredItem.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
-        <div className="p-4"><a href={featuredItem.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block text-sm font-black leading-5 active:text-accent">{featuredItem.title || "제목 없음"}</a><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(featuredItem.publishedAt)}</p>
-          <div className="mt-3 flex flex-wrap gap-1.5">{featuredItem.categories.length ? featuredItem.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[9px] font-bold text-neutral-400">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
-          {featuredItem.adminComment && <p className="mt-3 whitespace-pre-wrap rounded-xl border border-white/5 bg-black/30 px-3 py-2.5 text-[10px] leading-4 text-neutral-400">{featuredItem.adminComment}</p>}
-        </div>
-      </article>
-      <div className="mt-3 flex justify-center gap-1.5">{featuredItems.map((item, index) => <button key={item.id} onClick={() => setFeaturedIndex(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
+      <div className="grid">{previousFeaturedItem && featuredCard(previousFeaturedItem, true)}{featuredCard(featuredItem)}</div>
+      <div className="mt-3 flex justify-center gap-1.5">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
     </section>}
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
       <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><ChevronRight size={18} className="ml-auto text-neutral-700"/></div>
@@ -716,7 +741,6 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkBusy, setBulkBusy] = useState("");
   const [bulkSortOrder, setBulkSortOrder] = useState("");
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
-  const [bulkComment, setBulkComment] = useState("");
   const [adminQuery, setAdminQuery] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [categoryBusy, setCategoryBusy] = useState("");
@@ -949,6 +973,9 @@ function RecommendedVideosAdmin({ onBack }) {
   };
 
   const featuredActiveCount = items.filter((item) => item.isActive && item.isFeatured).length;
+  const featuredAdminItems = items
+    .filter((item) => item.isActive && item.isFeatured)
+    .sort((a, b) => Number(a.featuredOrder) - Number(b.featuredOrder));
 
   return <div className="pt-5">
     <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>
@@ -961,13 +988,19 @@ function RecommendedVideosAdmin({ onBack }) {
       <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
       <p className="text-[9px] leading-4 text-neutral-600">기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 신규 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
     </div>
-    <section className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-3">
-      <div><p className="text-xs font-black">추천 영상 카테고리 관리</p><p className="mt-1 text-[9px] font-bold leading-4 text-neutral-600">이름 수정과 삭제는 기존 영상의 카테고리에도 함께 반영됩니다.</p></div>
-      <form onSubmit={createCategory} className="mt-3 flex gap-2"><input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="새 카테고리 이름" disabled={Boolean(categoryBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newCategoryName.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create" ? "추가 중…" : "추가"}</button></form>
-      <div className="mt-3 space-y-2">{videoCategories.map((categoryItem) => { const draftName = categoryDrafts[categoryItem.id] ?? categoryItem.name; return <div key={categoryItem.id} className="flex gap-2"><input value={draftName} onChange={(event) => updateCategoryDraft(categoryItem.id, event.target.value)} disabled={Boolean(categoryBusy)} aria-label="카테고리 이름" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><button type="button" onClick={() => saveCategory(categoryItem)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-xl border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === categoryItem.id ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteCategory(categoryItem)} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 카테고리 삭제`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-40"><Trash2 size={14}/></button></div>; })}</div>
-    </section>
+    <details className="group mt-4 rounded-2xl border border-white/10 bg-white/[.03]">
+      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">추천 영상 카테고리 관리</p><p className="mt-1 text-[9px] font-bold text-neutral-600">카테고리 {videoCategories.length}개</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="border-t border-white/5 p-3">
+        <p className="text-[9px] font-bold leading-4 text-neutral-600">이름 수정과 삭제는 기존 영상의 카테고리에도 함께 반영됩니다.</p>
+        <form onSubmit={createCategory} className="mt-3 flex gap-2"><input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="새 카테고리 이름" disabled={Boolean(categoryBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newCategoryName.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create" ? "추가 중…" : "추가"}</button></form>
+        <div className="mt-3 space-y-2">{videoCategories.map((categoryItem) => { const draftName = categoryDrafts[categoryItem.id] ?? categoryItem.name; return <div key={categoryItem.id} className="flex gap-2"><input value={draftName} onChange={(event) => updateCategoryDraft(categoryItem.id, event.target.value)} disabled={Boolean(categoryBusy)} aria-label="카테고리 이름" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><button type="button" onClick={() => saveCategory(categoryItem)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-xl border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === categoryItem.id ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteCategory(categoryItem)} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 카테고리 삭제`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-40"><Trash2 size={14}/></button></div>; })}</div>
+      </div>
+    </details>
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
-    {!loading && !error && <div className={cn("mt-4 rounded-2xl border p-3", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}><div className="flex items-center"><p className="text-[10px] font-black text-neutral-500">노출 중인 오늘의 PICK</p><strong className={cn("ml-auto text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount}개</strong></div>{featuredActiveCount < 3 && <p className="mt-2 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}</div>}
+    {!loading && !error && <details className={cn("group mt-4 rounded-2xl border", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}>
+      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-[10px] font-black text-neutral-500">롤링배너 노출 현황</p><strong className={cn("mt-1 block text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount < 3 ? "노출 안 됨" : `${featuredActiveCount}개 노출`}</strong></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="border-t border-white/5 p-3">{featuredActiveCount < 3 && <p className="mb-3 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}{featuredAdminItems.length ? <div className="space-y-2">{featuredAdminItems.map((item, index) => <div key={item.id} className="flex items-center gap-3 rounded-xl bg-black/40 p-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-[10px] font-black text-accent">{index + 1}</span><div className="flex aspect-video w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={14}/>}</div><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{item.title || "제목 없음"}</p><p className="mt-1 truncate text-[9px] font-bold text-neutral-600">PICK 순서 {item.featuredOrder}</p></div></div>)}</div> : <p className="py-4 text-center text-[10px] font-bold text-neutral-600">현재 노출 중인 롤링배너가 없습니다.</p>}</div>
+    </details>}
     {!loading && !error && filteredAdminItems.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-4 w-4 accent-accent"/>{adminQuery.trim() ? "검색 결과 전체 선택" : "전체 선택"}</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <div className="flex items-center"><div><p className="text-xs font-black">선택 항목 일괄 설정</p><p className="mt-1 text-[9px] font-bold text-neutral-500">수정 후 아래 ‘선택 설정 저장’을 눌러 반영하세요.</p></div><button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg border border-white/10 px-2 py-1 text-[9px] font-black text-neutral-500">선택 해제</button></div>
@@ -975,8 +1008,6 @@ function RecommendedVideosAdmin({ onBack }) {
       <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">카테고리 전체 추가/해제</p><div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((value) => { const selected = selectedItems.every((item) => item.categories.includes(value)); return <button type="button" key={value} onClick={() => applyBulkCategory(value)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{value}</button>; })}</div></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={bulkSortOrder} onChange={(event) => setBulkSortOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={bulkFeaturedOrder} onChange={(event) => setBulkFeaturedOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label></div>
       <button type="button" onClick={applyBulkOrders} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">입력한 순서 일괄 적용</button>
-      <label className="mt-3 block rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">운영자 코멘트 일괄 입력</span><textarea rows={2} value={bulkComment} onChange={(event) => setBulkComment(event.target.value)} placeholder="비워서 적용하면 코멘트가 삭제됩니다." className="mt-1 w-full resize-none bg-transparent text-[10px] leading-4 outline-none placeholder:text-neutral-700"/></label>
-      <button type="button" onClick={() => applyToSelected({ adminComment: bulkComment })} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">코멘트 일괄 적용</button>
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" disabled={Boolean(bulkBusy)} onClick={saveSelected} className="rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{bulkBusy === "save" ? "저장 중…" : `선택 설정 저장 (${selectedItems.length})`}</button><button type="button" disabled={Boolean(bulkBusy)} onClick={deleteSelected} aria-label="선택 영상 삭제" className="flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-red-400 disabled:opacity-50">{bulkBusy === "delete" ? <RefreshCw size={16} className="animate-spin"/> : <Trash2 size={16}/>}</button></div>
     </section>}
     {saveError && <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[10px] font-bold text-accent">{saveError}</p>}
@@ -995,7 +1026,6 @@ function RecommendedVideosAdmin({ onBack }) {
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={item.sortOrder} onChange={(event) => updateItem(item.id, { sortOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={item.featuredOrder} onChange={(event) => updateItem(item.id, { featuredOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
         </div>
-        <label className="mt-2 block rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">운영자 코멘트</span><textarea rows={3} value={item.adminComment} onChange={(event) => updateItem(item.id, { adminComment: event.target.value })} placeholder="운영자 코멘트 입력" className="mt-1 w-full resize-none bg-transparent text-[10px] leading-4 text-neutral-300 outline-none placeholder:text-neutral-700"/></label>
         <button type="button" disabled={Boolean(savingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button>
       </div>
     </article>)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{adminQuery.trim() ? "검색 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
