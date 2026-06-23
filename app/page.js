@@ -586,6 +586,8 @@ function RecommendedView() {
   const [previousFeaturedIndex, setPreviousFeaturedIndex] = useState(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("전체");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [categorySort, setCategorySort] = useState("latest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const pickTouchStartX = useRef(null);
@@ -667,6 +669,37 @@ function RecommendedView() {
     const date = String(value || "").slice(0, 10);
     return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replace(/-/g, ".") : "날짜 없음";
   };
+  const selectedCategoryItems = useMemo(() => {
+    if (!selectedCategory) return [];
+    const categoryItems = selectedCategory === "미분류"
+      ? items.filter((item) => !item.categories.some((value) => videoCategories.includes(value)))
+      : items.filter((item) => item.categories.includes(selectedCategory));
+    const timestamp = (item) => {
+      const value = new Date(item.publishedAt || "").getTime();
+      return Number.isNaN(value) ? null : value;
+    };
+    return [...categoryItems].sort((a, b) => {
+      const aTime = timestamp(a);
+      const bTime = timestamp(b);
+      if (aTime === null) return bTime === null ? 0 : 1;
+      if (bTime === null) return -1;
+      return categorySort === "latest" ? bTime - aTime : aTime - bTime;
+    });
+  }, [items, selectedCategory, categorySort, videoCategories]);
+  const selectedCategoryDateGroups = useMemo(() => {
+    const groups = [];
+    selectedCategoryItems.forEach((item) => {
+      const date = displayDate(item.publishedAt);
+      const current = groups[groups.length - 1];
+      if (current?.date === date) current.items.push(item);
+      else groups.push({ date, items: [item] });
+    });
+    return groups;
+  }, [selectedCategoryItems]);
+  const openCategoryList = (value) => {
+    setSelectedCategory(value);
+    setCategorySort("latest");
+  };
   const moveFeatured = (direction) => {
     if (featuredItems.length < 3) return;
     const current = featuredIndexRef.current;
@@ -702,6 +735,24 @@ function RecommendedView() {
     </div>
   </article>;
 
+  if (selectedCategory) return <div className="px-4 pb-6 pt-4">
+    <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
+    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CATEGORY</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "미분류" ? "기타 영상" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
+    <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬">
+      {[["latest","최신순"],["oldest","과거순"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
+    </div>
+    <div className="mt-6 space-y-7">{selectedCategoryDateGroups.map((group) => <section key={group.date}>
+      <div className="mb-3 flex items-center gap-3"><time className="text-xs font-black text-neutral-300">{group.date}</time><span className="h-px flex-1 bg-white/10"/><span className="text-[9px] font-bold text-neutral-600">{group.items.length}개</span></div>
+      <div className="space-y-3">{group.items.map((item) => <article key={`${selectedCategory}-${item.id}`} className="overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
+        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
+          <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={24}/>}</div>
+          <div className="p-3"><h3 className="text-sm font-black leading-5">{item.title || "제목 없음"}</h3><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
+        </a>
+        <div className="flex min-h-10 flex-wrap gap-1.5 border-t border-white/5 px-3 py-2">{item.categories.length ? item.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[8px] font-bold text-neutral-500">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
+      </article>)}</div>
+    </section>)}</div>
+  </div>;
+
   return <div className="px-4 pb-6 pt-4">
     <h2 className="text-xl font-black">추천 영상</h2>
     <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="제목 또는 날짜로 검색"/></div>
@@ -711,7 +762,7 @@ function RecommendedView() {
       <div className="mt-3 flex justify-center gap-1.5">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
     </section>}
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
-      <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><ChevronRight size={18} className="ml-auto text-neutral-700"/></div>
+      <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "미분류" ? "기타 영상" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
       <div className="-mx-4 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max snap-x snap-mandatory gap-3 pb-1">{section.items.map((item) => <article key={`${section.key}-${item.id}`} className="w-[68vw] min-w-[210px] max-w-[250px] snap-start overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
         <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={22}/>}</div>
