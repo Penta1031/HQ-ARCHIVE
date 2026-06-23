@@ -54,7 +54,9 @@ export default function Page() {
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
+  const contentRef = useRef(null);
   const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
+  const scrollContentToTop = () => window.requestAnimationFrame(() => contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   const openAdmin = () => { setAdminOpen(true); };
   const closeAdmin = () => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -71,11 +73,11 @@ export default function Page() {
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
         <Header onAdmin={openAdmin} showLanguage={tab === "home"} language={archiveLanguage} onLanguage={setArchiveLanguage} />
-        <section className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? "overflow-hidden pb-[76px]" : "overflow-y-auto pb-28")}>
+        <section ref={contentRef} className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? "overflow-hidden pb-[76px]" : "overflow-y-auto pb-28")}>
           <div key={tab} className={cn("animate-fade-in", tab === "postype" && "h-full")}>
             {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
-            {tab === "recommended" && <RecommendedView />}
+            {tab === "recommended" && <RecommendedView onScrollTop={scrollContentToTop} />}
             {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} />}
           </div>
         </section>
@@ -578,7 +580,7 @@ function normalizeRecommendedDateQuery(value) {
   return "";
 }
 
-function RecommendedView() {
+function RecommendedView({ onScrollTop }) {
   const [items, setItems] = useState([]);
   const [videoCategories, setVideoCategories] = useState(DEFAULT_RECOMMENDED_VIDEO_CATEGORIES);
   const [featuredItems, setFeaturedItems] = useState([]);
@@ -699,6 +701,7 @@ function RecommendedView() {
   const openCategoryList = (value) => {
     setSelectedCategory(value);
     setCategorySort("latest");
+    onScrollTop?.();
   };
   const moveFeatured = (direction) => {
     if (featuredItems.length < 3) return;
@@ -728,10 +731,10 @@ function RecommendedView() {
   const showFeatured = featuredItems.length >= 3;
   const featuredItem = showFeatured ? featuredItems[featuredIndex % featuredItems.length] : null;
   const previousFeaturedItem = showFeatured && previousFeaturedIndex !== null ? featuredItems[previousFeaturedIndex % featuredItems.length] : null;
-  const featuredCard = (item, leaving = false) => <article key={`${leaving ? "leaving" : "active"}-${item.id}`} aria-hidden={leaving || undefined} onTouchStart={leaving ? undefined : (event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={leaving ? undefined : finishFeaturedSwipe} onTouchCancel={leaving ? undefined : () => { pickTouchStartX.current = null; }} className={cn("col-start-1 row-start-1 touch-pan-y select-none overflow-hidden rounded-3xl border border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014]", leaving ? "pointer-events-none animate-banner-out" : "relative z-10 animate-banner-in")}>
-    <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video overflow-hidden bg-black">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
-    <div className="p-4"><a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block text-sm font-black leading-5 active:text-accent">{item.title || "제목 없음"}</a><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p>
-      <div className="mt-3 flex flex-wrap gap-1.5">{item.categories.length ? item.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[9px] font-bold text-neutral-400">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
+  const featuredCard = (item, leaving = false) => <article key={`${leaving ? "leaving" : "active"}-${item.id}`} aria-hidden={leaving || undefined} onTouchStart={leaving ? undefined : (event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={leaving ? undefined : finishFeaturedSwipe} onTouchCancel={leaving ? undefined : () => { pickTouchStartX.current = null; }} className={cn("col-start-1 row-start-1 touch-pan-y select-none overflow-hidden border-y border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014]", leaving ? "pointer-events-none animate-banner-out" : "relative z-10 animate-banner-in")}>
+    <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video w-full overflow-hidden bg-black">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
+    <div className="h-[132px] overflow-hidden px-4 py-3"><a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="line-clamp-2 h-10 text-sm font-black leading-5 active:text-accent">{item.title || "제목 없음"}</a><p className="mt-1.5 h-4 truncate text-[9px] font-bold leading-4 text-neutral-600">{displayDate(item.publishedAt)}</p>
+      <div className="mt-2 flex h-[26px] flex-wrap gap-1.5 overflow-hidden">{item.categories.length ? item.categories.map((value) => <span key={value} className="h-6 shrink-0 rounded-full bg-white/5 px-2 py-1 text-[9px] font-bold text-neutral-400">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
     </div>
   </article>;
 
@@ -757,9 +760,9 @@ function RecommendedView() {
     <h2 className="text-xl font-black">추천 영상</h2>
     <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="제목 또는 날짜로 검색"/></div>
     <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...videoCategories].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
-    {featuredItem && <section className="mt-5"><div className="mb-2 flex items-center"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
+    {featuredItem && <section className="-mx-4 mt-5"><div className="mb-2 flex items-center px-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
       <div className="grid">{previousFeaturedItem && featuredCard(previousFeaturedItem, true)}{featuredCard(featuredItem)}</div>
-      <div className="mt-3 flex justify-center gap-1.5">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
+      <div className="mt-3 flex justify-center gap-1.5 px-4">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
     </section>}
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
       <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "미분류" ? "기타 영상" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
