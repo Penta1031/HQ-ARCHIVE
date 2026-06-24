@@ -69,6 +69,14 @@ async function invokeFunction(name: string, body: Record<string, unknown>) {
   return result;
 }
 const escapeLike = (value: string) => value.replace(/[,*()]/g, " ").trim();
+function exactKstArchiveDate(value: unknown) {
+  const candidate = text(value);
+  const match = candidate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const year = Number(match[1]); const month = Number(match[2]); const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? candidate : "";
+}
 async function categoryIds(mainCategory: string, subCategory: string) {
   if (!mainCategory || mainCategory === "#N/A") return { category_id: null, subcategory_id: null };
   const categories = await rest(`hq_archive_categories?select=id&name=eq.${encodeURIComponent(mainCategory)}&limit=1`);
@@ -191,7 +199,11 @@ Deno.serve(async (request) => {
       if (payload.status) params.set("status", `eq.${text(payload.status)}`);
       if (payload.dateFrom) params.set("occurred_on", `gte.${text(payload.dateFrom)}`);
       if (payload.dateTo) params.append("occurred_on", `lte.${text(payload.dateTo)}`);
-      if (payload.query) { const q = escapeLike(text(payload.query)); params.set("or", `(title.ilike.*${q}*,account.ilike.*${q}*,source_url.ilike.*${q}*)`); }
+      if (payload.query) {
+        const exactDate = exactKstArchiveDate(payload.query);
+        if (exactDate) params.set("occurred_on", `eq.${exactDate}`);
+        else { const q = escapeLike(text(payload.query)); params.set("or", `(title.ilike.*${q}*,account.ilike.*${q}*,source_url.ilike.*${q}*)`); }
+      }
       if (text(payload.mainCategory) && text(payload.mainCategory) !== "전체") {
         const ids = await categoryIds(text(payload.mainCategory), text(payload.subCategory) === "전체" ? "" : text(payload.subCategory));
         if (ids.category_id) params.set("category_id", `eq.${ids.category_id}`);
