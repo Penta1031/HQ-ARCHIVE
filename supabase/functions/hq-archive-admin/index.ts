@@ -269,25 +269,54 @@ Deno.serve(async (request) => {
     }
     if (action === "recommended-video-category-create") {
       const name = text(payload.name);
-      if (!name) throw new Error("추가할 카테고리 이름을 입력해주세요.");
+      const mainCategoryId = text(payload.mainCategoryId);
+      const sortOrder = Number(payload.sortOrder);
+      if (!name) throw new Error("추가할 하위 콘텐츠 이름을 입력해주세요.");
+      if (!uuidPattern.test(mainCategoryId)) throw new Error("메인 카테고리를 선택해주세요.");
+      if (text(payload.sortOrder) === "" || !Number.isInteger(sortOrder)) throw new Error("하위 콘텐츠 노출 순서는 정수로 입력해주세요.");
       const existing = await rest(`recommended_video_categories?select=id&name=eq.${encodeURIComponent(name)}&limit=1`);
-      if (existing.rows.length) throw new Error("이미 등록된 카테고리입니다.");
-      const last = await rest("recommended_video_categories?select=sort_order&order=sort_order.desc&limit=1");
-      const sortOrder = Math.max(0, Number(last.rows[0]?.sort_order || 0)) + 1;
-      const result = await rest("recommended_video_categories", { method: "POST", body: JSON.stringify({ name, sort_order: sortOrder }), headers: { Prefer: "return=representation" } });
+      if (existing.rows.length) throw new Error("이미 등록된 하위 콘텐츠입니다.");
+      const main = await rest(`recommended_video_main_categories?select=id&id=eq.${encodeURIComponent(mainCategoryId)}&limit=1`);
+      if (!main.rows.length) throw new Error("연결할 메인 카테고리를 찾을 수 없습니다.");
+      const result = await rest("recommended_video_categories", { method: "POST", body: JSON.stringify({ name, main_category_id: mainCategoryId, sort_order: sortOrder }), headers: { Prefer: "return=representation" } });
       return json(request, { ok: true, category: result.rows[0] });
     }
     if (action === "recommended-video-category-update") {
-      const id = text(payload.id); const name = text(payload.name);
-      if (!uuidPattern.test(id)) throw new Error("카테고리 ID가 올바르지 않습니다.");
-      if (!name) throw new Error("카테고리 이름을 입력해주세요.");
-      const result = await rest("rpc/hq_rename_recommended_video_category", { method: "POST", body: JSON.stringify({ p_id: id, p_name: name }) });
+      const id = text(payload.id); const name = text(payload.name); const mainCategoryId = text(payload.mainCategoryId); const sortOrder = Number(payload.sortOrder);
+      if (!uuidPattern.test(id)) throw new Error("하위 콘텐츠 ID가 올바르지 않습니다.");
+      if (!name) throw new Error("하위 콘텐츠 이름을 입력해주세요.");
+      if (!uuidPattern.test(mainCategoryId)) throw new Error("메인 카테고리를 선택해주세요.");
+      if (!Number.isInteger(sortOrder)) throw new Error("하위 콘텐츠 노출 순서는 정수로 입력해주세요.");
+      const result = await rest("rpc/hq_update_recommended_video_category", { method: "POST", body: JSON.stringify({ p_id: id, p_name: name, p_main_category_id: mainCategoryId, p_sort_order: sortOrder }) });
       return json(request, { ok: true, category: result.rows[0] || result.rows });
     }
     if (action === "recommended-video-category-delete") {
       const id = text(payload.id);
       if (!uuidPattern.test(id)) throw new Error("카테고리 ID가 올바르지 않습니다.");
       const result = await rest("rpc/hq_delete_recommended_video_category", { method: "POST", body: JSON.stringify({ p_id: id }) });
+      return json(request, { ok: true, category: result.rows[0] || result.rows });
+    }
+    if (action === "recommended-video-main-category-create") {
+      const name = text(payload.name); const sortOrder = Number(payload.sortOrder);
+      if (!name) throw new Error("추가할 메인 카테고리 이름을 입력해주세요.");
+      if (text(payload.sortOrder) === "" || !Number.isInteger(sortOrder)) throw new Error("메인 카테고리 순서는 정수로 입력해주세요.");
+      const existing = await rest(`recommended_video_main_categories?select=id&name=eq.${encodeURIComponent(name)}&limit=1`);
+      if (existing.rows.length) throw new Error("이미 등록된 메인 카테고리입니다.");
+      const result = await rest("recommended_video_main_categories", { method: "POST", body: JSON.stringify({ name, sort_order: sortOrder }), headers: { Prefer: "return=representation" } });
+      return json(request, { ok: true, category: result.rows[0] });
+    }
+    if (action === "recommended-video-main-category-update") {
+      const id = text(payload.id); const name = text(payload.name); const sortOrder = Number(payload.sortOrder);
+      if (!uuidPattern.test(id)) throw new Error("메인 카테고리 ID가 올바르지 않습니다.");
+      if (!name) throw new Error("메인 카테고리 이름을 입력해주세요.");
+      if (!Number.isInteger(sortOrder)) throw new Error("메인 카테고리 순서는 정수로 입력해주세요.");
+      const result = await rest("rpc/hq_rename_recommended_video_main_category", { method: "POST", body: JSON.stringify({ p_id: id, p_name: name, p_sort_order: sortOrder }) });
+      return json(request, { ok: true, category: result.rows[0] || result.rows });
+    }
+    if (action === "recommended-video-main-category-delete") {
+      const id = text(payload.id);
+      if (!uuidPattern.test(id)) throw new Error("메인 카테고리 ID가 올바르지 않습니다.");
+      const result = await rest("rpc/hq_delete_recommended_video_main_category", { method: "POST", body: JSON.stringify({ p_id: id }) });
       return json(request, { ok: true, category: result.rows[0] || result.rows });
     }
     if (action === "recommended-video-add") {

@@ -583,6 +583,7 @@ function normalizeRecommendedDateQuery(value) {
 function RecommendedView({ onScrollTop }) {
   const [items, setItems] = useState([]);
   const [videoCategories, setVideoCategories] = useState(DEFAULT_RECOMMENDED_VIDEO_CATEGORIES);
+  const [mainCategories, setMainCategories] = useState(DEFAULT_RECOMMENDED_VIDEO_MAIN_CATEGORIES);
   const [featuredItems, setFeaturedItems] = useState([]);
   const [featuredIndex, setFeaturedIndex] = useState(0);
   const [previousFeaturedIndex, setPreviousFeaturedIndex] = useState(null);
@@ -607,15 +608,15 @@ function RecommendedView({ onScrollTop }) {
 
   useEffect(() => {
     let active = true;
-    recommendedVideoService.categories()
-      .then((rows) => { if (active) setVideoCategories(rows.map((item) => item.name)); })
+    Promise.all([recommendedVideoService.mainCategories(), recommendedVideoService.categories()])
+      .then(([mains, children]) => { if (active) { setMainCategories(mains); setVideoCategories(children); } })
       .catch(() => {});
     return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (category !== "전체" && !videoCategories.includes(category)) setCategory("전체");
-  }, [category, videoCategories]);
+    if (category !== "전체" && !mainCategories.some((item) => item.name === category)) setCategory("전체");
+  }, [category, mainCategories]);
 
   useEffect(() => {
     let active = true;
@@ -654,18 +655,20 @@ function RecommendedView({ onScrollTop }) {
   }, [items, query]);
 
   const categorySections = useMemo(() => {
-    const categories = category === "전체" ? videoCategories : [category];
-    const sections = categories.map((value) => ({
-      key: value,
-      title: `${value} 모아보기`,
-      items: searchedItems.filter((item) => item.categories.includes(value))
+    const categories = category === "전체" ? videoCategories : videoCategories.filter((item) => item.mainCategoryName === category);
+    const sections = categories.map((categoryItem) => ({
+      key: categoryItem.name,
+      title: `${categoryItem.name} 모아보기`,
+      items: searchedItems.filter((item) => item.categories.includes(categoryItem.name))
     })).filter((section) => section.items.length);
-    if (category === "전체") {
-      const uncategorized = searchedItems.filter((item) => !item.categories.some((value) => videoCategories.includes(value)));
-      if (uncategorized.length) sections.push({ key: "미분류", title: "기타 영상 모아보기", items: uncategorized });
+    const selectedMain = mainCategories.find((item) => item.name === category);
+    if (category === "전체" || selectedMain?.isFallback) {
+      const knownNames = new Set(videoCategories.map((item) => item.name));
+      const uncategorized = searchedItems.filter((item) => !item.categories.some((value) => knownNames.has(value)));
+      if (uncategorized.length) sections.push({ key: "__uncategorized__", title: "미분류 모아보기", items: uncategorized });
     }
     return sections;
-  }, [searchedItems, category, videoCategories]);
+  }, [searchedItems, category, videoCategories, mainCategories]);
 
   const displayDate = (value) => {
     const date = String(value || "").slice(0, 10);
@@ -673,8 +676,9 @@ function RecommendedView({ onScrollTop }) {
   };
   const selectedCategoryItems = useMemo(() => {
     if (!selectedCategory) return [];
-    const categoryItems = selectedCategory === "미분류"
-      ? items.filter((item) => !item.categories.some((value) => videoCategories.includes(value)))
+    const knownNames = new Set(videoCategories.map((item) => item.name));
+    const categoryItems = selectedCategory === "__uncategorized__"
+      ? items.filter((item) => !item.categories.some((value) => knownNames.has(value)))
       : items.filter((item) => item.categories.includes(selectedCategory));
     const timestamp = (item) => {
       const value = new Date(item.publishedAt || "").getTime();
@@ -740,7 +744,7 @@ function RecommendedView({ onScrollTop }) {
 
   if (selectedCategory) return <div className="px-4 pb-6 pt-4">
     <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
-    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CATEGORY</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "미분류" ? "기타 영상" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
+    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
     <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬">
       {[["latest","최신순"],["oldest","과거순"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
     </div>
@@ -759,13 +763,13 @@ function RecommendedView({ onScrollTop }) {
   return <div className="px-4 pb-6 pt-4">
     <h2 className="text-xl font-black">추천 영상</h2>
     <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="제목 또는 날짜로 검색"/></div>
-    <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...videoCategories].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
-    {featuredItem && <section className="-mx-4 mt-5"><div className="mb-2 flex items-center px-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
+    <div className="-mx-4 mt-3 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max gap-2">{["전체", ...mainCategories.map((item) => item.name)].map((value) => <button key={value} onClick={() => setCategory(value)} className={cn("shrink-0 rounded-full border px-3.5 py-2 text-[10px] font-black transition", category === value ? "border-accent bg-accent text-white" : "border-white/10 bg-white/5 text-neutral-500")}>{value}</button>)}</div></div>
+    {category === "전체" && featuredItem && <section className="-mx-4 mt-5"><div className="mb-2 flex items-center px-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
       <div className="grid">{previousFeaturedItem && featuredCard(previousFeaturedItem, true)}{featuredCard(featuredItem)}</div>
       <div className="mt-3 flex justify-center gap-1.5 px-4">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
     </section>}
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
-      <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "미분류" ? "기타 영상" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
+      <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "__uncategorized__" ? "미분류" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
       <div className="-mx-4 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max snap-x snap-mandatory gap-3 pb-1">{section.items.map((item) => <article key={`${section.key}-${item.id}`} className="w-[68vw] min-w-[210px] max-w-[250px] snap-start overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
         <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={22}/>}</div>
@@ -777,10 +781,17 @@ function RecommendedView({ onScrollTop }) {
   </div>;
 }
 
-const DEFAULT_RECOMMENDED_VIDEO_CATEGORIES = ["연말결산", "라이브", "레코딩로그", "승협캠프", "그 외 자컨", "웹/예능"];
+const DEFAULT_RECOMMENDED_VIDEO_MAIN_CATEGORIES = ["엔플라잉", "승협이", "유회승", "라이브", "에딧", "미분류"].map((name, index) => ({ id: `default-main-${index}`, name, sortOrder: index + 1, isFallback: name === "미분류" }));
+const DEFAULT_RECOMMENDED_VIDEO_CATEGORIES = [
+  ["엔플라잉", "메이킹"], ["엔플라잉", "비하인드"], ["엔플라잉", "레코딩로그"], ["엔플라잉", "승캠"],
+  ["엔플라잉", "합주일지"], ["엔플라잉", "엔킷리스트"], ["엔플라잉", "버킷리스트"], ["엔플라잉", "냉탕과온탕사이"],
+  ["승협이", "라이브"], ["승협이", "기록"], ["승협이", "하기"], ["유회승", "소작실"], ["유회승", "하루의마무리"],
+  ["유회승", "승구리당당수다당"], ["라이브", "우리 얘기 좀 합시다"], ["에딧", "연말결산"], ["에딧", "모음집"]
+].map(([mainCategoryName, name], index) => ({ id: `default-child-${index}`, name, mainCategoryName, sortOrder: index + 1 }));
 
 function RecommendedVideosAdmin({ onBack }) {
   const [items, setItems] = useState([]);
+  const [mainCategories, setMainCategories] = useState([]);
   const [videoCategories, setVideoCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -796,14 +807,21 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkSortOrder, setBulkSortOrder] = useState("");
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
   const [adminQuery, setAdminQuery] = useState("");
+  const [newMainCategoryName, setNewMainCategoryName] = useState("");
+  const [newMainCategoryOrder, setNewMainCategoryOrder] = useState("");
+  const [mainCategoryDrafts, setMainCategoryDrafts] = useState({});
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryMainId, setNewCategoryMainId] = useState("");
+  const [newCategoryOrder, setNewCategoryOrder] = useState("");
   const [categoryBusy, setCategoryBusy] = useState("");
   const [categoryDrafts, setCategoryDrafts] = useState({});
+  const [categoryMainDrafts, setCategoryMainDrafts] = useState({});
+  const [categoryOrderDrafts, setCategoryOrderDrafts] = useState({});
 
   useEffect(() => {
     let active = true;
-    Promise.all([recommendedVideoService.list(), recommendedVideoService.categories()])
-      .then(([rows, categories]) => { if (active) { setItems(rows); setVideoCategories(categories); } })
+    Promise.all([recommendedVideoService.list(), recommendedVideoService.mainCategories(), recommendedVideoService.categories()])
+      .then(([rows, mains, categories]) => { if (active) { setItems(rows); setMainCategories(mains); setVideoCategories(categories); setNewCategoryMainId((current) => current || mains[0]?.id || ""); } })
       .catch((reason) => { if (active) setError(reason.message || "추천 영상 목록을 불러오지 못했습니다."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -849,9 +867,14 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
   const refreshCategories = async () => {
-    const categories = await recommendedVideoService.categories();
+    const [mains, categories] = await Promise.all([recommendedVideoService.mainCategories(), recommendedVideoService.categories()]);
+    setMainCategories(mains);
     setVideoCategories(categories);
+    setNewCategoryMainId((current) => mains.some((item) => item.id === current) ? current : (mains[0]?.id || ""));
+    setMainCategoryDrafts({});
     setCategoryDrafts({});
+    setCategoryMainDrafts({});
+    setCategoryOrderDrafts({});
   };
   const collectCustomChannel = async (event) => {
     event.preventDefault();
@@ -859,17 +882,50 @@ function RecommendedVideosAdmin({ onBack }) {
     if (!value) { setSaveError("수집할 YouTube 채널 링크를 입력해주세요."); return; }
     await collectChannelVideos(value);
   };
+  const updateMainCategoryDraft = (id, field, value) => setMainCategoryDrafts((current) => ({ ...current, [id]: { ...(current[id] || {}), [field]: value } }));
   const updateCategoryDraft = (id, name) => setCategoryDrafts((current) => ({ ...current, [id]: name }));
+  const createMainCategory = async (event) => {
+    event.preventDefault();
+    const name = newMainCategoryName.trim(); const sortOrder = Number(newMainCategoryOrder);
+    if (!name) { setSaveError("추가할 메인 카테고리 이름을 입력해주세요."); return; }
+    if (newMainCategoryOrder === "" || !Number.isInteger(sortOrder)) { setSaveError("메인 카테고리 순서를 정수로 입력해주세요."); return; }
+    setCategoryBusy("create-main"); setSaveError(""); setCollectNotice("");
+    try {
+      await recommendedVideoService.createMainCategory(name, sortOrder);
+      setNewMainCategoryName(""); setNewMainCategoryOrder("");
+      await refreshCategories();
+      setCollectNotice(`'${name}' 메인 카테고리를 추가했습니다.`);
+    } catch (reason) { setSaveError(reason.message || "메인 카테고리를 추가하지 못했습니다."); }
+    finally { setCategoryBusy(""); }
+  };
+  const saveMainCategory = async (categoryItem) => {
+    const draft = mainCategoryDrafts[categoryItem.id] || {};
+    const name = String(draft.name ?? categoryItem.name).trim(); const sortOrder = Number(draft.sortOrder ?? categoryItem.sortOrder);
+    if (!name || !Number.isInteger(sortOrder)) { setSaveError("메인 카테고리 이름과 정수 순서를 확인해주세요."); return; }
+    setCategoryBusy(`main-${categoryItem.id}`); setSaveError(""); setCollectNotice("");
+    try { await recommendedVideoService.updateMainCategory(categoryItem.id, name, sortOrder); await refreshCategories(); setCollectNotice(`메인 카테고리 '${name}'을(를) 수정했습니다.`); }
+    catch (reason) { setSaveError(reason.message || "메인 카테고리를 수정하지 못했습니다."); await refreshCategories().catch(() => {}); }
+    finally { setCategoryBusy(""); }
+  };
+  const deleteMainCategory = async (categoryItem) => {
+    if (!window.confirm(`'${categoryItem.name}' 메인 카테고리를 삭제할까요? 연결된 하위 콘텐츠는 미분류로 이동합니다.`)) return;
+    setCategoryBusy(`main-${categoryItem.id}`); setSaveError(""); setCollectNotice("");
+    try { await recommendedVideoService.removeMainCategory(categoryItem.id); await refreshCategories(); setCollectNotice(`'${categoryItem.name}' 메인 카테고리를 삭제하고 하위 콘텐츠를 미분류로 이동했습니다.`); }
+    catch (reason) { setSaveError(reason.message || "메인 카테고리를 삭제하지 못했습니다."); }
+    finally { setCategoryBusy(""); }
+  };
   const createCategory = async (event) => {
     event.preventDefault();
-    const name = newCategoryName.trim();
+    const name = newCategoryName.trim(); const sortOrder = Number(newCategoryOrder);
     if (!name) { setSaveError("추가할 카테고리 이름을 입력해주세요."); return; }
+    if (!newCategoryMainId) { setSaveError("연결할 메인 카테고리를 선택해주세요."); return; }
+    if (newCategoryOrder === "" || !Number.isInteger(sortOrder)) { setSaveError("하위 콘텐츠 노출 순서를 정수로 입력해주세요."); return; }
     setCategoryBusy("create"); setSaveError(""); setCollectNotice("");
     try {
-      await recommendedVideoService.createCategory(name);
-      setNewCategoryName("");
+      await recommendedVideoService.createCategory(name, newCategoryMainId, sortOrder);
+      setNewCategoryName(""); setNewCategoryOrder("");
       await refreshCategories();
-      setCollectNotice(`'${name}' 카테고리를 추가했습니다.`);
+      setCollectNotice(`'${name}' 하위 콘텐츠를 추가했습니다.`);
     } catch (reason) {
       setSaveError(reason.message || "카테고리를 추가하지 못했습니다.");
     } finally {
@@ -878,12 +934,14 @@ function RecommendedVideosAdmin({ onBack }) {
   };
   const saveCategory = async (categoryItem) => {
     const name = String(categoryDrafts[categoryItem.id] ?? categoryItem.name).trim();
-    if (!name) { setSaveError("카테고리 이름을 입력해주세요."); return; }
+    const mainCategoryId = String(categoryMainDrafts[categoryItem.id] ?? categoryItem.mainCategoryId);
+    const sortOrder = Number(categoryOrderDrafts[categoryItem.id] ?? categoryItem.sortOrder);
+    if (!name || !mainCategoryId || !Number.isInteger(sortOrder)) { setSaveError("하위 콘텐츠 이름, 메인 카테고리, 정수 순서를 확인해주세요."); return; }
     setCategoryBusy(categoryItem.id); setSaveError(""); setCollectNotice("");
     try {
-      await recommendedVideoService.updateCategory(categoryItem.id, name);
+      await recommendedVideoService.updateCategory(categoryItem.id, name, mainCategoryId, sortOrder);
       await Promise.all([refreshCategories(), refreshItems()]);
-      setCollectNotice(`카테고리 이름을 '${name}'(으)로 수정했습니다. 기존 영상에도 반영됐습니다.`);
+      setCollectNotice(`하위 콘텐츠 '${name}'의 연결과 순서를 수정했습니다. 이름 변경은 기존 영상에도 반영됐습니다.`);
     } catch (reason) {
       setSaveError(reason.message || "카테고리를 수정하지 못했습니다.");
       await refreshCategories().catch(() => {});
@@ -892,12 +950,12 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
   const deleteCategory = async (categoryItem) => {
-    if (!window.confirm(`'${categoryItem.name}' 카테고리를 삭제할까요? 기존 영상에서도 이 카테고리가 제거됩니다.`)) return;
+    if (!window.confirm(`'${categoryItem.name}' 하위 콘텐츠를 삭제할까요? 기존 영상에서도 이 연결이 제거됩니다.`)) return;
     setCategoryBusy(categoryItem.id); setSaveError(""); setCollectNotice("");
     try {
       await recommendedVideoService.removeCategory(categoryItem.id);
       await Promise.all([refreshCategories(), refreshItems()]);
-      setCollectNotice(`'${categoryItem.name}' 카테고리를 삭제했습니다.`);
+      setCollectNotice(`'${categoryItem.name}' 하위 콘텐츠를 삭제했습니다.`);
     } catch (reason) {
       setSaveError(reason.message || "카테고리를 삭제하지 못했습니다.");
     } finally {
@@ -942,7 +1000,10 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
 
-  const categoryNames = useMemo(() => videoCategories.map((item) => item.name).filter(Boolean), [videoCategories]);
+  const categoriesByMain = useMemo(() => mainCategories.map((main) => ({
+    ...main,
+    children: videoCategories.filter((categoryItem) => categoryItem.mainCategoryId === main.id)
+  })), [mainCategories, videoCategories]);
   const filteredAdminItems = useMemo(() => {
     const needle = adminQuery.trim().toLocaleLowerCase("ko-KR");
     if (!needle) return items;
@@ -1043,11 +1104,18 @@ function RecommendedVideosAdmin({ onBack }) {
       <p className="text-[9px] leading-4 text-neutral-600">기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 신규 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
     </div>
     <details className="group mt-4 rounded-2xl border border-white/10 bg-white/[.03]">
-      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">추천 영상 카테고리 관리</p><p className="mt-1 text-[9px] font-bold text-neutral-600">카테고리 {videoCategories.length}개</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
-      <div className="border-t border-white/5 p-3">
-        <p className="text-[9px] font-bold leading-4 text-neutral-600">이름 수정과 삭제는 기존 영상의 카테고리에도 함께 반영됩니다.</p>
-        <form onSubmit={createCategory} className="mt-3 flex gap-2"><input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="새 카테고리 이름" disabled={Boolean(categoryBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newCategoryName.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create" ? "추가 중…" : "추가"}</button></form>
-        <div className="mt-3 space-y-2">{videoCategories.map((categoryItem) => { const draftName = categoryDrafts[categoryItem.id] ?? categoryItem.name; return <div key={categoryItem.id} className="flex gap-2"><input value={draftName} onChange={(event) => updateCategoryDraft(categoryItem.id, event.target.value)} disabled={Boolean(categoryBusy)} aria-label="카테고리 이름" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><button type="button" onClick={() => saveCategory(categoryItem)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-xl border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === categoryItem.id ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteCategory(categoryItem)} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 카테고리 삭제`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-40"><Trash2 size={14}/></button></div>; })}</div>
+      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">추천 카테고리 2단계 관리</p><p className="mt-1 text-[9px] font-bold text-neutral-600">메인 {mainCategories.length}개 · 하위 콘텐츠 {videoCategories.length}개</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="space-y-5 border-t border-white/5 p-3">
+        <section>
+          <div><p className="text-[10px] font-black">메인 카테고리</p><p className="mt-1 text-[9px] font-bold leading-4 text-neutral-600">추천탭 상단 필터에 노출됩니다. 삭제 시 하위 콘텐츠는 미분류로 이동합니다.</p></div>
+          <form onSubmit={createMainCategory} className="mt-3 grid grid-cols-[1fr_72px_auto] gap-2"><input value={newMainCategoryName} onChange={(event) => setNewMainCategoryName(event.target.value)} placeholder="새 메인 이름" disabled={Boolean(categoryBusy)} className="min-w-0 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><input type="number" step="1" value={newMainCategoryOrder} onChange={(event) => setNewMainCategoryOrder(event.target.value)} placeholder="순서" aria-label="새 메인 카테고리 순서" disabled={Boolean(categoryBusy)} className="min-w-0 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newMainCategoryName.trim()} className="rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create-main" ? "추가 중…" : "추가"}</button></form>
+          <div className="mt-3 space-y-2">{mainCategories.map((main) => { const draft = mainCategoryDrafts[main.id] || {}; const draftName = draft.name ?? main.name; const draftOrder = draft.sortOrder ?? main.sortOrder; return <div key={main.id} className="grid grid-cols-[1fr_64px_auto_auto] gap-2"><input value={draftName} onChange={(event) => updateMainCategoryDraft(main.id, "name", event.target.value)} disabled={Boolean(categoryBusy)} aria-label="메인 카테고리 이름" className="min-w-0 rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><input type="number" step="1" value={draftOrder} onChange={(event) => updateMainCategoryDraft(main.id, "sortOrder", event.target.value)} disabled={Boolean(categoryBusy)} aria-label={`${main.name} 메인 순서`} className="min-w-0 rounded-xl border border-white/10 bg-black/40 px-2 text-center text-[10px] font-black outline-none focus:border-accent disabled:opacity-50"/><button type="button" onClick={() => saveMainCategory(main)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-xl border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === `main-${main.id}` ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteMainCategory(main)} disabled={Boolean(categoryBusy) || main.isFallback} aria-label={`${main.name} 메인 카테고리 삭제`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-25"><Trash2 size={14}/></button></div>; })}</div>
+        </section>
+        <section className="border-t border-white/5 pt-5">
+          <div><p className="text-[10px] font-black">하위 콘텐츠</p><p className="mt-1 text-[9px] font-bold leading-4 text-neutral-600">모아보기는 순서 오름차순으로 노출됩니다. 이름 변경은 기존 영상에도 반영됩니다.</p></div>
+          <form onSubmit={createCategory} className="mt-3 grid grid-cols-2 gap-2"><input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="새 하위 콘텐츠" disabled={Boolean(categoryBusy)} className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><select value={newCategoryMainId} onChange={(event) => setNewCategoryMainId(event.target.value)} disabled={Boolean(categoryBusy)} aria-label="새 하위 콘텐츠 메인 카테고리" className="min-w-0 rounded-xl border border-white/10 bg-black px-3 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50">{mainCategories.map((main) => <option key={main.id} value={main.id}>{main.name}</option>)}</select><input type="number" step="1" value={newCategoryOrder} onChange={(event) => setNewCategoryOrder(event.target.value)} placeholder="모아보기 순서" aria-label="새 하위 콘텐츠 노출 순서" disabled={Boolean(categoryBusy)} className="min-w-0 rounded-xl border border-white/10 bg-black px-3 py-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(categoryBusy) || !newCategoryName.trim()} className="rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{categoryBusy === "create" ? "추가 중…" : "하위 추가"}</button></form>
+          <div className="mt-4 space-y-4">{categoriesByMain.map((main) => <div key={main.id}><p className="mb-2 text-[9px] font-black text-neutral-500">{main.name} · {main.children.length}개</p><div className="space-y-2">{main.children.map((categoryItem) => { const draftName = categoryDrafts[categoryItem.id] ?? categoryItem.name; const draftMainId = categoryMainDrafts[categoryItem.id] ?? categoryItem.mainCategoryId; const draftOrder = categoryOrderDrafts[categoryItem.id] ?? categoryItem.sortOrder; return <div key={categoryItem.id} className="rounded-xl border border-white/5 bg-black/30 p-2"><div className="grid grid-cols-[1fr_66px] gap-2"><input value={draftName} onChange={(event) => updateCategoryDraft(categoryItem.id, event.target.value)} disabled={Boolean(categoryBusy)} aria-label="하위 콘텐츠 이름" className="min-w-0 rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50"/><input type="number" step="1" value={draftOrder} onChange={(event) => setCategoryOrderDrafts((current) => ({ ...current, [categoryItem.id]: event.target.value }))} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 모아보기 순서`} className="min-w-0 rounded-lg border border-white/10 bg-black/40 px-2 text-center text-[10px] font-black outline-none focus:border-accent disabled:opacity-50"/></div><div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-2"><select value={draftMainId} onChange={(event) => setCategoryMainDrafts((current) => ({ ...current, [categoryItem.id]: event.target.value }))} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 메인 카테고리`} className="min-w-0 rounded-lg border border-white/10 bg-black/40 px-3 text-[10px] font-bold outline-none focus:border-accent disabled:opacity-50">{mainCategories.map((mainOption) => <option key={mainOption.id} value={mainOption.id}>{mainOption.name}</option>)}</select><button type="button" onClick={() => saveCategory(categoryItem)} disabled={Boolean(categoryBusy) || !String(draftName).trim()} className="rounded-lg border border-accent/30 bg-accent/10 px-3 text-[9px] font-black text-accent disabled:opacity-40">{categoryBusy === categoryItem.id ? "처리 중…" : "저장"}</button><button type="button" onClick={() => deleteCategory(categoryItem)} disabled={Boolean(categoryBusy)} aria-label={`${categoryItem.name} 하위 콘텐츠 삭제`} className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 text-red-400 disabled:opacity-40"><Trash2 size={14}/></button></div></div>; })}</div></div>)}</div>
+        </section>
       </div>
     </details>
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
@@ -1059,7 +1127,7 @@ function RecommendedVideosAdmin({ onBack }) {
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <div className="flex items-center"><div><p className="text-xs font-black">선택 항목 일괄 설정</p><p className="mt-1 text-[9px] font-bold text-neutral-500">수정 후 아래 ‘선택 설정 저장’을 눌러 반영하세요.</p></div><button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg border border-white/10 px-2 py-1 text-[9px] font-black text-neutral-500">선택 해제</button></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => applyToSelected({ isActive: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">노출 ON</button><button type="button" onClick={() => applyToSelected({ isActive: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">노출 OFF</button><button type="button" onClick={() => applyToSelected({ isFeatured: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">PICK 지정</button><button type="button" onClick={() => applyToSelected({ isFeatured: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">PICK 해제</button></div>
-      <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">카테고리 전체 추가/해제</p><div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((value) => { const selected = selectedItems.every((item) => item.categories.includes(value)); return <button type="button" key={value} onClick={() => applyBulkCategory(value)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{value}</button>; })}</div></div>
+      <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">하위 콘텐츠 전체 추가/해제</p><div className="mt-2 space-y-2">{categoriesByMain.map((main) => <div key={main.id}><p className="mb-1 text-[8px] font-black text-neutral-700">{main.name}</p><div className="flex flex-wrap gap-1.5">{main.children.map((categoryItem) => { const selected = selectedItems.every((item) => item.categories.includes(categoryItem.name)); return <button type="button" key={categoryItem.id} onClick={() => applyBulkCategory(categoryItem.name)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{categoryItem.name}</button>; })}</div></div>)}</div></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={bulkSortOrder} onChange={(event) => setBulkSortOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={bulkFeaturedOrder} onChange={(event) => setBulkFeaturedOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label></div>
       <button type="button" onClick={applyBulkOrders} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">입력한 순서 일괄 적용</button>
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" disabled={Boolean(bulkBusy)} onClick={saveSelected} className="rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{bulkBusy === "save" ? "저장 중…" : `선택 설정 저장 (${selectedItems.length})`}</button><button type="button" disabled={Boolean(bulkBusy)} onClick={deleteSelected} aria-label="선택 영상 삭제" className="flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-red-400 disabled:opacity-50">{bulkBusy === "delete" ? <RefreshCw size={16} className="animate-spin"/> : <Trash2 size={16}/>}</button></div>
@@ -1075,7 +1143,7 @@ function RecommendedVideosAdmin({ onBack }) {
           <button type="button" aria-pressed={item.isActive} onClick={() => updateItem(item.id, { isActive: !item.isActive })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isActive ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">노출 여부</span><span className={cn("mt-1 block text-[10px] font-black", item.isActive ? "text-accent" : "text-neutral-400")}>{item.isActive ? "ON" : "OFF"}</span></button>
           <button type="button" aria-pressed={item.isFeatured} onClick={() => updateItem(item.id, { isFeatured: !item.isFeatured })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isFeatured ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">오늘의 PICK</span><span className={cn("mt-1 block text-[10px] font-black", item.isFeatured ? "text-accent" : "text-neutral-400")}>{item.isFeatured ? "지정" : "해제"}</span></button>
         </div>
-        <div className="mt-3"><p className="text-[9px] font-black text-neutral-600">카테고리</p><div className="mt-2 flex flex-wrap gap-1.5">{categoryNames.map((category) => { const selected = item.categories.includes(category); return <button type="button" aria-pressed={selected} key={category} onClick={() => toggleCategory(item, category)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}>{category}</button>; })}</div></div>
+        <div className="mt-3"><p className="text-[9px] font-black text-neutral-600">하위 콘텐츠</p><div className="mt-2 space-y-2">{categoriesByMain.map((main) => <div key={main.id}><p className="mb-1 text-[8px] font-black text-neutral-700">{main.name}</p><div className="flex flex-wrap gap-1.5">{main.children.map((categoryItem) => { const selected = item.categories.includes(categoryItem.name); return <button type="button" aria-pressed={selected} key={categoryItem.id} onClick={() => toggleCategory(item, categoryItem.name)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}>{categoryItem.name}</button>; })}</div></div>)}</div></div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={item.sortOrder} onChange={(event) => updateItem(item.id, { sortOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={item.featuredOrder} onChange={(event) => updateItem(item.id, { featuredOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
