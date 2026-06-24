@@ -1324,6 +1324,7 @@
     }
 
     .admin-filter-toggle {
+      width: 100%;
       margin: 0 0 10px;
       border: 1px solid #262a31;
       border-radius: 9px;
@@ -1453,7 +1454,7 @@
 
     .admin-sort-pills {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 3px;
       padding: 3px;
       border: 1px solid #292d34;
@@ -3048,6 +3049,8 @@
 
     .sort-pills {
       gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .sort-pill {
@@ -3446,6 +3449,8 @@
       <label class="admin-search">
         <input id="adminSearchInput" type="search" placeholder="관리자 목록에서 제목 · 작가 검색">
       </label>
+      <button class="filter-title admin-filter-toggle" id="adminFilterToggle" type="button"><strong>필터</strong><span id="adminFilterCaret">펼치기</span></button>
+      <div class="admin-filters is-collapsed" id="adminFilterMount"></div>
       <details class="admin-vocabulary" id="adminVocabulary">
         <summary>필터 단어 관리</summary>
         <div class="admin-vocabulary-body">
@@ -3464,6 +3469,7 @@
         <span>목록 정렬</span>
         <div class="admin-sort-pills" id="adminSortButtons">
           <button class="admin-sort-pill active" type="button" data-admin-sort="date-desc">최신순</button>
+          <button class="admin-sort-pill" type="button" data-admin-sort="date-asc">과거순</button>
           <button class="admin-sort-pill" type="button" data-admin-sort="title-asc">제목순</button>
         </div>
       </div>
@@ -3570,7 +3576,8 @@
         <div id="filterBody">
             <select id="sortSelect" hidden>
                 <option value="date-desc">최신순</option>
-                <option value="author-asc">작가순</option>
+                <option value="date-asc">과거순</option>
+                <option value="title-asc">제목순</option>
                 <option value="bookmarked">북마크</option>
             </select>
           <div id="filterMount"></div>
@@ -3582,7 +3589,8 @@
           <span id="totalCount">글 목록</span>
                 <div class="sort-pills" id="sortButtons">
                     <button class="sort-pill active" type="button" data-sort="date-desc">최신순</button>
-                    <button class="sort-pill" type="button" data-sort="author-asc">작가순</button>
+                    <button class="sort-pill" type="button" data-sort="date-asc">과거순</button>
+                    <button class="sort-pill" type="button" data-sort="title-asc">제목순</button>
                     <button class="sort-pill" type="button" data-sort="bookmarked">북마크</button>
                 </div>
         </div>
@@ -3872,9 +3880,14 @@
       "스포일러": ["해피엔딩", "새드엔딩", "오픈엔딩", "사망"]
     };
 
-    const PUBLIC_FILTER_GROUPS = ["장르", "키워드", "스포일러"];
+    const PUBLIC_FILTER_GROUPS = ["카테고리", "가격", "성인", "시리즈여부", "장르", "키워드", "스포일러"];
     const PUBLIC_TAG_GROUPS = ["장르", "키워드"];
     const PUBLIC_HIDDEN_FILTER_GROUPS = new Set(["공", "수"]);
+    const FILTER_LABELS = {
+      "가격": "유료/무료",
+      "성인": "성인 여부",
+      "시리즈여부": "시리즈 여부"
+    };
 
     const ADMIN_TAG_GROUPS = {
       "시리즈여부": ["시리즈", "단편"],
@@ -3932,6 +3945,7 @@
     const state = {
       posts: [],
       active: {},
+      adminActive: {},
       query: "",
       adminQuery: "",
       sort: "date-desc",
@@ -3990,6 +4004,9 @@
       adminLoginCancel: $("#adminLoginCancel"),
       adminPasswordInput: $("#adminPasswordInput"),
       adminSearch: $("#adminSearchInput"),
+      adminFilterToggle: $("#adminFilterToggle"),
+      adminFilterMount: $("#adminFilterMount"),
+      adminFilterCaret: $("#adminFilterCaret"),
       adminVocabularyGroup: $("#adminVocabularyGroup"),
       adminVocabularyInput: $("#adminVocabularyInput"),
       adminVocabularyAdd: $("#adminVocabularyAdd"),
@@ -4663,6 +4680,7 @@
         els.status.textContent = `${error.message} 지금은 샘플/로컬 데이터로 표시합니다.`;
       }
       buildFilters();
+      buildAdminFilters();
       buildAdminMultiSelects();
       buildAuthorSubmissionSelectors();
       buildAdminBulkValueOptions();
@@ -4693,13 +4711,13 @@
       els.filterMount.innerHTML = "";
       PUBLIC_HIDDEN_FILTER_GROUPS.forEach((group) => delete state.active[group]);
       PUBLIC_FILTER_GROUPS.forEach((group) => {
-        const options = TAG_GROUPS[group] || [];
+        const options = group === "시리즈여부" ? ADMIN_TAG_GROUPS[group] : (TAG_GROUPS[group] || []);
         const box = document.createElement("div");
         box.className = "filter-group";
         box.dataset.group = group;
         const label = document.createElement("span");
         label.className = "label";
-        label.textContent = group;
+        label.textContent = FILTER_LABELS[group] || group;
         const chips = document.createElement("div");
         chips.className = "chips";
         options.forEach((option) => {
@@ -4709,6 +4727,7 @@
           button.textContent = option;
           button.dataset.group = group;
           button.dataset.option = option;
+          button.classList.toggle("active", Boolean(state.active[group]?.has(option)));
           button.addEventListener("click", () => {
             state.active[group] ||= new Set();
             state.active[group].has(option) ? state.active[group].delete(option) : state.active[group].add(option);
@@ -4719,6 +4738,36 @@
         });
         box.append(label, chips);
         els.filterMount.appendChild(box);
+      });
+    }
+
+    function buildAdminFilters() {
+      els.adminFilterMount.innerHTML = "";
+      PUBLIC_FILTER_GROUPS.forEach((group) => {
+        const options = group === "시리즈여부" ? ADMIN_TAG_GROUPS[group] : (TAG_GROUPS[group] || []);
+        const box = document.createElement("div");
+        box.className = "admin-filter-group";
+        const label = document.createElement("span");
+        label.className = "admin-filter-label";
+        label.textContent = FILTER_LABELS[group] || group;
+        const chips = document.createElement("div");
+        chips.className = "admin-filter-chips";
+        options.forEach((option) => {
+          const button = document.createElement("button");
+          button.className = "chip";
+          button.type = "button";
+          button.textContent = option;
+          button.classList.toggle("active", Boolean(state.adminActive[group]?.has(option)));
+          button.addEventListener("click", () => {
+            state.adminActive[group] ||= new Set();
+            state.adminActive[group].has(option) ? state.adminActive[group].delete(option) : state.adminActive[group].add(option);
+            button.classList.toggle("active");
+            renderAdminList();
+          });
+          chips.appendChild(button);
+        });
+        box.append(label, chips);
+        els.adminFilterMount.appendChild(box);
       });
     }
 
@@ -4791,15 +4840,23 @@
       const query = normalize(state.query).toLowerCase();
       const posts = state.posts.filter((post) => matchesPost(post, state.active, query));
       const sorted = posts.sort((a, b) => {
-        if (state.sort === "author-asc") return normalize(a["작가"]).localeCompare(normalize(b["작가"]), "ko");
         if (state.sort === "bookmarked") {
           const ab = postLibraryEntry(a).bookmarked ? 1 : 0;
           const bb = postLibraryEntry(b).bookmarked ? 1 : 0;
           if (ab !== bb) return bb - ab;
         }
-        return Date.parse(normalize(b["날짜"])) - Date.parse(normalize(a["날짜"]));
+        return comparePosts(a, b, state.sort === "bookmarked" ? "date-desc" : state.sort);
       });
       return state.sort === "bookmarked" ? sorted.filter((post) => postLibraryEntry(post).bookmarked) : sorted;
+    }
+
+    function comparePosts(a, b, sort) {
+      const titleDiff = normalize(a["제목"]).localeCompare(normalize(b["제목"]), "ko");
+      if (sort === "title-asc") return titleDiff;
+      const aDate = Date.parse(normalize(a["날짜"])) || 0;
+      const bDate = Date.parse(normalize(b["날짜"])) || 0;
+      const dateDiff = sort === "date-asc" ? aDate - bDate : bDate - aDate;
+      return dateDiff || titleDiff;
     }
 
     function matchesPost(post, activeGroups = state.active, query = normalize(state.query).toLowerCase()) {
@@ -5027,15 +5084,9 @@
       state.adminSelected = new Set([...state.adminSelected].filter((key) => validKeys.has(key)));
       const query = normalize(state.adminQuery).toLowerCase();
       const posts = state.posts
-        .filter((post) => !query || searchText(post).includes(query))
+        .filter((post) => matchesPost(post, state.adminActive, query))
         .slice()
-        .sort((a, b) => {
-          if (state.adminSort === "title-asc") {
-            return normalize(a["제목"]).localeCompare(normalize(b["제목"]), "ko");
-          }
-          const dateDiff = (Date.parse(normalize(b["날짜"])) || 0) - (Date.parse(normalize(a["날짜"])) || 0);
-          return dateDiff || normalize(a["제목"]).localeCompare(normalize(b["제목"]), "ko");
-        });
+        .sort((a, b) => comparePosts(a, b, state.adminSort));
       state.adminVisiblePosts = posts;
       updateAdminBulkControls();
       if (!state.posts.length) {
@@ -6504,6 +6555,10 @@
       const filters = document.querySelector(".filters");
       filters.classList.toggle("collapsed");
       els.filterCaret.textContent = filters.classList.contains("collapsed") ? "펼치기" : "접기";
+    });
+    els.adminFilterToggle.addEventListener("click", () => {
+      els.adminFilterMount.classList.toggle("is-collapsed");
+      els.adminFilterCaret.textContent = els.adminFilterMount.classList.contains("is-collapsed") ? "펼치기" : "접기";
     });
     els.adminSearch.addEventListener("input", (event) => {
       state.adminQuery = event.target.value;
