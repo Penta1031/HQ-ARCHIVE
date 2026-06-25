@@ -532,7 +532,7 @@ function PostypeView({ adminRequest = null }) {
     frame?.addEventListener("load", openAdmin);
     return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
   }, [adminRequest?.id, adminRequest?.credential]);
-  return <iframe ref={frameRef} src="postype/index.html?v=20260622-3" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
+  return <iframe ref={frameRef} src="postype/index.html?v=20260625-1" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
 function AdminHub({ onClose, onOpenPostype }) {

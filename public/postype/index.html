@@ -3507,6 +3507,7 @@
               </span>
             </label>
             <label><span class="label">날짜</span><input name="날짜" type="date"></label>
+            <label><span class="label">노출상태</span><select name="관리자검수"><option value="Y">노출</option><option value="">비공개</option></select></label>
             <label><span class="label">카테고리</span><select name="카테고리"><option>글</option><option>그림</option><option>기타</option></select></label>
             <label><span class="label">유료</span><select name="유료"><option value="X">무료</option><option value="O">유료</option></select></label>
             <label><span class="label">성인</span><select name="성인"><option value="X">전연령</option><option value="O">성인</option></select></label>
@@ -4442,6 +4443,17 @@
       return ["Y", "YES", "TRUE", "1", "O"].includes(normalize(value).toUpperCase());
     }
 
+    function withVisibilityPayload(post, fallbackVisible = true) {
+      const hasVisibility = Object.prototype.hasOwnProperty.call(post, "관리자검수");
+      const reviewed = hasVisibility ? postFlag(post["관리자검수"]) : fallbackVisible;
+      return {
+        ...post,
+        "관리자검수": reviewed ? "Y" : "",
+        admin_reviewed: reviewed,
+        admin_reviewed_at: reviewed ? (normalize(post._adminReviewedAt) || normalize(post.admin_reviewed_at) || new Date().toISOString()) : null
+      };
+    }
+
     function postToSupabaseRow(post, action) {
       const rowNumber = normalize(post._rowNumber);
       const sourceRowNumber = rowNumber && !rowNumber.startsWith("local-") ? rowNumber : `manual-${Date.now()}`;
@@ -4463,9 +4475,9 @@
         series_name: normalize(post["시리즈명"]),
         series_volume: normalize(post["시리즈회차"]),
         serialization_status: normalize(post["연재상태"]),
+        admin_reviewed: postFlag(post["관리자검수"]),
+        admin_reviewed_at: postFlag(post["관리자검수"]) ? (normalize(post._adminReviewedAt) || normalize(post.admin_reviewed_at) || new Date().toISOString()) : null,
         ...(action === "create" ? {
-          admin_reviewed: true,
-          admin_reviewed_at: new Date().toISOString(),
           source_url: "admin_manual"
         } : {})
       };
@@ -5245,7 +5257,7 @@
           updated["시리즈회차"] = "";
         }
       }
-      return updated;
+      return withVisibilityPayload(updated);
     }
 
     function escapeHtml(value) {
@@ -6210,6 +6222,7 @@
         field.value = post[field.name] || "";
       });
       els.adminForm.elements["_rowNumber"].value = post._rowNumber || "";
+      els.adminForm.elements["_supabaseId"].value = post._supabaseId || "";
       els.adminForm.elements["_originalSeriesName"].value = post["시리즈명"] || "";
       syncAdminMultiSelectsFromForm();
       syncStandaloneStatus();
@@ -6328,7 +6341,7 @@
       if (!data["시리즈"]) data["연재상태"] = "";
       data._source = data._rowNumber ? "local-edit" : "local";
       data._rowNumber ||= `local-${Date.now()}`;
-      return data;
+      return withVisibilityPayload(data);
     }
 
     function syncStandaloneStatus() {
