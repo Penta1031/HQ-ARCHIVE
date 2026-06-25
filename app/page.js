@@ -327,7 +327,7 @@ const mediaFromTweetData = (data = {}) => {
   const asArray = (value) => Array.isArray(value) ? value : value ? [value] : [];
   const vxMedia = asArray(data.mediaURLs)[0] || asArray(data.media_urls)[0];
   const vxUrl = typeof vxMedia === "string" ? vxMedia : vxMedia?.url || "";
-  if (vxUrl) return { url: vxUrl, thumbnailUrl: typeof vxMedia === "string" ? "" : String(vxMedia?.thumbnail_url || vxMedia?.preview_image_url || ""), isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(vxUrl) };
+  if (vxUrl) return { url: vxUrl, thumbnailUrl: typeof vxMedia === "string" ? "" : String(vxMedia?.thumbnail_url || vxMedia?.preview_image_url || vxMedia?.poster || vxMedia?.media_url_https || ""), isVideo: /video\.twimg\.com|\.(mp4|m3u8)(?:$|\?)/i.test(vxUrl) };
   const candidates = [
     ...asArray(data.media_extended),
     ...asArray(data.tweet?.media?.all),
@@ -335,7 +335,7 @@ const mediaFromTweetData = (data = {}) => {
   ];
   const detailed = candidates.find((media)=>/video|gif/i.test(media?.type || "") && (media?.url || media?.thumbnail_url))
     || candidates.find((media)=>media?.url || media?.thumbnail_url);
-  const thumbnailUrl = detailed?.thumbnail_url || detailed?.preview_image_url || data.preview_image_url || data.tweet?.media?.thumbnail_url || "";
+  const thumbnailUrl = detailed?.thumbnail_url || detailed?.preview_image_url || detailed?.poster || detailed?.media_url_https || detailed?.media_url || data.thumbnail_url || data.preview_image_url || data.poster || data.tweet?.media?.thumbnail_url || data.tweet?.video?.thumbnail_url || data.tweet?.video?.preview_image_url || "";
   const url = detailed?.url || thumbnailUrl || data.video_url || data.tweet?.video?.url || "";
   return url ? { url, thumbnailUrl: String(thumbnailUrl || ""), isVideo: /video|gif/i.test(detailed?.type || "") || /\.(mp4|m3u8)(?:$|\?)/i.test(url) } : null;
 };
@@ -353,12 +353,14 @@ async function resolveTweetMedia(sourceUrl) {
       const match = source.pathname.match(/\/([^/]+)\/(?:status|statuses)\/(\d+)/i);
       if (!match) return null;
       const path = `/${match[1]}/status/${match[2]}`;
+      let fallbackMedia = null;
       for (const endpoint of [`https://api.vxtwitter.com${path}`,`https://api.fxtwitter.com${path}`]) {
         try {
           const response = await fetch(endpoint);
           if (!response.ok) continue;
           const resolved = mediaFromTweetData(await response.json());
-          if (resolved) return resolved;
+          if (resolved?.thumbnailUrl || (resolved && !resolved.isVideo)) return resolved;
+          if (resolved && !fallbackMedia) fallbackMedia = resolved;
         } catch {}
       }
       try {
@@ -366,8 +368,9 @@ async function resolveTweetMedia(sourceUrl) {
           tweetMediaService.resolve(sourceUrl),
           new Promise((_,reject)=>setTimeout(()=>reject(new Error("media resolver timeout")),8000))
         ]);
-        if (serverMedia?.url) return { ...serverMedia, isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
+        if (serverMedia?.url) return { ...serverMedia, thumbnailUrl: serverMedia.thumbnailUrl || serverMedia.thumbnail_url || serverMedia.preview_image_url || serverMedia.poster || "", isVideo: Boolean(serverMedia.isVideo || serverMedia.type === "video") };
       } catch {}
+      if (fallbackMedia) return fallbackMedia;
     } catch {}
     return null;
   })();
@@ -1309,7 +1312,7 @@ function ArchiveAdmin({ onBack }) {
     try {
       tweetMediaCache.delete(sourceUrl);
       const resolved = await resolveTweetMedia(sourceUrl);
-      const thumbnailUrl = resolved?.thumbnailUrl || resolved?.thumbnail_url || resolved?.preview_image_url || (!resolved?.isVideo ? resolved?.url : "") || "";
+      const thumbnailUrl = resolved?.thumbnailUrl || resolved?.thumbnail_url || resolved?.preview_image_url || resolved?.poster || (!resolved?.isVideo ? resolved?.url : "") || "";
       if (!thumbnailUrl) {
         setThumbnailMessage("불러올 썸네일을 찾지 못했습니다.");
         return;
