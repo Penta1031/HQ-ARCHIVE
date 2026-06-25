@@ -21,6 +21,17 @@ const getKstDate = (date = new Date()) => {
   const parts = Object.fromEntries(KST_DATE_FORMATTER.formatToParts(date).map(({ type, value }) => [type, value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
+const kstDateFromValue = (value) => {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isNaN(date.getTime())) return getKstDate(date);
+  const dateOnly = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : "";
+};
+const displayKstDate = (value, fallback = "날짜 없음") => {
+  const date = kstDateFromValue(value);
+  return date ? date.replace(/-/g, ".") : fallback;
+};
 function useKstToday() {
   const [date, setDate] = useState("");
   useEffect(() => {
@@ -658,7 +669,7 @@ function RecommendedView({ onScrollTop }) {
     const needle = query.trim().toLocaleLowerCase("ko-KR");
     const dateNeedle = normalizeRecommendedDateQuery(query);
     return items.filter((item) => {
-      const publishedDate = String(item.publishedAt || "").slice(0, 10);
+      const publishedDate = kstDateFromValue(item.publishedAt);
       const matchesSearch = !needle
         || item.title.toLocaleLowerCase("ko-KR").includes(needle)
         || Boolean(dateNeedle && publishedDate.startsWith(dateNeedle));
@@ -682,10 +693,7 @@ function RecommendedView({ onScrollTop }) {
     return sections;
   }, [searchedItems, category, videoCategories, mainCategories]);
 
-  const displayDate = (value) => {
-    const date = String(value || "").slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.replace(/-/g, ".") : "날짜 없음";
-  };
+  const displayDate = (value) => displayKstDate(value);
   const selectedCategoryItems = useMemo(() => {
     if (!selectedCategory) return [];
     const knownNames = new Set(videoCategories.map((item) => item.name));
@@ -928,6 +936,18 @@ function RecommendedVideosAdmin({ onBack }) {
     event.preventDefault();
     await collectPlaylistVideos(playlistUrl.trim());
   };
+  const refreshPublishedDates = async () => {
+    setCollectBusy("refresh-dates"); setCollectNotice(""); setSaveError("");
+    try {
+      const result = await recommendedVideoService.refreshPublishedDates();
+      setCollectNotice(`업로드일자 재확인 완료: ${Number(result.checked || 0)}개 확인 · ${Number(result.updated || 0)}개 보정 · ${Number(result.missing || 0)}개 미확인`);
+      await refreshAfterCollection();
+    } catch (reason) {
+      setSaveError(reason.message || "추천 영상 업로드일자를 재확인하지 못했습니다.");
+    } finally {
+      setCollectBusy("");
+    }
+  };
   const updateMainCategoryDraft = (id, field, value) => setMainCategoryDrafts((current) => ({ ...current, [id]: { ...(current[id] || {}), [field]: value } }));
   const updateCategoryDraft = (id, name) => setCategoryDrafts((current) => ({ ...current, [id]: name }));
   const createMainCategory = async (event) => {
@@ -1058,7 +1078,7 @@ function RecommendedVideosAdmin({ onBack }) {
     return items.filter((item) => {
       const searchable = [item.title, item.channelTitle, item.youtubeId, item.publishedAt, item.adminComment, item.isHyeopkwaePick ? "혚쾌 PICK" : "", ...item.categories]
         .join(" ").toLocaleLowerCase("ko-KR");
-      const compactDate = String(item.publishedAt || "").slice(0, 10).replace(/\D/g, "");
+      const compactDate = kstDateFromValue(item.publishedAt).replace(/\D/g, "");
       return searchable.includes(needle) || Boolean(compactNeedle && compactDate.includes(compactNeedle));
     });
   }, [items, adminQuery]);
@@ -1128,11 +1148,7 @@ function RecommendedVideosAdmin({ onBack }) {
     }
   };
 
-  const uploadDate = (value) => {
-    if (!value) return "업로드일 없음";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit" });
-  };
+  const uploadDate = (value) => displayKstDate(value, "업로드일 없음");
 
   const featuredActiveCount = items.filter((item) => item.isActive && item.isFeatured).length;
   const featuredAdminItems = items
@@ -1150,6 +1166,7 @@ function RecommendedVideosAdmin({ onBack }) {
       <form onSubmit={collectCustomChannel} className="flex gap-2"><input type="url" value={channelUrl} onChange={(event) => setChannelUrl(event.target.value)} placeholder="YouTube 채널 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !channelUrl.trim()} className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "custom-channel" ? "수집 중…" : "채널 수집"}</button></form>
       <form onSubmit={collectCustomPlaylist} className="flex gap-2"><input type="url" value={playlistUrl} onChange={(event) => setPlaylistUrl(event.target.value)} placeholder="YouTube 플레이리스트 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !playlistUrl.trim()} className="shrink-0 rounded-xl border border-[#ff0000]/30 bg-[#ff0000]/10 px-3 py-3 text-[10px] font-black text-[#ff6666] disabled:opacity-40">{collectBusy === "playlist" ? "수집 중…" : "플레이리스트 수집"}</button></form>
       <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
+      <button type="button" onClick={refreshPublishedDates} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-[#55acee]/30 bg-[#1DA1F2]/10 py-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{collectBusy === "refresh-dates" ? "업로드일자 재확인 중…" : "기존 추천 영상 업로드일자 재확인"}</button>
       <p className="text-[9px] leading-4 text-neutral-600">채널 수집은 기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 플레이리스트 수집은 목록 전체를 확인해 기존 영상은 건너뛰고 신규 영상만 노출 OFF 상태로 저장합니다.</p>
     </div>
     <details className="group mt-4 rounded-2xl border border-white/10 bg-white/[.03]">

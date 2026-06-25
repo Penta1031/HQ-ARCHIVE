@@ -53,6 +53,13 @@ async function rest(resource: string, options: RequestInit = {}, count = false) 
   const range = response.headers.get("content-range") || "";
   return { rows, total: Number(range.split("/")[1] || rows.length) };
 }
+function detailFromYoutube(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const error = (value as Record<string, unknown>).error;
+  if (!error || typeof error !== "object") return "";
+  const message = (error as Record<string, unknown>).message;
+  return typeof message === "string" ? message : "";
+}
 async function invokeFunction(name: string, body: Record<string, unknown>) {
   if (!supabaseUrl || !serviceKey) throw new Error("Supabase server secrets are not configured.");
   const response = await fetch(`${supabaseUrl}/functions/v1/${name}`, {
@@ -132,6 +139,65 @@ function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>,
   };
   if (typeof updates.isHyeopkwaePick === "boolean") row.is_hyeopkwae_pick = updates.isHyeopkwaePick;
   return row;
+}
+async function refreshRecommendedVideoPublishedDates() {
+  const youtubeApiKey = text(Deno.env.get("YOUTUBE_API_KEY"));
+  if (!youtubeApiKey) throw new Error("Supabase Secret에 YOUTUBE_API_KEY가 설정되지 않았습니다.");
+
+  const rows: Record<string, unknown>[] = [];
+  const limit = 1000;
+  for (let offset = 0; ; offset += limit) {
+    const result = await rest(`recommended_videos?select=id,youtube_id,published_at&order=id.asc&offset=${offset}&limit=${limit}`, {}, true);
+    rows.push(...result.rows.filter((row) => text(row.youtube_id)));
+    if (result.rows.length < limit) break;
+  }
+
+  let checked = 0;
+  let updated = 0;
+  let missing = 0;
+  for (let index = 0; index < rows.length; index += 50) {
+    const chunk = rows.slice(index, index + 50);
+    const ids = [...new Set(chunk.map((row) => text(row.youtube_id)).filter(Boolean))];
+    if (!ids.length) continue;
+
+    const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+    url.searchParams.set("part", "snippet");
+    url.searchParams.set("id", ids.join(","));
+    url.searchParams.set("key", youtubeApiKey);
+    const response = await fetch(url);
+    const youtubeResult = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = detailFromYoutube(youtubeResult);
+      throw new Error(`YouTube Data API 호출에 실패했습니다 (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
+
+    const byId = new Map<string, string>();
+    for (const item of Array.isArray(youtubeResult.items) ? youtubeResult.items : []) {
+      const videoId = text(item?.id);
+      const publishedAt = text(item?.snippet?.publishedAt);
+      if (videoId && publishedAt) byId.set(videoId, publishedAt);
+    }
+
+    for (const row of chunk) {
+      checked += 1;
+      const videoId = text(row.youtube_id);
+      const publishedAt = byId.get(videoId);
+      if (!publishedAt) { missing += 1; continue; }
+      const currentTime = new Date(text(row.published_at)).getTime();
+      const nextTime = new Date(publishedAt).getTime();
+      if (Number.isNaN(nextTime)) { missing += 1; continue; }
+      if (Number.isNaN(currentTime) || currentTime !== nextTime) {
+        await rest(`recommended_videos?id=eq.${encodeURIComponent(text(row.id))}`, {
+          method: "PATCH",
+          body: JSON.stringify({ published_at: publishedAt }),
+          headers: { Prefer: "return=minimal" }
+        });
+        updated += 1;
+      }
+    }
+  }
+
+  return { checked, updated, missing };
 }
 async function twitterSearch(payload: Record<string, unknown>) {
   const bearer = text(Deno.env.get("X_BEARER_TOKEN"));
@@ -244,6 +310,9 @@ Deno.serve(async (request) => {
       const limit = Math.min(1000, Math.max(1, Number(payload.limit || 1000)));
       const result = await rest(`recommended_videos?select=${fields}&order=published_at.desc.nullslast,id.desc&offset=${offset}&limit=${limit}`, {}, true);
       return json(request, { ok: true, items: result.rows, total: result.total, hasMore: offset + result.rows.length < result.total });
+    }
+    if (action === "recommended-video-refresh-published-dates") {
+      return json(request, { ok: true, ...await refreshRecommendedVideoPublishedDates() });
     }
     if (action === "recommended-video-update") {
       const id = text(payload.id);
