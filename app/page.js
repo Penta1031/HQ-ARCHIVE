@@ -1066,6 +1066,20 @@ function RecommendedVideosAdmin({ onBack }) {
       setSavingId("");
     }
   };
+  const removeFeaturedItem = async (item) => {
+    const nextItem = { ...item, isFeatured: false };
+    setSavingId(item.id); setSavedId(""); setSaveError(""); setCollectNotice("");
+    try {
+      const saved = await recommendedVideoService.update(item.id, settingsFrom(nextItem));
+      setItems((current) => current.map((value) => value.id === item.id ? saved : value));
+      setSavedId(item.id);
+      setCollectNotice("롤링배너 노출을 해제했습니다.");
+    } catch (reason) {
+      setSaveError(reason.message || "롤링배너 노출을 해제하지 못했습니다.");
+    } finally {
+      setSavingId("");
+    }
+  };
 
   const categoriesByMain = useMemo(() => mainCategories.map((main) => ({
     ...main,
@@ -1187,7 +1201,7 @@ function RecommendedVideosAdmin({ onBack }) {
     {collectNotice && <p className="mt-3 rounded-xl border border-white/10 bg-white/[.03] p-3 text-[10px] font-bold text-neutral-400">{collectNotice}</p>}
     {!loading && !error && <details className={cn("group mt-4 rounded-2xl border", featuredActiveCount < 3 ? "border-accent/30 bg-accent/10" : "border-white/10 bg-white/[.03]")}>
       <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-[10px] font-black text-neutral-500">롤링배너 노출 현황</p><strong className={cn("mt-1 block text-lg font-black", featuredActiveCount < 3 ? "text-accent" : "text-white")}>{featuredActiveCount < 3 ? "노출 안 됨" : `${featuredActiveCount}개 노출`}</strong></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
-      <div className="border-t border-white/5 p-3">{featuredActiveCount < 3 && <p className="mb-3 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}{featuredAdminItems.length ? <div className="space-y-2">{featuredAdminItems.map((item, index) => <div key={item.id} className="flex items-center gap-3 rounded-xl bg-black/40 p-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-[10px] font-black text-accent">{index + 1}</span><div className="flex aspect-video w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={14}/>}</div><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{item.title || "제목 없음"}</p><p className="mt-1 truncate text-[9px] font-bold text-neutral-600">PICK 순서 {item.featuredOrder}</p></div></div>)}</div> : <p className="py-4 text-center text-[10px] font-bold text-neutral-600">현재 노출 중인 롤링배너가 없습니다.</p>}</div>
+      <div className="border-t border-white/5 p-3">{featuredActiveCount < 3 && <p className="mb-3 text-[10px] font-bold leading-4 text-accent">오늘의 PICK은 최소 3개 이상 선택해야 추천 탭에 노출됩니다.</p>}{featuredAdminItems.length ? <div className="space-y-2">{featuredAdminItems.map((item, index) => <div key={item.id} className="flex items-center gap-3 rounded-xl bg-black/40 p-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-[10px] font-black text-accent">{index + 1}</span><div className="flex aspect-video w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={14}/>}</div><div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black">{item.title || "제목 없음"}</p><p className="mt-1 truncate text-[9px] font-bold text-neutral-600">PICK 순서 {item.featuredOrder}</p></div><button type="button" disabled={savingId === item.id} onClick={() => removeFeaturedItem(item)} className="shrink-0 rounded-lg border border-accent/30 bg-accent/10 px-2.5 py-2 text-[9px] font-black text-accent disabled:opacity-40">{savingId === item.id ? "해제 중…" : "노출 해제"}</button></div>)}</div> : <p className="py-4 text-center text-[10px] font-bold text-neutral-600">현재 노출 중인 롤링배너가 없습니다.</p>}</div>
     </details>}
     {!loading && !error && filteredAdminItems.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-4 w-4 accent-accent"/>{adminQuery.trim() ? "검색 결과 전체 선택" : "전체 선택"}</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
