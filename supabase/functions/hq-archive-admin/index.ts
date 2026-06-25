@@ -333,6 +333,12 @@ Deno.serve(async (request) => {
       const result = await invokeFunction("recommended-videos-channel-sync", channelUrl ? { channel_urls: [channelUrl] } : {});
       return json(request, { ok: true, totalInserted: Number(result.total_inserted || 0), channels: result.channels || [] });
     }
+    if (action === "recommended-video-playlist-sync") {
+      const playlistUrl = text(payload.playlistUrl);
+      if (!playlistUrl) throw new Error("수집할 YouTube 플레이리스트 링크를 입력해주세요.");
+      const result = await invokeFunction("recommended-videos-channel-sync", { playlist_urls: [playlistUrl] });
+      return json(request, { ok: true, totalInserted: Number(result.total_inserted || 0), playlists: result.playlists || result.channels || [] });
+    }
 
     if (action === "worldcup-save") {
       const cup = payload.cup || {}; const legacyId = text(cup.legacyCupId || cup.id || Date.now());

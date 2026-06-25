@@ -824,6 +824,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const [savedId, setSavedId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [channelUrl, setChannelUrl] = useState("");
+  const [playlistUrl, setPlaylistUrl] = useState("");
   const [collectBusy, setCollectBusy] = useState("");
   const [collectNotice, setCollectNotice] = useState("");
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -905,6 +906,25 @@ function RecommendedVideosAdmin({ onBack }) {
     const value = channelUrl.trim();
     if (!value) { setSaveError("수집할 YouTube 채널 링크를 입력해주세요."); return; }
     await collectChannelVideos(value);
+  };
+  const collectPlaylistVideos = async (customPlaylistUrl = "") => {
+    const value = String(customPlaylistUrl || "").trim();
+    if (!value) { setSaveError("수집할 YouTube 플레이리스트 링크를 입력해주세요."); return; }
+    setCollectBusy("playlist"); setCollectNotice(""); setSaveError("");
+    try {
+      const result = await recommendedVideoService.collectPlaylist(value);
+      setPlaylistUrl("");
+      setCollectNotice(`플레이리스트에서 신규 영상 ${Number(result.totalInserted || 0)}개를 수집했습니다. 기존 영상은 건너뛰며 신규 영상은 노출 OFF 상태입니다.`);
+      await refreshAfterCollection();
+    } catch (reason) {
+      setSaveError(reason.message || "플레이리스트 영상을 수집하지 못했습니다.");
+    } finally {
+      setCollectBusy("");
+    }
+  };
+  const collectCustomPlaylist = async (event) => {
+    event.preventDefault();
+    await collectPlaylistVideos(playlistUrl.trim());
   };
   const updateMainCategoryDraft = (id, field, value) => setMainCategoryDrafts((current) => ({ ...current, [id]: { ...(current[id] || {}), [field]: value } }));
   const updateCategoryDraft = (id, name) => setCategoryDrafts((current) => ({ ...current, [id]: name }));
@@ -1126,8 +1146,9 @@ function RecommendedVideosAdmin({ onBack }) {
     <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
       <form onSubmit={addYoutubeVideo} className="flex gap-2"><input type="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="YouTube 영상 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !youtubeUrl.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{collectBusy === "manual" ? "추가 중…" : "링크 추가"}</button></form>
       <form onSubmit={collectCustomChannel} className="flex gap-2"><input type="url" value={channelUrl} onChange={(event) => setChannelUrl(event.target.value)} placeholder="YouTube 채널 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !channelUrl.trim()} className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "custom-channel" ? "수집 중…" : "채널 수집"}</button></form>
+      <form onSubmit={collectCustomPlaylist} className="flex gap-2"><input type="url" value={playlistUrl} onChange={(event) => setPlaylistUrl(event.target.value)} placeholder="YouTube 플레이리스트 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !playlistUrl.trim()} className="shrink-0 rounded-xl border border-[#ff0000]/30 bg-[#ff0000]/10 px-3 py-3 text-[10px] font-black text-[#ff6666] disabled:opacity-40">{collectBusy === "playlist" ? "수집 중…" : "플레이리스트 수집"}</button></form>
       <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
-      <p className="text-[9px] leading-4 text-neutral-600">기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 신규 영상은 노출 OFF 상태로 저장되며 직접 노출 설정을 변경해야 합니다.</p>
+      <p className="text-[9px] leading-4 text-neutral-600">채널 수집은 기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 플레이리스트 수집은 목록 전체를 확인해 기존 영상은 건너뛰고 신규 영상만 노출 OFF 상태로 저장합니다.</p>
     </div>
     <details className="group mt-4 rounded-2xl border border-white/10 bg-white/[.03]">
       <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">추천 카테고리 2단계 관리</p><p className="mt-1 text-[9px] font-bold text-neutral-600">메인 {mainCategories.length}개 · 하위 콘텐츠 {videoCategories.length}개</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
