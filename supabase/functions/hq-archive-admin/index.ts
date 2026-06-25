@@ -87,10 +87,14 @@ async function categoryIds(mainCategory: string, subCategory: string) {
 }
 async function archiveRow(item: Record<string, unknown>, status?: string) {
   const ids = await categoryIds(text(item.mainCategory), text(item.subCategory));
+  const rawKeywords = text(item.rawKeywords);
+  const keywords = rawKeywords
+    ? rawKeywords.split(/[,#]/).map(text).filter(Boolean)
+    : Array.isArray(item.keywords) ? item.keywords.map(text).filter(Boolean) : [];
   return {
     title: text(item.title), occurred_on: text(item.date) || null, source_url: text(item.link) || null,
     account: text(item.account) || null, ...ids,
-    keywords: Array.isArray(item.keywords) ? item.keywords.map(text).filter(Boolean) : text(item.rawKeywords).split(/[,#]/).map(text).filter(Boolean),
+    keywords,
     thumbnail_url: text(item.thumbnailUrl) || null, status: status || text(item.status) || "published",
     source_type: text(item.sourceType) || "manual"
   };
