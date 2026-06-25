@@ -4243,7 +4243,8 @@
       const explicitVolume = normalize(post["시리즈회차"]);
       const explicitSeries = normalize(post["시리즈"]).toUpperCase() === "Y";
       const inferred = titleSeriesInfo(post["제목"]);
-      const isSeries = explicitSeries || explicitName || explicitVolume || inferred.isSeries;
+      const hasAdminSeriesFlag = Object.prototype.hasOwnProperty.call(post, "시리즈");
+      const isSeries = explicitSeries || explicitName || explicitVolume || (!hasAdminSeriesFlag && inferred.isSeries);
       if (!isSeries) return { isSeries: false };
       const status = explicitStatus || inferred.status || "연재중";
       return {
@@ -6338,7 +6339,11 @@
       const data = {};
       new FormData(els.adminForm).forEach((value, key) => data[key] = normalize(value));
       data["장르"] = withoutRps(data["장르"]);
-      if (!data["시리즈"]) data["연재상태"] = "";
+      if (!data["시리즈"]) {
+        data["연재상태"] = "";
+        data["시리즈명"] = "";
+        data["시리즈회차"] = "";
+      }
       data._source = data._rowNumber ? "local-edit" : "local";
       data._rowNumber ||= `local-${Date.now()}`;
       return withVisibilityPayload(data);
