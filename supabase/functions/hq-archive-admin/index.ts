@@ -112,12 +112,13 @@ async function allowedRecommendedVideoCategories() {
 function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>, allowedCategories: Set<string>) {
   if (!uuidPattern.test(id)) throw new Error("추천 영상 ID가 올바르지 않습니다.");
   if (typeof updates.isActive !== "boolean" || typeof updates.isFeatured !== "boolean") throw new Error("노출 및 PICK 설정이 올바르지 않습니다.");
+  if (updates.isHyeopkwaePick !== undefined && typeof updates.isHyeopkwaePick !== "boolean") throw new Error("혚쾌 PICK 설정이 올바르지 않습니다.");
   if (!Array.isArray(updates.categories)) throw new Error("카테고리 값이 올바르지 않습니다.");
   const categories = [...new Set(updates.categories.map(text).filter(Boolean))];
   if (categories.some((category) => !allowedCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
   const sortOrder = Number(updates.sortOrder); const featuredOrder = Number(updates.featuredOrder);
   if (!Number.isInteger(sortOrder) || !Number.isInteger(featuredOrder)) throw new Error("목록 순서는 정수로 입력해주세요.");
-  return {
+  const row: Record<string, unknown> = {
     is_active: updates.isActive,
     is_featured: updates.isFeatured,
     categories,
@@ -125,6 +126,8 @@ function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>,
     featured_order: featuredOrder,
     admin_comment: text(updates.adminComment) || null
   };
+  if (typeof updates.isHyeopkwaePick === "boolean") row.is_hyeopkwae_pick = updates.isHyeopkwaePick;
+  return row;
 }
 async function twitterSearch(payload: Record<string, unknown>) {
   const bearer = text(Deno.env.get("X_BEARER_TOKEN"));
@@ -232,7 +235,7 @@ Deno.serve(async (request) => {
     if (action === "twitter-search") return json(request, { ok: true, items: await twitterSearch(payload) });
 
     if (action === "recommended-video-list") {
-      const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_active,source,channel_id,channel_title,created_at,updated_at";
+      const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_hyeopkwae_pick,is_active,source,channel_id,channel_title,created_at,updated_at";
       const offset = Math.max(0, Number(payload.offset || 0));
       const limit = Math.min(1000, Math.max(1, Number(payload.limit || 1000)));
       const result = await rest(`recommended_videos?select=${fields}&order=published_at.desc.nullslast,id.desc&offset=${offset}&limit=${limit}`, {}, true);

@@ -680,21 +680,25 @@ function RecommendedView({ onScrollTop }) {
   const selectedCategoryItems = useMemo(() => {
     if (!selectedCategory) return [];
     const knownNames = new Set(videoCategories.map((item) => item.name));
-    const categoryItems = selectedCategory === "__uncategorized__"
+    const categoryItems = selectedCategory === "__hyeopkwae_pick__"
+      ? items.filter((item) => item.isHyeopkwaePick)
+      : selectedCategory === "__uncategorized__"
       ? items.filter((item) => !item.categories.some((value) => knownNames.has(value)))
       : items.filter((item) => item.categories.includes(selectedCategory));
+    const filteredItems = categorySort === "hyeop-pick" ? categoryItems.filter((item) => item.isHyeopkwaePick) : categoryItems;
     const timestamp = (item) => {
       const value = new Date(item.publishedAt || "").getTime();
       return Number.isNaN(value) ? null : value;
     };
-    return [...categoryItems].sort((a, b) => {
+    return [...filteredItems].sort((a, b) => {
       const aTime = timestamp(a);
       const bTime = timestamp(b);
       if (aTime === null) return bTime === null ? 0 : 1;
       if (bTime === null) return -1;
-      return categorySort === "latest" ? bTime - aTime : aTime - bTime;
+      return categorySort === "oldest" ? aTime - bTime : bTime - aTime;
     });
   }, [items, selectedCategory, categorySort, videoCategories]);
+  const hyeopkwaePickItems = useMemo(() => searchedItems.filter((item) => item.isHyeopkwaePick), [searchedItems]);
   const selectedCategoryDateGroups = useMemo(() => {
     const groups = [];
     selectedCategoryItems.forEach((item) => {
@@ -747,20 +751,20 @@ function RecommendedView({ onScrollTop }) {
 
   if (selectedCategory) return <div className="px-4 pb-6 pt-4">
     <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
-    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
-    <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬">
-      {[["latest","최신순"],["oldest","과거순"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
+    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__hyeopkwae_pick__" ? "혚쾌 PICK" : selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
+    <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬 및 필터">
+      {[["latest","최신순"],["oldest","과거순"],["hyeop-pick","혚쾌 PICK"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
     </div>
-    <div className="mt-6 space-y-7">{selectedCategoryDateGroups.map((group) => <section key={group.date}>
+    <div className="mt-6 space-y-7">{selectedCategoryDateGroups.length ? selectedCategoryDateGroups.map((group) => <section key={group.date}>
       <div className="mb-3 flex items-center gap-3"><time className="text-xs font-black text-neutral-300">{group.date}</time><span className="h-px flex-1 bg-white/10"/><span className="text-[9px] font-bold text-neutral-600">{group.items.length}개</span></div>
       <div className="space-y-3">{group.items.map((item) => <article key={`${selectedCategory}-${item.id}`} className="overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
         <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={24}/>}</div>
-          <div className="p-3"><h3 className="text-sm font-black leading-5">{item.title || "제목 없음"}</h3><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
+          <div className="p-3"><div className="flex items-start gap-2"><h3 className="min-w-0 flex-1 text-sm font-black leading-5">{item.title || "제목 없음"}</h3>{item.isHyeopkwaePick && <span className="shrink-0 rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">혚쾌 PICK</span>}</div><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
         </a>
         <div className="flex min-h-10 flex-wrap gap-1.5 border-t border-white/5 px-3 py-2">{item.categories.length ? item.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[8px] font-bold text-neutral-500">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
       </article>)}</div>
-    </section>)}</div>
+    </section>) : <div className="rounded-2xl border border-dashed border-white/10 py-14 text-center text-xs font-bold text-neutral-600">조건에 맞는 추천 영상이 없습니다.</div>}</div>
   </div>;
 
   return <div className="px-4 pb-6 pt-4">
@@ -770,6 +774,16 @@ function RecommendedView({ onScrollTop }) {
     {category === "전체" && featuredItem && <section className="-mx-4 mt-5"><div className="mb-2 flex items-center px-4"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">TODAY&apos;S PICK</p><h3 className="mt-1 text-sm font-black">오늘의 PICK</h3></div><span className="ml-auto text-[10px] font-black text-neutral-600">{featuredIndex + 1} / {featuredItems.length}</span></div>
       <div className="grid">{previousFeaturedItem && featuredCard(previousFeaturedItem, true)}{featuredCard(featuredItem)}</div>
       <div className="mt-3 flex justify-center gap-1.5 px-4">{featuredItems.map((item, index) => <button key={item.id} onClick={() => selectFeatured(index)} aria-label={`오늘의 PICK ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === featuredIndex ? "w-5 bg-accent" : "w-1.5 bg-neutral-700")}/>)}</div>
+    </section>}
+    {category === "전체" && !loading && !error && hyeopkwaePickItems.length > 0 && <section className="mt-7">
+      <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">혚쾌 PICK 모아보기</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{hyeopkwaePickItems.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList("__hyeopkwae_pick__")} aria-label="혚쾌 PICK 전체 목록 보기" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
+      <div className="-mx-4 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max snap-x snap-mandatory gap-3 pb-1">{hyeopkwaePickItems.map((item) => <article key={`hyeop-pick-${item.id}`} className="w-[68vw] min-w-[210px] max-w-[250px] snap-start overflow-hidden rounded-2xl border border-accent/25 bg-neutral-900/70">
+        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
+          <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={22}/>}</div>
+          <div className="p-3"><div className="mb-2 inline-flex rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">혚쾌 PICK</div><h4 className="line-clamp-2 min-h-10 text-xs font-black leading-5">{item.title || "제목 없음"}</h4><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
+        </a>
+        <div className="flex min-h-10 flex-wrap gap-1.5 border-t border-white/5 px-3 py-2">{item.categories.length ? item.categories.map((value) => <span key={value} className="rounded-full bg-white/5 px-2 py-1 text-[8px] font-bold text-neutral-500">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
+      </article>)}</div></div>
     </section>}
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
       <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "__uncategorized__" ? "미분류" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
@@ -980,6 +994,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const settingsFrom = (item) => ({
     isActive: item.isActive,
     isFeatured: item.isFeatured,
+    isHyeopkwaePick: item.isHyeopkwaePick,
     categories: item.categories,
     sortOrder: Number(item.sortOrder),
     featuredOrder: Number(item.featuredOrder),
@@ -1012,7 +1027,7 @@ function RecommendedVideosAdmin({ onBack }) {
     if (!needle) return items;
     const compactNeedle = needle.replace(/[^0-9a-z가-힣]/gi, "");
     return items.filter((item) => {
-      const searchable = [item.title, item.channelTitle, item.youtubeId, item.publishedAt, item.adminComment, ...item.categories]
+      const searchable = [item.title, item.channelTitle, item.youtubeId, item.publishedAt, item.adminComment, item.isHyeopkwaePick ? "혚쾌 PICK" : "", ...item.categories]
         .join(" ").toLocaleLowerCase("ko-KR");
       const compactDate = String(item.publishedAt || "").slice(0, 10).replace(/\D/g, "");
       return searchable.includes(needle) || Boolean(compactNeedle && compactDate.includes(compactNeedle));
@@ -1094,10 +1109,11 @@ function RecommendedVideosAdmin({ onBack }) {
   const featuredAdminItems = items
     .filter((item) => item.isActive && item.isFeatured)
     .sort((a, b) => Number(a.featuredOrder) - Number(b.featuredOrder));
+  const hyeopkwaePickAdminCount = items.filter((item) => item.isActive && item.isHyeopkwaePick).length;
 
   return <div className="pt-5">
     <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>
-    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{items.length}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
+    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{items.length}</span>개 · 혚쾌 PICK <span className="text-accent">{hyeopkwaePickAdminCount}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
     <div className="mt-4"><SearchBar value={adminQuery} onChange={setAdminQuery} placeholder="제목, 채널명, 날짜, 카테고리로 검색"/></div>
     {adminQuery.trim() && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개</p>}
     <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
@@ -1129,7 +1145,7 @@ function RecommendedVideosAdmin({ onBack }) {
     {!loading && !error && filteredAdminItems.length > 0 && <div className="mt-4 flex items-center rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><label className="flex cursor-pointer items-center gap-2 text-[10px] font-black text-neutral-400"><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} className="h-4 w-4 accent-accent"/>{adminQuery.trim() ? "검색 결과 전체 선택" : "전체 선택"}</label><span className="ml-auto text-[10px] font-black text-accent">{selectedItems.length}개 선택</span></div>}
     {selectedItems.length > 0 && <section className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 p-3">
       <div className="flex items-center"><div><p className="text-xs font-black">선택 항목 일괄 설정</p><p className="mt-1 text-[9px] font-bold text-neutral-500">수정 후 아래 ‘선택 설정 저장’을 눌러 반영하세요.</p></div><button type="button" onClick={() => setSelectedIds(new Set())} className="ml-auto rounded-lg border border-white/10 px-2 py-1 text-[9px] font-black text-neutral-500">선택 해제</button></div>
-      <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => applyToSelected({ isActive: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">노출 ON</button><button type="button" onClick={() => applyToSelected({ isActive: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">노출 OFF</button><button type="button" onClick={() => applyToSelected({ isFeatured: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">PICK 지정</button><button type="button" onClick={() => applyToSelected({ isFeatured: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">PICK 해제</button></div>
+      <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" onClick={() => applyToSelected({ isActive: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">노출 ON</button><button type="button" onClick={() => applyToSelected({ isActive: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">노출 OFF</button><button type="button" onClick={() => applyToSelected({ isFeatured: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">오늘의 PICK 지정</button><button type="button" onClick={() => applyToSelected({ isFeatured: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">오늘의 PICK 해제</button><button type="button" onClick={() => applyToSelected({ isHyeopkwaePick: true })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">혚쾌 PICK 지정</button><button type="button" onClick={() => applyToSelected({ isHyeopkwaePick: false })} className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-500">혚쾌 PICK 해제</button></div>
       <div className="mt-3"><p className="text-[9px] font-black text-neutral-500">하위 콘텐츠 전체 추가/해제</p><div className="mt-2 space-y-2">{categoriesByMain.map((main) => <div key={main.id}><p className="mb-1 text-[8px] font-black text-neutral-700">{main.name}</p><div className="flex flex-wrap gap-1.5">{main.children.map((categoryItem) => { const selected = selectedItems.every((item) => item.categories.includes(categoryItem.name)); return <button type="button" key={categoryItem.id} onClick={() => applyBulkCategory(categoryItem.name)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-black/30 text-neutral-500")}>{categoryItem.name}</button>; })}</div></div>)}</div></div>
       <div className="mt-3 grid grid-cols-2 gap-2"><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={bulkSortOrder} onChange={(event) => setBulkSortOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label><label className="rounded-xl bg-black/40 px-3 py-2"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={bulkFeaturedOrder} onChange={(event) => setBulkFeaturedOrder(event.target.value)} placeholder="유지" className="mt-1 w-full bg-transparent text-xs font-black outline-none placeholder:text-neutral-700"/></label></div>
       <button type="button" onClick={applyBulkOrders} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black">입력한 순서 일괄 적용</button>
@@ -1142,9 +1158,10 @@ function RecommendedVideosAdmin({ onBack }) {
         <div className="min-w-0 flex-1"><h3 className="line-clamp-2 text-xs font-black leading-5">{item.title || "제목 없음"}</h3><p className="mt-1 truncate text-[10px] font-bold text-neutral-500">{item.channelTitle || "채널명 없음"}</p><p className="mt-1 text-[9px] text-neutral-600">{uploadDate(item.publishedAt)}</p></div>
       </div>
       <div className="border-t border-white/5 px-3 py-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button type="button" aria-pressed={item.isActive} onClick={() => updateItem(item.id, { isActive: !item.isActive })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isActive ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">노출 여부</span><span className={cn("mt-1 block text-[10px] font-black", item.isActive ? "text-accent" : "text-neutral-400")}>{item.isActive ? "ON" : "OFF"}</span></button>
           <button type="button" aria-pressed={item.isFeatured} onClick={() => updateItem(item.id, { isFeatured: !item.isFeatured })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isFeatured ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">오늘의 PICK</span><span className={cn("mt-1 block text-[10px] font-black", item.isFeatured ? "text-accent" : "text-neutral-400")}>{item.isFeatured ? "지정" : "해제"}</span></button>
+          <button type="button" aria-pressed={item.isHyeopkwaePick} onClick={() => updateItem(item.id, { isHyeopkwaePick: !item.isHyeopkwaePick })} className={cn("rounded-xl border px-3 py-2.5 text-left", item.isHyeopkwaePick ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}><span className="block text-[9px] font-black text-neutral-600">혚쾌 PICK</span><span className={cn("mt-1 block text-[10px] font-black", item.isHyeopkwaePick ? "text-accent" : "text-neutral-400")}>{item.isHyeopkwaePick ? "지정" : "해제"}</span></button>
         </div>
         <div className="mt-3"><p className="text-[9px] font-black text-neutral-600">하위 콘텐츠</p><div className="mt-2 space-y-2">{categoriesByMain.map((main) => <div key={main.id}><p className="mb-1 text-[8px] font-black text-neutral-700">{main.name}</p><div className="flex flex-wrap gap-1.5">{main.children.map((categoryItem) => { const selected = item.categories.includes(categoryItem.name); return <button type="button" aria-pressed={selected} key={categoryItem.id} onClick={() => toggleCategory(item, categoryItem.name)} className={cn("rounded-full border px-2.5 py-1.5 text-[9px] font-bold", selected ? "border-accent/40 bg-accent/15 text-accent" : "border-white/10 bg-white/5 text-neutral-500")}>{categoryItem.name}</button>; })}</div></div>)}</div></div>
         <div className="mt-3 grid grid-cols-2 gap-2">
