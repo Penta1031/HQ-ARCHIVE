@@ -824,10 +824,15 @@ const DEFAULT_RECOMMENDED_VIDEO_CATEGORIES = [
 ].map(([mainCategoryName, name], index) => ({ id: `default-child-${index}`, name, mainCategoryName, sortOrder: index + 1 }));
 
 function RecommendedVideosAdmin({ onBack }) {
+  const pageSize = 30;
   const [items, setItems] = useState([]);
   const [mainCategories, setMainCategories] = useState([]);
   const [videoCategories, setVideoCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
+  const [summary, setSummary] = useState({ total: 0, featuredActiveCount: 0, hyeopkwaePickActiveCount: 0, featuredItems: [] });
+  const [page, setPage] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [savingId, setSavingId] = useState("");
@@ -842,6 +847,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkSortOrder, setBulkSortOrder] = useState("");
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
   const [adminQuery, setAdminQuery] = useState("");
+  const [debouncedAdminQuery, setDebouncedAdminQuery] = useState("");
   const [newMainCategoryName, setNewMainCategoryName] = useState("");
   const [newMainCategoryOrder, setNewMainCategoryOrder] = useState("");
   const [mainCategoryDrafts, setMainCategoryDrafts] = useState({});
@@ -853,22 +859,53 @@ function RecommendedVideosAdmin({ onBack }) {
   const [categoryMainDrafts, setCategoryMainDrafts] = useState({});
   const [categoryOrderDrafts, setCategoryOrderDrafts] = useState({});
 
+  const matchingCategory = useMemo(() => {
+    const needle = debouncedAdminQuery.trim().toLocaleLowerCase("ko-KR");
+    return videoCategories.find((item) => item.name.toLocaleLowerCase("ko-KR") === needle)?.name || "";
+  }, [debouncedAdminQuery, videoCategories]);
+  const loadRequest = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedAdminQuery(adminQuery), 300);
+    return () => window.clearTimeout(timer);
+  }, [adminQuery]);
+
+  useEffect(() => { setPage(0); }, [debouncedAdminQuery, matchingCategory]);
+
   useEffect(() => {
     let active = true;
-    Promise.all([recommendedVideoService.list(), recommendedVideoService.mainCategories(), recommendedVideoService.categories()])
-      .then(([rows, mains, categories]) => { if (active) { setItems(rows); setMainCategories(mains); setVideoCategories(categories); setNewCategoryMainId((current) => current || mains[0]?.id || ""); } })
+    Promise.all([recommendedVideoService.mainCategories(), recommendedVideoService.categories(), recommendedVideoService.adminSummary()])
+      .then(([mains, categories, nextSummary]) => { if (active) { setMainCategories(mains); setVideoCategories(categories); setSummary(nextSummary); setNewCategoryMainId((current) => current || mains[0]?.id || ""); } })
       .catch((reason) => { if (active) setError(reason.message || "추천 영상 목록을 불러오지 못했습니다."); })
-      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
 
-  const refreshItems = async () => {
-    const rows = await recommendedVideoService.list();
-    setItems(rows);
-    setSelectedIds((current) => new Set([...current].filter((id) => rows.some((item) => item.id === id))));
+  useEffect(() => {
+    let active = true;
+    const requestId = ++loadRequest.current;
+    setListLoading(true); setError("");
+    recommendedVideoService.list({ offset: page * pageSize, limit: pageSize, query: debouncedAdminQuery, category: matchingCategory })
+      .then((result) => {
+        if (!active || requestId !== loadRequest.current) return;
+        setItems(result.items); setTotalItems(result.total); setSelectedIds(new Set());
+      })
+      .catch((reason) => { if (active && requestId === loadRequest.current) setError(reason.message || "추천 영상 목록을 불러오지 못했습니다."); })
+      .finally(() => { if (active && requestId === loadRequest.current) { setLoading(false); setListLoading(false); } });
+    return () => { active = false; };
+  }, [page, debouncedAdminQuery, matchingCategory]);
+
+  const refreshSummary = async () => {
+    const nextSummary = await recommendedVideoService.adminSummary();
+    setSummary(nextSummary);
+  };
+  const refreshItems = async ({ resetPage = false } = {}) => {
+    if (resetPage && page !== 0) { setPage(0); return; }
+    const result = await recommendedVideoService.list({ offset: (resetPage ? 0 : page) * pageSize, limit: pageSize, query: debouncedAdminQuery, category: matchingCategory });
+    setItems(result.items); setTotalItems(result.total); setSelectedIds(new Set());
+    await refreshSummary();
   };
   const refreshAfterCollection = async () => {
-    try { await refreshItems(); }
+    try { await refreshItems({ resetPage: true }); }
     catch { setSaveError("수집은 완료됐지만 목록 새로고침에 실패했습니다."); }
   };
   const addYoutubeVideo = async (event) => {
@@ -1059,6 +1096,7 @@ function RecommendedVideosAdmin({ onBack }) {
     try {
       const saved = await recommendedVideoService.update(item.id, settingsFrom(item));
       setItems((current) => current.map((value) => value.id === item.id ? saved : value));
+      await refreshSummary();
       setSavedId(item.id);
     } catch (reason) {
       setSaveError(reason.message || "추천 영상 설정을 저장하지 못했습니다.");
@@ -1072,6 +1110,7 @@ function RecommendedVideosAdmin({ onBack }) {
     try {
       const saved = await recommendedVideoService.update(item.id, settingsFrom(nextItem));
       setItems((current) => current.map((value) => value.id === item.id ? saved : value));
+      await refreshSummary();
       setSavedId(item.id);
       setCollectNotice("롤링배너 노출을 해제했습니다.");
     } catch (reason) {
@@ -1085,17 +1124,7 @@ function RecommendedVideosAdmin({ onBack }) {
     ...main,
     children: videoCategories.filter((categoryItem) => categoryItem.mainCategoryId === main.id)
   })), [mainCategories, videoCategories]);
-  const filteredAdminItems = useMemo(() => {
-    const needle = adminQuery.trim().toLocaleLowerCase("ko-KR");
-    if (!needle) return items;
-    const compactNeedle = needle.replace(/[^0-9a-z가-힣]/gi, "");
-    return items.filter((item) => {
-      const searchable = [item.title, item.channelTitle, item.youtubeId, item.publishedAt, item.adminComment, item.isHyeopkwaePick ? "혚쾌 PICK" : "", ...item.categories]
-        .join(" ").toLocaleLowerCase("ko-KR");
-      const compactDate = kstDateFromValue(item.publishedAt).replace(/\D/g, "");
-      return searchable.includes(needle) || Boolean(compactNeedle && compactDate.includes(compactNeedle));
-    });
-  }, [items, adminQuery]);
+  const filteredAdminItems = items;
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.has(item.id)), [items, selectedIds]);
   const visibleSelectedCount = filteredAdminItems.filter((item) => selectedIds.has(item.id)).length;
   const allVisibleSelected = filteredAdminItems.length > 0 && visibleSelectedCount === filteredAdminItems.length;
@@ -1139,6 +1168,7 @@ function RecommendedVideosAdmin({ onBack }) {
       const saved = await recommendedVideoService.updateMany(selectedItems.map((item) => ({ id: item.id, updates: settingsFrom(item) })));
       const savedById = new Map(saved.map((item) => [item.id, item]));
       setItems((current) => current.map((item) => savedById.get(item.id) || item));
+      await refreshSummary();
       setCollectNotice(`선택한 영상 ${saved.length}개의 설정을 저장했습니다.`);
     } catch (reason) {
       setSaveError(reason.message || "선택한 영상 설정을 저장하지 못했습니다.");
@@ -1154,6 +1184,7 @@ function RecommendedVideosAdmin({ onBack }) {
       const deletedCount = await recommendedVideoService.removeMany(ids);
       setItems((current) => current.filter((item) => !selectedIds.has(item.id)));
       setSelectedIds(new Set());
+      await refreshItems();
       setCollectNotice(`추천 영상 ${deletedCount}개를 삭제했습니다.`);
     } catch (reason) {
       setSaveError(reason.message || "선택한 추천 영상을 삭제하지 못했습니다.");
@@ -1164,17 +1195,16 @@ function RecommendedVideosAdmin({ onBack }) {
 
   const uploadDate = (value) => displayKstDate(value, "업로드일 없음");
 
-  const featuredActiveCount = items.filter((item) => item.isActive && item.isFeatured).length;
-  const featuredAdminItems = items
-    .filter((item) => item.isActive && item.isFeatured)
-    .sort((a, b) => Number(a.featuredOrder) - Number(b.featuredOrder));
-  const hyeopkwaePickAdminCount = items.filter((item) => item.isActive && item.isHyeopkwaePick).length;
+  const featuredActiveCount = summary.featuredActiveCount;
+  const featuredAdminItems = summary.featuredItems;
+  const hyeopkwaePickAdminCount = summary.hyeopkwaePickActiveCount;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
 
   return <div className="pt-5">
     <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>
-    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{items.length}</span>개 · 혚쾌 PICK <span className="text-accent">{hyeopkwaePickAdminCount}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
+    <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{summary.total}</span>개 · 혚쾌 PICK <span className="text-accent">{hyeopkwaePickAdminCount}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
     <div className="mt-4"><SearchBar value={adminQuery} onChange={setAdminQuery} placeholder="제목, 채널명, 날짜, 카테고리로 검색"/></div>
-    {adminQuery.trim() && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">검색 결과 {filteredAdminItems.length}개</p>}
+    {(adminQuery.trim() || listLoading) && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">{listLoading ? "검색 중…" : `검색 결과 ${totalItems}개`}</p>}
     <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
       <form onSubmit={addYoutubeVideo} className="flex gap-2"><input type="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="YouTube 영상 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !youtubeUrl.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{collectBusy === "manual" ? "추가 중…" : "링크 추가"}</button></form>
       <form onSubmit={collectCustomChannel} className="flex gap-2"><input type="url" value={channelUrl} onChange={(event) => setChannelUrl(event.target.value)} placeholder="YouTube 채널 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !channelUrl.trim()} className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "custom-channel" ? "수집 중…" : "채널 수집"}</button></form>
@@ -1213,7 +1243,7 @@ function RecommendedVideosAdmin({ onBack }) {
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" disabled={Boolean(bulkBusy)} onClick={saveSelected} className="rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{bulkBusy === "save" ? "저장 중…" : `선택 설정 저장 (${selectedItems.length})`}</button><button type="button" disabled={Boolean(bulkBusy)} onClick={deleteSelected} aria-label="선택 영상 삭제" className="flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-red-400 disabled:opacity-50">{bulkBusy === "delete" ? <RefreshCw size={16} className="animate-spin"/> : <Trash2 size={16}/>}</button></div>
     </section>}
     {saveError && <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[10px] font-bold text-accent">{saveError}</p>}
-    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : filteredAdminItems.length ? <div className="mt-4 space-y-3">{filteredAdminItems.map((item) => <article key={item.id} className={cn("overflow-hidden rounded-2xl border bg-white/[.03]", selectedIds.has(item.id) ? "border-accent/50" : "border-white/10")}>
+    {loading ? <div className="mt-4"><ListSkeleton/></div> : error ? <div className="mt-4"><LoadError message={error}/></div> : filteredAdminItems.length ? <><div className={cn("mt-4 space-y-3 transition-opacity", listLoading && "opacity-40")}>{filteredAdminItems.map((item) => <article key={item.id} className={cn("overflow-hidden rounded-2xl border bg-white/[.03]", selectedIds.has(item.id) ? "border-accent/50" : "border-white/10")}>
       <div className="flex gap-3 p-3"><label className="flex shrink-0 cursor-pointer items-start pt-1" aria-label={`${item.title || "제목 없음"} 선택`}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelected(item.id)} className="h-4 w-4 accent-accent"/></label>
         <div className="flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={20}/>}</div>
         <div className="min-w-0 flex-1"><h3 className="line-clamp-2 text-xs font-black leading-5">{item.title || "제목 없음"}</h3><p className="mt-1 truncate text-[10px] font-bold text-neutral-500">{item.channelTitle || "채널명 없음"}</p><p className="mt-1 text-[9px] text-neutral-600">{uploadDate(item.publishedAt)}</p></div>
@@ -1231,7 +1261,7 @@ function RecommendedVideosAdmin({ onBack }) {
         </div>
         <button type="button" disabled={Boolean(savingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button>
       </div>
-    </article>)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{adminQuery.trim() ? "검색 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
+    </article>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">이전</button><span className="text-[10px] font-black text-neutral-500">{page + 1} / {totalPages} · {totalItems}개</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">다음</button></div></> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{adminQuery.trim() ? "검색 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
   </div>;
 }
 

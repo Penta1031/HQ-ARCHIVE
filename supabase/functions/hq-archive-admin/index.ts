@@ -84,6 +84,14 @@ function exactKstArchiveDate(value: unknown) {
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? candidate : "";
 }
+function kstTimestampRange(value: unknown) {
+  const date = exactKstArchiveDate(value);
+  if (!date) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day) - 9 * 60 * 60 * 1000);
+  const end = new Date(Date.UTC(year, month - 1, day + 1) - 9 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
 async function categoryIds(mainCategory: string, subCategory: string) {
   if (!mainCategory || mainCategory === "#N/A") return { category_id: null, subcategory_id: null };
   const categories = await rest(`hq_archive_categories?select=id&name=eq.${encodeURIComponent(mainCategory)}&limit=1`);
@@ -307,9 +315,39 @@ Deno.serve(async (request) => {
     if (action === "recommended-video-list") {
       const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_hyeopkwae_pick,is_active,source,channel_id,channel_title,created_at,updated_at";
       const offset = Math.max(0, Number(payload.offset || 0));
-      const limit = Math.min(1000, Math.max(1, Number(payload.limit || 1000)));
-      const result = await rest(`recommended_videos?select=${fields}&order=published_at.desc.nullslast,id.desc&offset=${offset}&limit=${limit}`, {}, true);
+      const limit = Math.min(100, Math.max(1, Number(payload.limit || 30)));
+      const params = new URLSearchParams({ select: fields, order: "published_at.desc.nullslast,id.desc", offset: String(offset), limit: String(limit) });
+      const query = text(payload.query);
+      const category = text(payload.category);
+      const normalizedQuery = query.toLocaleLowerCase("ko-KR");
+      const isHyeopkwaePickSearch = /[혚혜]쾌/.test(normalizedQuery) && normalizedQuery.includes("pick");
+      const dateRange = kstTimestampRange(query);
+      if (dateRange) {
+        params.set("published_at", `gte.${dateRange.start}`);
+        params.append("published_at", `lt.${dateRange.end}`);
+      } else if (query && !category && !isHyeopkwaePickSearch) {
+        const q = escapeLike(query);
+        if (q) params.set("or", `(title.ilike.*${q}*,channel_title.ilike.*${q}*,youtube_id.ilike.*${q}*,admin_comment.ilike.*${q}*)`);
+      }
+      if (category && category.length <= 120 && !/[{},"]/.test(category)) params.set("categories", `cs.{${category}}`);
+      if (isHyeopkwaePickSearch) params.set("is_hyeopkwae_pick", "eq.true");
+      const result = await rest(`recommended_videos?${params}`, {}, true);
       return json(request, { ok: true, items: result.rows, total: result.total, hasMore: offset + result.rows.length < result.total });
+    }
+    if (action === "recommended-video-admin-summary") {
+      const featuredFields = "id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,featured_order,is_hyeopkwae_pick,is_active,channel_title";
+      const [all, featured, hyeopkwaePick] = await Promise.all([
+        rest("recommended_videos?select=id&limit=1", {}, true),
+        rest(`recommended_videos?select=${featuredFields}&is_active=eq.true&is_featured=eq.true&order=featured_order.asc,published_at.desc.nullslast&limit=100`, {}, true),
+        rest("recommended_videos?select=id&is_active=eq.true&is_hyeopkwae_pick=eq.true&limit=1", {}, true),
+      ]);
+      return json(request, {
+        ok: true,
+        total: all.total,
+        featuredActiveCount: featured.total,
+        hyeopkwaePickActiveCount: hyeopkwaePick.total,
+        featuredItems: featured.rows,
+      });
     }
     if (action === "recommended-video-refresh-published-dates") {
       return json(request, { ok: true, ...await refreshRecommendedVideoPublishedDates() });
