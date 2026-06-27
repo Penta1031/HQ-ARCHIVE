@@ -89,6 +89,7 @@ export default function Page() {
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
+  const [postypeExcerptOpen, setPostypeExcerptOpen] = useState(false);
   const contentRef = useRef(null);
   const visibleTabs = useMemo(() => visibleAppTabs(tabVisibility), [tabVisibility]);
   const navigate = (next, keyword = "") => {
@@ -115,20 +116,23 @@ export default function Page() {
       .catch(() => { if (active) setTabVisibility(DEFAULT_TAB_VISIBILITY); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (tab !== "postype") setPostypeExcerptOpen(false);
+  }, [tab]);
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
         <Header onAdmin={openAdmin} showLanguage={tab === "home"} language={archiveLanguage} onLanguage={setArchiveLanguage} />
-        <section ref={contentRef} className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? "overflow-hidden pb-[76px]" : "overflow-y-auto pb-28")}>
+        <section ref={contentRef} className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? (postypeExcerptOpen ? "overflow-hidden pb-0" : "overflow-hidden pb-[76px]") : "overflow-y-auto pb-28")}>
           <div key={tab} className={cn("animate-fade-in", tab === "postype" && "h-full")}>
             {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
             {tab === "recommended" && <RecommendedView onScrollTop={scrollContentToTop} />}
-            {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} />}
+            {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} onExcerptOpenChange={setPostypeExcerptOpen} />}
           </div>
         </section>
-        <BottomNav tab={tab} onChange={navigate} items={visibleTabs} />
+        {!postypeExcerptOpen && <BottomNav tab={tab} onChange={navigate} items={visibleTabs} />}
         {adminOpen && <AdminHub onClose={closeAdmin} onOpenPostype={openPostypeAdmin} tabVisibility={tabVisibility} onTabVisibilityChange={setTabVisibility} />}
       </div>
     </main>
@@ -576,7 +580,7 @@ function WinnerView({winner,cup,onBack,onAgain}) {
   return <><AppOverlay><div className="relative mx-auto h-[100dvh] w-full max-w-md overflow-y-auto bg-black px-5 pt-8 text-center no-scrollbar"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><button onClick={()=>setPreview(winner)} aria-label={`${winner.name} 미디어 전체 보기`} className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="pointer-events-none absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></button><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div></AppOverlay>{preview&&<MediaPreviewModal item={winner} onClose={()=>setPreview(null)}/>}</>;
 }
 
-function PostypeView({ adminRequest = null }) {
+function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
   const frameRef = useRef(null);
   useEffect(() => {
     if (!adminRequest) return;
@@ -586,7 +590,18 @@ function PostypeView({ adminRequest = null }) {
     frame?.addEventListener("load", openAdmin);
     return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
   }, [adminRequest?.id, adminRequest?.credential]);
-  return <iframe ref={frameRef} src="postype/index.html?v=20260627-excerpt-editor" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "hq-postype-excerpt-modal") onExcerptOpenChange?.(Boolean(event.data.open));
+    };
+    window.addEventListener("message", handleMessage);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      onExcerptOpenChange?.(false);
+    };
+  }, [onExcerptOpenChange]);
+  return <iframe ref={frameRef} src="postype/index.html?v=20260627-excerpt-editor-v2" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
 function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange }) {

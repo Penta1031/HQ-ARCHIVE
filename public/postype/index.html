@@ -2581,11 +2581,17 @@
     }
 
     .modal-card.excerpt-editor-card {
-      width: min(calc(100vw - 32px), 480px);
-      max-height: min(94vh, 900px);
+      width: min(100vw, 480px);
+      height: 100dvh;
+      max-height: 100dvh;
       padding: 0;
       overflow: auto;
       background: #181818;
+      border-radius: 0;
+    }
+
+    #excerptModal {
+      padding: 0;
     }
 
     .excerpt-editor-card .modal-head {
@@ -4134,9 +4140,18 @@
           <label class="excerpt-field"><span class="label">제목</span><input id="excerptWorkTitle"></label>
           <label class="excerpt-field"><span class="label">작가</span><input id="excerptAuthor"></label>
           <label class="excerpt-field"><span class="label">텍스트</span><textarea id="excerptText" placeholder="텍스트를 복붙해 주세요."></textarea></label>
-          <label class="excerpt-field"><span class="label">글꼴</span><select id="excerptFont"><option value="Pretendard, system-ui, sans-serif">기본</option><option value="'Nanum Gothic', '나눔고딕', system-ui, sans-serif">나눔고딕</option><option value="'Nanum Myeongjo', '나눔명조', serif">나눔명조</option><option value="'RIDIBatang', 'Nanum Myeongjo', serif">리디명조</option></select></label>
           <div class="excerpt-field">
-            <span class="label">글꼴크기 <span id="excerptFontSizeLabel">중간 글씨</span></span>
+            <span class="label">글꼴</span>
+            <input id="excerptFont" type="hidden" value="Pretendard, system-ui, sans-serif">
+            <div class="excerpt-segmented" aria-label="글꼴">
+              <button class="excerpt-option active" type="button" data-font="Pretendard, system-ui, sans-serif">기본</button>
+              <button class="excerpt-option" type="button" data-font="'Nanum Gothic', '나눔고딕', system-ui, sans-serif">나눔고딕</button>
+              <button class="excerpt-option" type="button" data-font="'Nanum Myeongjo', '나눔명조', serif">나눔명조</button>
+              <button class="excerpt-option" type="button" data-font="'RIDIBatang', 'Nanum Myeongjo', serif">리디명조</button>
+            </div>
+          </div>
+          <div class="excerpt-field">
+            <span class="label">글꼴크기</span>
             <input id="excerptFontSize" type="hidden" value="44">
             <div class="excerpt-segmented" aria-label="글꼴크기">
               <button class="excerpt-option" type="button" data-font-size="30" data-font-label="더 작은 글씨">더 작은 글씨</button>
@@ -5899,12 +5914,20 @@
         els.excerptText.value = normalize(entry.note);
       }
       els.excerptModal.hidden = false;
+      notifyExcerptModalState(true);
       drawExcerptCanvas();
     }
 
     function closeExcerptModal() {
       els.excerptModal.hidden = true;
       state.excerptPost = null;
+      notifyExcerptModalState(false);
+    }
+
+    function notifyExcerptModalState(open) {
+      try {
+        window.parent?.postMessage({ type: "hq-postype-excerpt-modal", open: Boolean(open) }, window.location.origin);
+      } catch (_) {}
     }
 
     function setExcerptBackground(value) {
@@ -5927,6 +5950,14 @@
       state.excerptTextColor = value;
       document.querySelectorAll("[data-text-color]").forEach((button) => {
         button.classList.toggle("active", button.dataset.textColor === value);
+      });
+      drawExcerptCanvas();
+    }
+
+    function setExcerptFont(value) {
+      els.excerptFont.value = value;
+      document.querySelectorAll("[data-font]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.font === value);
       });
       drawExcerptCanvas();
     }
@@ -7156,11 +7187,15 @@
     els.excerptModal.addEventListener("click", (event) => {
       if (event.target === els.excerptModal) closeExcerptModal();
     });
+    setExcerptFont(els.excerptFont.value || "Pretendard, system-ui, sans-serif");
     setExcerptFontSize(els.excerptFontSize.value || "44", false);
-    [els.excerptWorkTitle, els.excerptAuthor, els.excerptText, els.excerptFont].forEach((input) => {
+    [els.excerptWorkTitle, els.excerptAuthor, els.excerptText].forEach((input) => {
       input.addEventListener("input", () => {
         drawExcerptCanvas();
       });
+    });
+    document.querySelectorAll("[data-font]").forEach((button) => {
+      button.addEventListener("click", () => setExcerptFont(button.dataset.font));
     });
     document.querySelectorAll("[data-font-size]").forEach((button) => {
       button.addEventListener("click", () => setExcerptFontSize(button.dataset.fontSize));
@@ -7184,6 +7219,7 @@
     els.excerptShare.addEventListener("click", () => {
       shareExcerptImage().catch(() => downloadExcerptImage());
     });
+    window.addEventListener("beforeunload", () => notifyExcerptModalState(false));
     els.randomToggle.addEventListener("click", toggleRandomPanel);
     els.randomCurrent.addEventListener("click", () => {
       els.randomPanel.hidden = true;
