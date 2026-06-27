@@ -1521,6 +1521,13 @@
       grid-column: 1 / -1;
     }
 
+    .admin-bulk-visibility {
+      display: grid;
+      grid-column: 1 / -1;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+
     .admin-bulk-values.is-disabled {
       opacity: .55;
       pointer-events: none;
@@ -1556,6 +1563,10 @@
       display: grid;
       gap: 10px;
       margin: 0 0 12px;
+    }
+
+    .crawler-section[hidden] {
+      display: none;
     }
 
     .crawler-status-grid {
@@ -2198,6 +2209,10 @@
       flex: 0 0 16px;
       margin: 0;
       accent-color: #8fe1d4;
+    }
+
+    .admin-multiselect-option input:disabled + span {
+      opacity: .35;
     }
 
     .admin-multiselect-clear {
@@ -3498,7 +3513,7 @@
       <div class="admin-head">
         <div>
           <strong>관리자 모드</strong>
-          <p class="admin-note">글·작가 계정·필터 단어를 여기에서 관리합니다.</p>
+          <p class="admin-note">글과 필터 단어를 여기에서 관리합니다.</p>
         </div>
       </div>
       <div class="admin-run-actions">
@@ -3524,7 +3539,7 @@
           </div>
           <p class="admin-note" id="crawlerRunMessage" role="status" aria-live="polite"></p>
         </details>
-        <details class="crawler-section" id="authorAccountsAdmin">
+        <details class="crawler-section" id="authorAccountsAdmin" hidden>
           <summary class="crawler-section-head">
             <strong>작가 계정·키 관리</strong>
             <span id="authorAccountCount">0명</span>
@@ -3549,42 +3564,12 @@
       </label>
       <button class="filter-title admin-filter-toggle" id="adminFilterToggle" type="button"><strong>필터</strong><span id="adminFilterCaret">펼치기</span></button>
       <div class="admin-filters is-collapsed" id="adminFilterMount"></div>
-      <details class="admin-tag-guide" id="adminTagGuide">
-        <summary>장르 · 키워드 · 스포일러 분류 기준표</summary>
-        <div class="admin-tag-guide-body">
-          <div class="admin-tag-guide-principles">
-            <section class="admin-tag-guide-card"><h3>장르 · 최대 3개</h3><p>초반 단서나 과거 설정이 아니라, 작품의 메인 무대와 중심 서사를 기준으로 선택합니다.</p></section>
-            <section class="admin-tag-guide-card"><h3>키워드 · 최대 5개</h3><p>관계, 소재, 설정, 사건, 정서 중 검색에 중요한 것만 선택합니다.</p></section>
-            <section class="admin-tag-guide-card"><h3>스포일러 · 필요한 경우만</h3><p>결말이 명확할 때만 입력하고 기본값은 비워둡니다.</p></section>
-          </div>
-          <div class="admin-tag-guide-columns">
-            <section class="admin-tag-guide-card"><h3>장르 목록</h3><p class="admin-tag-guide-list">군부물 · 느와르 · 리얼물 · 수인물 · 스포츠물 · 시대물 · 연예계물 · 일상물 · 조직물 · 종교물 · 청게 · 캠게 · 판타지 · 현대물 · 회귀물 · 가이드버스 · 네임버스 · 오메가버스</p></section>
-            <section class="admin-tag-guide-card"><h3>키워드 목록</h3><p class="admin-tag-guide-list">게헤 · 계약 · 구원 · 궁중물 · 기억상실 · 달달물 · 동거 · 뱀파이어 · 비밀연애 · 사고 · 사내연애 · 상실 · 상처 · 스폰서 · 신분차이 · 쌍방짝사랑 · 아저씨 · 알파베타 · 알파오메가 · 오해 · 원나잇 · 육아 · 임신 · 재회 · 정략결혼 · 좀비아포칼립스 · 죽음 · 질투 · 집착 · 짝사랑 · 짭근 · 찐근 · 친구에서연인 · 프로게이머 · 헤게 · 혐관 · 후회 · F1 · 가이드x센티넬 · 센티넬x가이드</p></section>
-            <section class="admin-tag-guide-card"><h3>스포일러 목록</h3><p class="admin-tag-guide-list">새드엔딩 · 오픈엔딩 · 사망</p><p>사망은 결말 또는 주요 스포일러로 인물 사망이 명확할 때만 선택합니다.</p></section>
-          </div>
-          <h3 class="admin-tag-guide-section-title">상세 분류 기준</h3>
-          <div class="admin-tag-guide-rules">
-            <section class="admin-tag-guide-card"><h4>리얼물 / 현대물 / 연예계물</h4><ul><li><strong>리얼물:</strong> 실제 엔플라잉 세계관·활동·멤버 설정·숙소·스케줄·실제 시점 IF. 실제 엔플라잉 활동 중 만나는 이야기는 리얼물. 실제 엔플라잉 회귀는 리얼물 + 회귀물.</li><li><strong>현대물:</strong> 일반 현대 AU, 직장인·회사원·카페·의사·경찰·일반인. 리맨물/직장인물은 현대물로 분류하고, 같은 회사·직장 내 관계일 때만 사내연애를 추가.</li><li><strong>연예계물:</strong> 실제 엔플라잉이 아닌 배우·아이돌·연습생·방송국 AU. 실제 엔플라잉 세계관이면 리얼물.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>청게 / 캠게</h4><ul><li><strong>청게:</strong> 중학교·고등학교 생활이 작품의 메인 무대일 때. 교복, 반, 담임, 수업, 시험, 야자, 수학여행, 동아리 등이 중심인 작품. 기존 학원물 태그는 청게로 통일.</li><li><strong>캠게:</strong> 대학교·대학생·캠퍼스 생활이 작품의 메인 무대일 때. 과방, 전공, 교양, MT, 동아리, CC, 조별과제, 자취, 대학 축제 등이 중심인 작품.</li><li>대학교 시절 원나잇, 고등학교 때 첫 만남처럼 과거/초반 설정만 학교이고 현재 회사·일상·재회가 중심이면 청게/캠게가 아니라 현대물 등 메인 장르로 분류.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>분위기·세계관 장르</h4><ul><li><strong>일상물:</strong> 큰 사건 없이 생활 묘사와 관계의 소소한 흐름이 중심.</li><li><strong>회귀물:</strong> 과거로 회귀하는 설정.</li><li><strong>판타지:</strong> 마법, 신, 요괴, 이세계, 초능력 등 비현실적 설정이 주요한 작품.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>범죄·조직 장르</h4><ul><li><strong>느와르:</strong> 범죄, 폭력, 배신, 어두운 분위기가 강하고 범죄 정서와 암흑 분위기가 핵심.</li><li><strong>조직물:</strong> 조폭·마피아·범죄조직이 주요 배경. 분위기까지 어둡고 범죄성이 강하면 조직물 + 느와르 가능.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>관계·정서 키워드</h4><ul><li><strong>구원:</strong> 혼자 벗어나기 어려운 상처·고립·절망·트라우마를 다른 인물이 결정적으로 바꾸는 서사.</li><li><strong>상처:</strong> 아픈 과거, 감정적 결핍, 트라우마, 관계적 상처.</li><li><strong>상실:</strong> 죽음, 이별, 관계 단절, 기억 상실, 기회 상실 등 잃은 감정이 핵심.</li><li><strong>달달물:</strong> 유독 달달한 장면과 관계성이 작품의 핵심일 때만.</li><li><strong>혐관:</strong> 초반 적대감이 관계 전개의 핵심일 때만. 단순 티격태격은 제외.</li><li><strong>집착:</strong> 상대를 과하게 소유하거나 관계를 통제하려는 정서가 핵심.</li><li><strong>후회:</strong> 과거 선택이나 상처 준 행동을 후회하고 그 후회가 관계 회복의 핵심.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>설정·사건 키워드</h4><ul><li><strong>사내연애:</strong> 같은 회사·직장 내 관계일 때만. 단순 직장인물에는 부여하지 않음.</li><li><strong>궁중물:</strong> 시대물 중 궁궐 배경이 주요할 때.</li><li><strong>죽음:</strong> 죽음이 서사나 관계에 중요한 영향을 줄 때. 결말 사망은 스포일러 사망과 별개.</li><li><strong>사고:</strong> 교통사고, 추락, 부상 등 특정 사고가 서사의 주요 전환점일 때만.</li><li><strong>친구에서연인:</strong> 친구에서 연인이 되는 관계일 때만.</li><li><strong>아저씨:</strong> 성인/직장인과 대학생·고등학생 등 나이차와 세대차가 관계성의 핵심일 때.</li></ul></section>
-            <section class="admin-tag-guide-card"><h4>조합·버스 키워드</h4><ul><li><strong>게헤 / 헤게:</strong> 게이 × 헤테로 / 헤테로 × 게이. 공수 방향 기준.</li><li><strong>알파베타 / 알파오메가:</strong> 주인공 조합이 명확할 때만. 오메가버스 장르와 별도 판단.</li><li><strong>센티넬x가이드:</strong> 센티넬(공) × 가이드(수).</li><li><strong>가이드x센티넬:</strong> 가이드(공) × 센티넬(수).</li><li><strong>F1:</strong> 포뮬러1 AU. <strong>짭근:</strong> 비혈연 가족. <strong>찐근:</strong> 친형제.</li></ul></section>
-          </div>
-          <h3 class="admin-tag-guide-section-title">삭제·통일 기준</h3>
-          <div class="admin-tag-guide-cleanup">
-            <section class="admin-tag-guide-card"><ul><li><strong>학원물</strong> 삭제 → 장르 청게로 통일.</li><li><strong>노란장판·힐링물·잔잔물·피폐물·피폐·쌍방구원·첫사랑·첫사랑물·소꿉친구·코믹</strong> 삭제 → 더 이상 장르/키워드로 사용하지 않음.</li><li><strong>리맨물</strong> 삭제 → 현대물. 사내연애는 실제 직장 내 관계일 때만.</li><li><strong>친구연애물</strong> 삭제 → 키워드 친구에서연인.</li></ul></section>
-            <section class="admin-tag-guide-card"><ul><li><strong>일상물 키워드</strong> 삭제 → 장르 일상물만 사용.</li><li><strong>스포츠 키워드</strong> 삭제 → 스포츠물 장르만 사용.</li><li><strong>사망 키워드</strong> 삭제 → 스포일러 사망으로만 사용.</li><li><strong>해피엔딩</strong> 삭제.</li><li>확실한 정보만 태깅하고 애매하면 비워두거나 관리자 검토 대상으로 남깁니다. 기존 작품 데이터의 일괄 수정은 별도 작업으로 진행합니다.</li></ul></section>
-          </div>
-        </div>
-      </details>
       <details class="admin-vocabulary" id="adminVocabulary">
         <summary>필터 단어 관리</summary>
         <div class="admin-vocabulary-body">
           <div class="admin-vocabulary-controls">
             <select id="adminVocabularyGroup" aria-label="관리할 필터 종류">
-              <option>장르</option><option>키워드</option><option>공</option><option>수</option>
+              <option>장르</option><option>키워드</option>
             </select>
             <input id="adminVocabularyInput" type="text" maxlength="40" placeholder="추가할 단어">
             <button class="button primary" id="adminVocabularyAdd" type="button">추가</button>
@@ -3605,13 +3590,17 @@
         <label class="admin-select-all"><input id="adminSelectAll" type="checkbox"><span id="adminSelectedCount">0개 선택</span></label>
         <select class="admin-bulk-field" id="adminBulkField" aria-label="일괄 수정할 항목">
           <option value="">수정 항목 선택</option>
-          <option>노출상태</option><option>카테고리</option><option>가격</option><option>성인</option><option>장르</option><option>키워드</option><option>공</option><option>수</option><option>시리즈여부</option><option>연재상태</option><option>스포일러</option>
+          <option>노출상태</option><option>카테고리</option><option>가격</option><option>성인</option><option>장르</option><option>키워드</option><option>시리즈여부</option><option>연재상태</option><option>스포일러</option>
         </select>
         <details class="admin-multiselect admin-bulk-values is-disabled" id="adminBulkValuePicker">
           <summary><span id="adminBulkValueSummary">먼저 수정 항목을 선택하세요</span></summary>
           <div class="admin-multiselect-options" id="adminBulkValueOptions"></div>
         </details>
         <button class="button primary admin-bulk-apply" id="adminBulkApply" type="button" disabled>선택값으로 일괄 교체</button>
+        <div class="admin-bulk-visibility">
+          <button class="button" id="adminBulkShow" type="button" disabled>선택 공개</button>
+          <button class="button" id="adminBulkHide" type="button" disabled>선택 비공개</button>
+        </div>
         <button class="button danger admin-bulk-delete" id="adminBulkDelete" type="button" disabled>선택한 글 삭제</button>
       </div>
       <div class="admin-list" id="adminList"></div>
@@ -3657,22 +3646,8 @@
               </details>
               <span class="admin-tag-limit-note">최대 5개</span>
             </div>
-            <div class="admin-multi-field">
-              <span class="label">공</span>
-              <input type="hidden" name="공">
-              <details class="admin-multiselect" data-admin-multiselect="공">
-                <summary><span data-admin-multiselect-summary>선택 없음</span></summary>
-                <div class="admin-multiselect-options"></div>
-              </details>
-            </div>
-            <div class="admin-multi-field">
-              <span class="label">수</span>
-              <input type="hidden" name="수">
-              <details class="admin-multiselect" data-admin-multiselect="수">
-                <summary><span data-admin-multiselect-summary>선택 없음</span></summary>
-                <div class="admin-multiselect-options"></div>
-              </details>
-            </div>
+            <input type="hidden" name="공">
+            <input type="hidden" name="수">
             <label><span class="label">시리즈 여부</span><select name="시리즈"><option value="">단편/미표기</option><option value="Y">시리즈</option></select></label>
             <label><span class="label">연재상태</span><select name="연재상태"><option value="">미표기</option><option>단편</option><option>연재중</option><option>완결</option></select></label>
             <label><span class="label">시리즈명</span><input name="시리즈명" placeholder="시리즈명"></label>
@@ -3776,7 +3751,7 @@
           <span class="access-choice-icon" aria-hidden="true">A</span>
           <span class="access-choice-copy">
             <strong id="accessAdminChoiceLabel">관리자 로그인</strong>
-            <small>글·작가 계정·필터 단어 관리</small>
+            <small>글·필터 단어 관리</small>
           </span>
         </button>
         <button class="button access-choice" id="accessAuthorChoice" type="button">
@@ -4056,8 +4031,6 @@
       "성인": { options: TAG_GROUPS["성인"], multiple: false },
       "장르": { options: TAG_GROUPS["장르"], multiple: true },
       "키워드": { options: TAG_GROUPS["키워드"], multiple: true },
-      "공": { options: TAG_GROUPS["공"], multiple: true },
-      "수": { options: TAG_GROUPS["수"], multiple: true },
       "시리즈여부": { options: ADMIN_TAG_GROUPS["시리즈여부"], multiple: false },
       "연재상태": { options: ADMIN_TAG_GROUPS["연재상태"], multiple: false },
       "스포일러": { options: TAG_GROUPS["스포일러"], multiple: true }
@@ -4166,6 +4139,8 @@
       adminBulkValueSummary: $("#adminBulkValueSummary"),
       adminBulkValueOptions: $("#adminBulkValueOptions"),
       adminBulkApply: $("#adminBulkApply"),
+      adminBulkShow: $("#adminBulkShow"),
+      adminBulkHide: $("#adminBulkHide"),
       adminBulkDelete: $("#adminBulkDelete"),
       adminEditor: $("#adminEditor"),
       adminEditorTitle: $("#adminEditorTitle"),
@@ -4676,13 +4651,7 @@
         renderCrawlStatus();
         return;
       }
-      try {
-        const authorResult = await requestAdminFunction("list_authors");
-        state.authors = Array.isArray(authorResult.rows) ? authorResult.rows : [];
-      } catch (error) {
-        state.authors = [];
-        showAdminResult(`작가 계정 목록을 불러오지 못했습니다: ${error.message}`, "error");
-      }
+      state.authors = [];
       try {
         const crawlResult = await requestAdminFunction("crawl_status");
         state.crawlRun = crawlResult.run || null;
@@ -5331,6 +5300,8 @@
       els.adminBulkApply.disabled = count === 0
         || !normalize(els.adminBulkField.value)
         || state.adminBulkValues.size === 0;
+      els.adminBulkShow.disabled = count === 0;
+      els.adminBulkHide.disabled = count === 0;
       els.adminBulkDelete.disabled = count === 0;
     }
 
@@ -5349,6 +5320,10 @@
       } else {
         els.adminBulkValueSummary.textContent = values.length ? values.join(", ") : "적용할 값 선택";
       }
+      const limit = TAG_LIMITS[field] || 0;
+      els.adminBulkValueOptions.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.disabled = Boolean(limit && values.length >= limit && !input.checked);
+      });
       updateAdminBulkControls();
     }
 
@@ -6073,6 +6048,10 @@
       const summary = details.querySelector("[data-admin-multiselect-summary]");
       if (hidden) hidden.value = values.join(", ");
       if (summary) summary.textContent = values.length ? values.join(", ") : "선택 없음";
+      const limit = tagLimitForField(fieldName);
+      details.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.disabled = Boolean(limit && values.length >= limit && !input.checked);
+      });
     }
 
     function appendAdminMultiSelectOption(details, option, { legacy = false, checked = false } = {}) {
@@ -6662,6 +6641,37 @@
       }
     }
 
+    async function bulkSetVisibility(visible) {
+      const posts = selectedAdminPosts();
+      if (!posts.length) return;
+      const label = visible ? "공개" : "비공개";
+      if (!confirm(`선택한 ${posts.length}개 글을 ${label} 상태로 바꿀까요?`)) return;
+      const updatedPosts = posts.map((post) => withVisibilityPayload({ ...post, "관리자검수": visible ? "Y" : "" }, visible));
+
+      els.status.textContent = `선택한 글을 ${label}로 변경하는 중입니다.`;
+      try {
+        if (!hasSupabaseConfig() && !CONFIG.ADMIN_API_URL) {
+          updatedPosts.forEach(upsertLocal);
+          const updatedByKey = new Map(updatedPosts.map((post) => [adminPostKey(post), post]));
+          state.posts = state.posts.map((post) => updatedByKey.get(adminPostKey(post)) || post);
+          state.adminSelected.clear();
+          render();
+          showAdminResult(`${posts.length}개 글을 이 브라우저에서 ${label}로 변경했습니다.`);
+          return;
+        }
+        for (let index = 0; index < updatedPosts.length; index += 1) {
+          els.status.textContent = `${label} 변경 중 ${index + 1}/${updatedPosts.length}`;
+          await sendAdminAction("update", updatedPosts[index]);
+        }
+        state.adminSelected.clear();
+        await loadData();
+        showAdminResult(`${posts.length}개 글을 Supabase에서 ${label}로 변경했습니다.`);
+      } catch (error) {
+        showAdminResult(`${label} 변경에 실패했습니다: ${error.message}`, "error");
+        alert(`${label} 변경에 실패했습니다. ${error.message}`);
+      }
+    }
+
     async function bulkDeletePosts() {
       const posts = selectedAdminPosts();
       if (!posts.length) return;
@@ -6798,6 +6808,8 @@
     });
     els.adminBulkField.addEventListener("change", buildAdminBulkValueOptions);
     els.adminBulkApply.addEventListener("click", bulkUpdateFilters);
+    els.adminBulkShow.addEventListener("click", () => bulkSetVisibility(true));
+    els.adminBulkHide.addEventListener("click", () => bulkSetVisibility(false));
     els.adminBulkDelete.addEventListener("click", bulkDeletePosts);
     els.adminVocabularyGroup.addEventListener("change", renderAdminVocabulary);
     els.adminVocabularyAdd.addEventListener("click", addVocabularyOption);
