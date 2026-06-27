@@ -997,6 +997,10 @@ function RecommendedVideosAdmin({ onBack }) {
   const [bulkFeaturedOrder, setBulkFeaturedOrder] = useState("");
   const [adminQuery, setAdminQuery] = useState("");
   const [debouncedAdminQuery, setDebouncedAdminQuery] = useState("");
+  const [adminVisibilityFilter, setAdminVisibilityFilter] = useState("all");
+  const [adminFeaturedFilter, setAdminFeaturedFilter] = useState("all");
+  const [adminHyeopkwaePickFilter, setAdminHyeopkwaePickFilter] = useState("all");
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState("");
   const [newMainCategoryName, setNewMainCategoryName] = useState("");
   const [newMainCategoryOrder, setNewMainCategoryOrder] = useState("");
   const [mainCategoryDrafts, setMainCategoryDrafts] = useState({});
@@ -1012,6 +1016,7 @@ function RecommendedVideosAdmin({ onBack }) {
     const needle = debouncedAdminQuery.trim().toLocaleLowerCase("ko-KR");
     return videoCategories.find((item) => item.name.toLocaleLowerCase("ko-KR") === needle)?.name || "";
   }, [debouncedAdminQuery, videoCategories]);
+  const effectiveCategoryFilter = adminCategoryFilter || matchingCategory;
   const loadRequest = useRef(0);
 
   useEffect(() => {
@@ -1019,7 +1024,7 @@ function RecommendedVideosAdmin({ onBack }) {
     return () => window.clearTimeout(timer);
   }, [adminQuery]);
 
-  useEffect(() => { setPage(0); }, [debouncedAdminQuery, matchingCategory]);
+  useEffect(() => { setPage(0); }, [debouncedAdminQuery, effectiveCategoryFilter, adminVisibilityFilter, adminFeaturedFilter, adminHyeopkwaePickFilter]);
 
   useEffect(() => {
     let active = true;
@@ -1033,7 +1038,15 @@ function RecommendedVideosAdmin({ onBack }) {
     let active = true;
     const requestId = ++loadRequest.current;
     setListLoading(true); setError("");
-    recommendedVideoService.list({ offset: page * pageSize, limit: pageSize, query: debouncedAdminQuery, category: matchingCategory })
+    recommendedVideoService.list({
+      offset: page * pageSize,
+      limit: pageSize,
+      query: debouncedAdminQuery,
+      category: effectiveCategoryFilter,
+      isActive: adminVisibilityFilter,
+      isFeatured: adminFeaturedFilter,
+      isHyeopkwaePick: adminHyeopkwaePickFilter
+    })
       .then((result) => {
         if (!active || requestId !== loadRequest.current) return;
         setItems(result.items); setTotalItems(result.total); setSelectedIds(new Set());
@@ -1041,7 +1054,7 @@ function RecommendedVideosAdmin({ onBack }) {
       .catch((reason) => { if (active && requestId === loadRequest.current) setError(reason.message || "추천 영상 목록을 불러오지 못했습니다."); })
       .finally(() => { if (active && requestId === loadRequest.current) { setLoading(false); setListLoading(false); } });
     return () => { active = false; };
-  }, [page, debouncedAdminQuery, matchingCategory]);
+  }, [page, debouncedAdminQuery, effectiveCategoryFilter, adminVisibilityFilter, adminFeaturedFilter, adminHyeopkwaePickFilter]);
 
   const refreshSummary = async () => {
     const nextSummary = await recommendedVideoService.adminSummary();
@@ -1049,7 +1062,15 @@ function RecommendedVideosAdmin({ onBack }) {
   };
   const refreshItems = async ({ resetPage = false } = {}) => {
     if (resetPage && page !== 0) { setPage(0); return; }
-    const result = await recommendedVideoService.list({ offset: (resetPage ? 0 : page) * pageSize, limit: pageSize, query: debouncedAdminQuery, category: matchingCategory });
+    const result = await recommendedVideoService.list({
+      offset: (resetPage ? 0 : page) * pageSize,
+      limit: pageSize,
+      query: debouncedAdminQuery,
+      category: effectiveCategoryFilter,
+      isActive: adminVisibilityFilter,
+      isFeatured: adminFeaturedFilter,
+      isHyeopkwaePick: adminHyeopkwaePickFilter
+    });
     setItems(result.items); setTotalItems(result.total); setSelectedIds(new Set());
     await refreshSummary();
   };
@@ -1348,20 +1369,46 @@ function RecommendedVideosAdmin({ onBack }) {
   const featuredAdminItems = summary.featuredItems;
   const hyeopkwaePickAdminCount = summary.hyeopkwaePickActiveCount;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const activeAdminFilterCount = [
+    adminVisibilityFilter !== "all",
+    adminFeaturedFilter !== "all",
+    adminHyeopkwaePickFilter !== "all",
+    Boolean(adminCategoryFilter)
+  ].filter(Boolean).length;
+  const hasAdminListFilter = Boolean(adminQuery.trim()) || activeAdminFilterCount > 0;
+  const resetAdminFilters = () => {
+    setAdminVisibilityFilter("all");
+    setAdminFeaturedFilter("all");
+    setAdminHyeopkwaePickFilter("all");
+    setAdminCategoryFilter("");
+  };
 
   return <div className="pt-5">
     <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button>
     <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-wider text-neutral-600">RECOMMENDED VIDEOS</p><p className="mt-1 text-xs font-black">등록 영상 <span className="text-accent">{summary.total}</span>개 · 혚쾌 PICK <span className="text-accent">{hyeopkwaePickAdminCount}</span>개</p></div><p className="ml-auto text-[9px] font-bold text-neutral-600">업로드일 최신순</p></div>
     <div className="mt-4"><SearchBar value={adminQuery} onChange={setAdminQuery} placeholder="제목, 채널명, 날짜, 카테고리로 검색"/></div>
-    {(adminQuery.trim() || listLoading) && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">{listLoading ? "검색 중…" : `검색 결과 ${totalItems}개`}</p>}
-    <div className="mt-3 space-y-2 rounded-2xl border border-white/10 bg-white/[.03] p-3">
+    <details className="group mt-3 rounded-2xl border border-white/10 bg-white/[.03]">
+      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">목록 필터</p><p className="mt-1 text-[9px] font-bold text-neutral-600">{activeAdminFilterCount ? `${activeAdminFilterCount}개 필터 적용 중` : "노출, PICK, 하위 콘텐츠 기준으로 보기"}</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="grid grid-cols-2 gap-2 border-t border-white/5 p-3">
+        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">노출</span><select value={adminVisibilityFilter} onChange={(event) => setAdminVisibilityFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">노출 ON</option><option value="false">노출 OFF</option></select></label>
+        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">오늘의 PICK</span><select value={adminFeaturedFilter} onChange={(event) => setAdminFeaturedFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">지정</option><option value="false">해제</option></select></label>
+        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">혚쾌 PICK</span><select value={adminHyeopkwaePickFilter} onChange={(event) => setAdminHyeopkwaePickFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">지정</option><option value="false">해제</option></select></label>
+        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">하위 콘텐츠</span><select value={adminCategoryFilter} onChange={(event) => setAdminCategoryFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="">전체</option>{categoriesByMain.map((main) => <optgroup key={main.id} label={main.name}>{main.children.map((categoryItem) => <option key={categoryItem.id} value={categoryItem.name}>{categoryItem.name}</option>)}</optgroup>)}</select></label>
+        <button type="button" onClick={resetAdminFilters} disabled={!activeAdminFilterCount} className="col-span-2 rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-400 disabled:opacity-40">필터 초기화</button>
+      </div>
+    </details>
+    {(hasAdminListFilter || listLoading) && <p className="mt-2 text-right text-[9px] font-bold text-neutral-600">{listLoading ? "검색 중…" : `목록 결과 ${totalItems}개`}</p>}
+    <details className="group mt-3 rounded-2xl border border-white/10 bg-white/[.03]">
+      <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">영상 추가/수집</p><p className="mt-1 text-[9px] font-bold text-neutral-600">링크 추가, 채널 수집, 플레이리스트 수집</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="space-y-2 border-t border-white/5 p-3">
       <form onSubmit={addYoutubeVideo} className="flex gap-2"><input type="url" value={youtubeUrl} onChange={(event) => setYoutubeUrl(event.target.value)} placeholder="YouTube 영상 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !youtubeUrl.trim()} className="shrink-0 rounded-xl bg-accent px-3 py-3 text-[10px] font-black disabled:opacity-40">{collectBusy === "manual" ? "추가 중…" : "링크 추가"}</button></form>
       <form onSubmit={collectCustomChannel} className="flex gap-2"><input type="url" value={channelUrl} onChange={(event) => setChannelUrl(event.target.value)} placeholder="YouTube 채널 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !channelUrl.trim()} className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-3 text-[10px] font-black text-accent disabled:opacity-40">{collectBusy === "custom-channel" ? "수집 중…" : "채널 수집"}</button></form>
       <form onSubmit={collectCustomPlaylist} className="flex gap-2"><input type="url" value={playlistUrl} onChange={(event) => setPlaylistUrl(event.target.value)} placeholder="YouTube 플레이리스트 링크" disabled={Boolean(collectBusy)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-[10px] outline-none focus:border-accent disabled:opacity-50"/><button disabled={Boolean(collectBusy) || !playlistUrl.trim()} className="shrink-0 rounded-xl border border-[#ff0000]/30 bg-[#ff0000]/10 px-3 py-3 text-[10px] font-black text-[#ff6666] disabled:opacity-40">{collectBusy === "playlist" ? "수집 중…" : "플레이리스트 수집"}</button></form>
       <button type="button" onClick={() => collectChannelVideos()} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-white/10 bg-black/40 py-3 text-[10px] font-black text-neutral-400 disabled:opacity-40">{collectBusy === "channels" ? "기본 채널 수집 중…" : "기본 4개 채널 신규 영상 수집"}</button>
       <button type="button" onClick={refreshPublishedDates} disabled={Boolean(collectBusy)} className="w-full rounded-xl border border-[#55acee]/30 bg-[#1DA1F2]/10 py-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{collectBusy === "refresh-dates" ? "업로드일자 재확인 중…" : "기존 추천 영상 업로드일자 재확인"}</button>
       <p className="text-[9px] leading-4 text-neutral-600">채널 수집은 기존 영상이 확인되면 이전 페이지 탐색을 멈춥니다. 플레이리스트 수집은 목록 전체를 확인해 기존 영상은 건너뛰고 신규 영상만 노출 OFF 상태로 저장합니다.</p>
-    </div>
+      </div>
+    </details>
     <details className="group mt-4 rounded-2xl border border-white/10 bg-white/[.03]">
       <summary className="flex cursor-pointer list-none items-center p-3 [&::-webkit-details-marker]:hidden"><div><p className="text-xs font-black">추천 카테고리 2단계 관리</p><p className="mt-1 text-[9px] font-bold text-neutral-600">메인 {mainCategories.length}개 · 하위 콘텐츠 {videoCategories.length}개</p></div><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
       <div className="space-y-5 border-t border-white/5 p-3">
@@ -1410,7 +1457,7 @@ function RecommendedVideosAdmin({ onBack }) {
         </div>
         <button type="button" disabled={Boolean(savingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button>
       </div>
-    </article>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">이전</button><span className="text-[10px] font-black text-neutral-500">{page + 1} / {totalPages} · {totalItems}개</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">다음</button></div></> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{adminQuery.trim() ? "검색 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
+    </article>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">이전</button><span className="text-[10px] font-black text-neutral-500">{page + 1} / {totalPages} · {totalItems}개</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">다음</button></div></> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{hasAdminListFilter ? "검색/필터 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
   </div>;
 }
 

@@ -180,6 +180,12 @@ function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>,
   if (typeof updates.isHyeopkwaePick === "boolean") row.is_hyeopkwae_pick = updates.isHyeopkwaePick;
   return row;
 }
+function booleanFilter(value: unknown) {
+  const normalized = text(value).toLowerCase();
+  if (normalized === "true") return "true";
+  if (normalized === "false") return "false";
+  return "";
+}
 async function refreshRecommendedVideoPublishedDates() {
   const youtubeApiKey = text(Deno.env.get("YOUTUBE_API_KEY"));
   if (!youtubeApiKey) throw new Error("Supabase Secret에 YOUTUBE_API_KEY가 설정되지 않았습니다.");
@@ -413,18 +419,24 @@ Deno.serve(async (request) => {
       const params = new URLSearchParams({ select: fields, order: "published_at.desc.nullslast,id.desc", offset: String(offset), limit: String(limit) });
       const query = text(payload.query);
       const category = text(payload.category);
+      const activeFilter = booleanFilter(payload.isActive);
+      const featuredFilter = booleanFilter(payload.isFeatured);
+      const hyeopkwaePickFilter = booleanFilter(payload.isHyeopkwaePick);
       const normalizedQuery = query.toLocaleLowerCase("ko-KR");
       const isHyeopkwaePickSearch = /[혚혜]쾌/.test(normalizedQuery) && normalizedQuery.includes("pick");
       const dateRange = kstTimestampRange(query);
       if (dateRange) {
         params.set("published_at", `gte.${dateRange.start}`);
         params.append("published_at", `lt.${dateRange.end}`);
-      } else if (query && !category && !isHyeopkwaePickSearch) {
+      } else if (query && !isHyeopkwaePickSearch) {
         const q = escapeLike(query);
         if (q) params.set("or", `(title.ilike.*${q}*,channel_title.ilike.*${q}*,youtube_id.ilike.*${q}*,admin_comment.ilike.*${q}*)`);
       }
       if (category && category.length <= 120 && !/[{},"]/.test(category)) params.set("categories", `cs.{${category}}`);
-      if (isHyeopkwaePickSearch) params.set("is_hyeopkwae_pick", "eq.true");
+      if (activeFilter) params.set("is_active", `eq.${activeFilter}`);
+      if (featuredFilter) params.set("is_featured", `eq.${featuredFilter}`);
+      if (hyeopkwaePickFilter) params.set("is_hyeopkwae_pick", `eq.${hyeopkwaePickFilter}`);
+      else if (isHyeopkwaePickSearch) params.set("is_hyeopkwae_pick", "eq.true");
       const result = await rest(`recommended_videos?${params}`, {}, true);
       return json(request, { ok: true, items: result.rows, total: result.total, hasMore: offset + result.rows.length < result.total });
     }
