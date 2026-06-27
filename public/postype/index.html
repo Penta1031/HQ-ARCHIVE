@@ -6154,6 +6154,18 @@
       return lines.filter((line, index, all) => line || (index > 0 && index < all.length - 1));
     }
 
+    function limitCanvasTextLines(lines, maxTextLines) {
+      const visibleLines = [];
+      let textLineCount = 0;
+      for (const line of lines) {
+        if (line && textLineCount >= maxTextLines) break;
+        visibleLines.push(line);
+        if (line) textLineCount += 1;
+      }
+      while (!visibleLines[visibleLines.length - 1]) visibleLines.pop();
+      return visibleLines;
+    }
+
     function drawExcerptCanvas() {
       const canvas = els.excerptCanvas;
       if (!canvas) return;
@@ -6216,7 +6228,10 @@
       if (quote.length >= 2 && quotePairs[quote[0]] === quote[quote.length - 1]) {
         quote = quote.slice(1, -1).trim();
       }
-      const lines = wrapCanvasText(ctx, quote, textWidth, state.excerptLineBreak).slice(0, 9);
+      const lines = limitCanvasTextLines(
+        wrapCanvasText(ctx, quote, textWidth, state.excerptLineBreak),
+        9
+      );
       let y = 136;
       lines.forEach((line) => {
         if (line) {
