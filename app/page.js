@@ -894,7 +894,7 @@ function RecommendedView({ onScrollTop }) {
   if (selectedCategory) return <div className="px-4 pb-6 pt-4">
     <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
     <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__hyeopkwae_pick__" ? "혚쾌 PICK" : selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
-    {selectedCategory === "__hyeopkwae_pick__" && <section className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-3" aria-label="혚쾌 PICK 카테고리 필터">
+    {selectedCategory === "__hyeopkwae_pick__" && <section className="mt-4" aria-label="혚쾌 PICK 카테고리 필터">
       <p className="text-[9px] font-black text-neutral-600">상위 카테고리</p>
       <div className="mt-2"><FilterRow values={["전체", ...mainCategories.map((item) => item.name)]} active={hyeopMainCategory} onChange={(value) => { setHyeopMainCategory(value); setHyeopSubCategory("전체"); }}/></div>
       <p className="mt-4 text-[9px] font-black text-neutral-600">하위 카테고리</p>
