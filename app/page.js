@@ -603,7 +603,7 @@ function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
       onExcerptOpenChange?.(false);
     };
   }, [onExcerptOpenChange]);
-  return <iframe ref={frameRef} src={`${POSTYPE_APP_URL}?v=20260628-standalone`} title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
+  return <iframe ref={frameRef} src={`${POSTYPE_APP_URL}?v=20260629-public-visibility-v2`} title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
 function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange }) {
