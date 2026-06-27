@@ -894,12 +894,15 @@ function RecommendedView({ onScrollTop }) {
   if (selectedCategory) return <div className="px-4 pb-6 pt-4">
     <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
     <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__hyeopkwae_pick__" ? "혚쾌 PICK" : selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
-    {selectedCategory === "__hyeopkwae_pick__" && <section className="mt-4" aria-label="혚쾌 PICK 카테고리 필터">
-      <p className="text-[9px] font-black text-neutral-600">상위 카테고리</p>
-      <div className="mt-2"><FilterRow values={["전체", ...mainCategories.map((item) => item.name)]} active={hyeopMainCategory} onChange={(value) => { setHyeopMainCategory(value); setHyeopSubCategory("전체"); }}/></div>
-      <p className="mt-4 text-[9px] font-black text-neutral-600">하위 카테고리</p>
-      <div className="mt-2"><FilterRow values={["전체", ...hyeopSubCategories]} active={hyeopSubCategory} onChange={setHyeopSubCategory} secondary/></div>
-    </section>}
+    {selectedCategory === "__hyeopkwae_pick__" && <details className="group mt-4" aria-label="혚쾌 PICK 카테고리 필터">
+      <summary className="flex cursor-pointer list-none items-center py-2 text-xs font-black text-neutral-400 [&::-webkit-details-marker]:hidden"><span>카테고리 필터</span><ChevronRight size={16} className="ml-auto text-neutral-600 transition-transform group-open:rotate-90"/></summary>
+      <div className="mt-2">
+        <p className="text-[9px] font-black text-neutral-600">상위 카테고리</p>
+        <div className="mt-2"><FilterRow values={["전체", ...mainCategories.map((item) => item.name)]} active={hyeopMainCategory} onChange={(value) => { setHyeopMainCategory(value); setHyeopSubCategory("전체"); }}/></div>
+        <p className="mt-4 text-[9px] font-black text-neutral-600">하위 카테고리</p>
+        <div className="mt-2"><FilterRow values={["전체", ...hyeopSubCategories]} active={hyeopSubCategory} onChange={setHyeopSubCategory} secondary/></div>
+      </div>
+    </details>}
     <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬 및 필터">
       {[["latest","최신순"],["oldest","과거순"],["hyeop-pick","혚쾌 PICK"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
     </div>
