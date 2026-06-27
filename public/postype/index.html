@@ -4023,6 +4023,7 @@
     const ADMIN_FIELD_TAG_GROUPS = { "엔딩": "스포일러" };
 
     const PUBLIC_FILTER_GROUPS = ["카테고리", "가격", "성인", "시리즈여부", "장르", "키워드", "스포일러"];
+    const ADMIN_FILTER_GROUPS = ["노출상태", ...PUBLIC_FILTER_GROUPS];
     const PUBLIC_TAG_GROUPS = ["장르", "키워드"];
     const PUBLIC_HIDDEN_FILTER_GROUPS = new Set(["공", "수"]);
     const FILTER_LABELS = {
@@ -4032,6 +4033,7 @@
     };
 
     const ADMIN_TAG_GROUPS = {
+      "노출상태": ["노출", "미노출"],
       "시리즈여부": ["시리즈", "단편"],
       "연재상태": ["단편", "연재중", "완결"],
       "카테고리": ["글", "그림", "기타"],
@@ -4457,6 +4459,7 @@
     }
 
     function tagsFor(post, group) {
+      if (group === "노출상태") return [postFlag(post["관리자검수"]) ? "노출" : "미노출"];
       if (group === "카테고리") return [postCategory(post)];
       if (group === "성인") return [ageLabel(post)];
       if (group === "가격") return [priceLabel(post)];
@@ -4913,8 +4916,8 @@
 
     function buildAdminFilters() {
       els.adminFilterMount.innerHTML = "";
-      PUBLIC_FILTER_GROUPS.forEach((group) => {
-        const options = group === "시리즈여부" ? ADMIN_TAG_GROUPS[group] : (TAG_GROUPS[group] || []);
+      ADMIN_FILTER_GROUPS.forEach((group) => {
+        const options = ADMIN_TAG_GROUPS[group] || TAG_GROUPS[group] || [];
         const box = document.createElement("div");
         box.className = "admin-filter-group";
         const label = document.createElement("span");
@@ -4930,8 +4933,15 @@
           button.classList.toggle("active", Boolean(state.adminActive[group]?.has(option)));
           button.addEventListener("click", () => {
             state.adminActive[group] ||= new Set();
-            state.adminActive[group].has(option) ? state.adminActive[group].delete(option) : state.adminActive[group].add(option);
-            button.classList.toggle("active");
+            if (group === "노출상태") {
+              const wasActive = state.adminActive[group].has(option);
+              state.adminActive[group].clear();
+              if (!wasActive) state.adminActive[group].add(option);
+              chips.querySelectorAll(".chip").forEach((chip) => chip.classList.toggle("active", chip === button && !wasActive));
+            } else {
+              state.adminActive[group].has(option) ? state.adminActive[group].delete(option) : state.adminActive[group].add(option);
+              button.classList.toggle("active");
+            }
             renderAdminList();
           });
           chips.appendChild(button);
