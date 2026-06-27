@@ -81,6 +81,8 @@ const normalizeTabVisibility = (rowsOrSettings = []) => {
   return next;
 };
 const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
+const POSTYPE_APP_URL = "https://penta1031.github.io/HQ-POSTYPE-SEARCH/";
+const POSTYPE_APP_ORIGIN = new URL(POSTYPE_APP_URL).origin;
 
 export default function Page() {
   const [tab, setTab] = useState("home");
@@ -584,7 +586,7 @@ function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
   const frameRef = useRef(null);
   useEffect(() => {
     if (!adminRequest) return;
-    const openAdmin = () => frameRef.current?.contentWindow?.postMessage({ type: "hq-open-postype-admin", credential: adminRequest.credential || "" }, window.location.origin);
+    const openAdmin = () => frameRef.current?.contentWindow?.postMessage({ type: "hq-open-postype-admin", credential: adminRequest.credential || "" }, POSTYPE_APP_ORIGIN);
     const frame = frameRef.current;
     const timer = window.setTimeout(openAdmin, 0);
     frame?.addEventListener("load", openAdmin);
@@ -592,7 +594,7 @@ function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
   }, [adminRequest?.id, adminRequest?.credential]);
   useEffect(() => {
     const handleMessage = (event) => {
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== POSTYPE_APP_ORIGIN) return;
       if (event.data?.type === "hq-postype-excerpt-modal") onExcerptOpenChange?.(Boolean(event.data.open));
     };
     window.addEventListener("message", handleMessage);
@@ -601,7 +603,7 @@ function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
       onExcerptOpenChange?.(false);
     };
   }, [onExcerptOpenChange]);
-  return <iframe ref={frameRef} src="postype/index.html?v=20260627-excerpt-editor-v3" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
+  return <iframe ref={frameRef} src={`${POSTYPE_APP_URL}?v=20260628-standalone`} title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
 function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange }) {
