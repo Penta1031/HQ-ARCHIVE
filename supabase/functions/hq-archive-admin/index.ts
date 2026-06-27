@@ -75,6 +75,20 @@ async function invokeFunction(name: string, body: Record<string, unknown>) {
   if (!response.ok || result.ok === false) throw new Error(text(result.error) || `${name} 호출에 실패했습니다 (${response.status}).`);
   return result;
 }
+function directThumbnailUrl(sourceUrl: string) {
+  if (/^https?:\/\/.+\.(?:jpg|jpeg|png|webp|gif)(?:$|[?#])/i.test(sourceUrl)) return sourceUrl;
+  return "";
+}
+async function resolveArchiveThumbnail(sourceUrl: string) {
+  const direct = directThumbnailUrl(sourceUrl);
+  if (direct) return direct;
+  if (/^https?:\/\/(?:www\.)?(?:x|twitter)\.com\//i.test(sourceUrl)) {
+    const result = await invokeFunction("hq-twitter-media", { sourceUrl });
+    const data = result.data && typeof result.data === "object" ? result.data as Record<string, unknown> : {};
+    return text(data.thumbnailUrl || data.thumbnail_url || data.preview_image_url || data.poster || (!data.isVideo ? data.url : ""));
+  }
+  return "";
+}
 const escapeLike = (value: string) => value.replace(/[,*()]/g, " ").trim();
 function exactKstArchiveDate(value: unknown) {
   const candidate = text(value);
@@ -259,6 +273,52 @@ async function twitterSearch(payload: Record<string, unknown>) {
     };
   });
 }
+async function refreshArchiveThumbnails(payload: Record<string, unknown>) {
+  const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+  if (!ids.length) throw new Error("썸네일을 불러올 기록을 선택해주세요.");
+  if (ids.length > 100) throw new Error("썸네일은 한 번에 100개 이하로 불러올 수 있습니다.");
+
+  const result = await rest(`hq_archive_contents?select=id,title,source_url,thumbnail_url,status&id=in.(${ids.join(",")})`);
+  const rows = result.rows as Record<string, unknown>[];
+  const foundIds = new Set(rows.map((row) => Number(row.id)));
+  const missing = ids.filter((id) => !foundIds.has(id));
+  const items: Record<string, unknown>[] = [];
+  const errors: Record<string, unknown>[] = [];
+  let skipped = missing.length;
+  let updated = 0;
+
+  for (const row of rows) {
+    const id = Number(row.id);
+    const sourceUrl = text(row.source_url);
+    if (!sourceUrl) {
+      skipped += 1;
+      errors.push({ id, title: text(row.title), error: "랜딩 링크 없음" });
+      continue;
+    }
+    try {
+      const thumbnailUrl = await resolveArchiveThumbnail(sourceUrl);
+      if (!thumbnailUrl) {
+        skipped += 1;
+        errors.push({ id, title: text(row.title), error: "썸네일 없음" });
+        continue;
+      }
+      const saved = await rest(`hq_archive_contents?id=eq.${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ thumbnail_url: thumbnailUrl }),
+        headers: { Prefer: "return=representation" }
+      });
+      if (saved.rows[0]) {
+        items.push({ id, thumbnailUrl });
+        updated += 1;
+      }
+    } catch (error) {
+      skipped += 1;
+      errors.push({ id, title: text(row.title), error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  return { checked: ids.length, updated, skipped, missing: missing.length, errors: errors.slice(0, 20), items };
+}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors(request) });
@@ -303,6 +363,7 @@ Deno.serve(async (request) => {
       await rest(`hq_archive_contents?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=minimal" } });
       return json(request, { ok: true });
     }
+    if (action === "archive-refresh-thumbnails") return json(request, { ok: true, ...await refreshArchiveThumbnails(payload) });
     if (action === "archive-delete") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "DELETE" }); return json(request, { ok: true }); }
     if (action === "archive-save-drafts") {
       const rows = []; for (const item of payload.items || []) rows.push(await archiveRow(item, "draft"));
