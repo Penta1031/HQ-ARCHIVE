@@ -3376,6 +3376,104 @@
       background: rgba(245, 158, 11, .14) !important;
       color: #fbbf24 !important;
     }
+
+    .admin-tag-guide {
+      margin: 12px 0;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .018);
+    }
+
+    .admin-tag-guide > summary {
+      min-height: 44px;
+      padding: 12px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .admin-tag-guide-body {
+      display: grid;
+      gap: 14px;
+      padding: 0 14px 14px;
+    }
+
+    .admin-tag-guide-principles,
+    .admin-tag-guide-columns,
+    .admin-tag-guide-rules,
+    .admin-tag-guide-cleanup {
+      display: grid;
+      gap: 10px;
+    }
+
+    .admin-tag-guide-principles,
+    .admin-tag-guide-columns {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .admin-tag-guide-rules {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-tag-guide-card {
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .025);
+    }
+
+    .admin-tag-guide-card h3,
+    .admin-tag-guide-card h4 {
+      margin: 0 0 7px;
+      font-size: 13px;
+    }
+
+    .admin-tag-guide-card p,
+    .admin-tag-guide-card li,
+    .admin-tag-guide-cleanup li {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+    }
+
+    .admin-tag-guide-card p,
+    .admin-tag-guide-card ul,
+    .admin-tag-guide-cleanup ul {
+      margin: 0;
+    }
+
+    .admin-tag-guide-card ul,
+    .admin-tag-guide-cleanup ul {
+      padding-left: 18px;
+    }
+
+    .admin-tag-guide-list {
+      color: var(--text) !important;
+    }
+
+    .admin-tag-guide-section-title {
+      margin: 2px 0 0;
+      font-size: 13px;
+    }
+
+    .admin-tag-guide-cleanup {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .admin-tag-limit-note {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    @media (max-width: 760px) {
+      .admin-tag-guide-principles,
+      .admin-tag-guide-columns,
+      .admin-tag-guide-rules,
+      .admin-tag-guide-cleanup {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -3451,6 +3549,35 @@
       </label>
       <button class="filter-title admin-filter-toggle" id="adminFilterToggle" type="button"><strong>필터</strong><span id="adminFilterCaret">펼치기</span></button>
       <div class="admin-filters is-collapsed" id="adminFilterMount"></div>
+      <details class="admin-tag-guide" id="adminTagGuide">
+        <summary>장르 · 키워드 · 스포일러 분류 기준표</summary>
+        <div class="admin-tag-guide-body">
+          <div class="admin-tag-guide-principles">
+            <section class="admin-tag-guide-card"><h3>장르 · 최대 3개</h3><p>세계관, 배경, 작품의 큰 분류만 선택합니다.</p></section>
+            <section class="admin-tag-guide-card"><h3>키워드 · 최대 5개</h3><p>관계, 소재, 설정, 사건 중 검색에 중요한 것만 선택합니다.</p></section>
+            <section class="admin-tag-guide-card"><h3>스포일러 · 필요한 경우만</h3><p>결말이 명확할 때만 입력하고 기본값은 비워둡니다.</p></section>
+          </div>
+          <div class="admin-tag-guide-columns">
+            <section class="admin-tag-guide-card"><h3>장르 목록</h3><p class="admin-tag-guide-list">현대물 · 학원물 · 캠게 · 노란장판 · 리얼물 · 판타지 · 오메가버스 · 가이드버스 · 회귀물 · 힐링물 · 시대물 · 연예계물 · 스포츠물 · 군부물 · 피폐물 · 일상물 · 수인물 · 종교물 · 느와르 · 청게 · 네임버스 · 조직물</p></section>
+            <section class="admin-tag-guide-card"><h3>키워드 목록</h3><p class="admin-tag-guide-list">계약 · 재회 · 첫사랑 · 짝사랑 · 동거 · 오해 · 구원 · 집착 · 후회 · 비밀연애 · 신분차이 · 소꿉친구 · 친구에서연인 · 정략결혼 · 임신 · 육아 · 상처 · 질투 · 쌍방구원 · 쌍방짝사랑 · 혐관 · 달달물 · 코믹 · 잔잔물 · 궁중물 · 사고 · 죽음 · 상실 · 사내연애 · 원나잇 · 기억상실 · 좀비아포칼립스 · 스폰서 · 프로게이머 · 게헤 · 헤게 · 알파베타 · 알파오메가 · 센티넬x가이드 · 가이드x센티넬 · 뱀파이어 · 아저씨 · F1 · 짭근 · 찐근</p></section>
+            <section class="admin-tag-guide-card"><h3>스포일러 목록</h3><p class="admin-tag-guide-list">새드엔딩 · 오픈엔딩 · 사망</p><p>사망은 결말 또는 주요 스포일러로 인물 사망이 명확할 때만 선택합니다.</p></section>
+          </div>
+          <h3 class="admin-tag-guide-section-title">상세 분류 기준</h3>
+          <div class="admin-tag-guide-rules">
+            <section class="admin-tag-guide-card"><h4>리얼물 / 현대물 / 연예계물</h4><ul><li><strong>리얼물:</strong> 실제 엔플라잉 세계관·활동·멤버 설정·숙소·스케줄·실제 시점 IF. 실제 엔플라잉 회귀는 리얼물 + 회귀물.</li><li><strong>현대물:</strong> 일반 현대 AU, 직장인·회사원·카페·의사·경찰·일반인.</li><li><strong>연예계물:</strong> 실제 엔플라잉이 아닌 배우·아이돌·연습생·방송국 AU.</li></ul></section>
+            <section class="admin-tag-guide-card"><h4>학원물 / 캠게 / 청게</h4><ul><li><strong>학원물:</strong> 중학교·고등학교 배경.</li><li><strong>캠게:</strong> 대학교 배경.</li><li><strong>청게:</strong> 고등학생 청춘물. 대학생은 캠게로 분류.</li></ul></section>
+            <section class="admin-tag-guide-card"><h4>분위기·서사 장르</h4><ul><li><strong>노란장판:</strong> 가난, 밑바닥 인생, 현실적인 삶이 핵심.</li><li><strong>힐링물:</strong> 상처·회복·치유가 핵심 서사.</li><li><strong>잔잔물:</strong> 장르가 아닌 키워드. 큰 사건 없이 조용하고 잔잔하며 치유 서사가 필수는 아님.</li><li><strong>회귀물:</strong> 과거로 회귀하는 설정.</li></ul></section>
+            <section class="admin-tag-guide-card"><h4>범죄 장르</h4><ul><li><strong>느와르:</strong> 범죄 분위기가 강한 작품.</li><li><strong>조직물:</strong> 조폭·마피아·범죄조직이 주요 배경.</li></ul></section>
+            <section class="admin-tag-guide-card"><h4>관계·분위기 키워드</h4><ul><li><strong>첫사랑:</strong> 첫사랑이 메인 서사일 때만.</li><li><strong>친구에서연인:</strong> 친구에서 연인이 되는 관계일 때만.</li><li><strong>달달물:</strong> 유독 달달한 작품만.</li><li><strong>사내연애:</strong> 같은 회사·직장 내 관계일 때만. 단순 직장인물에는 부여하지 않음.</li><li><strong>궁중물:</strong> 시대물 중 궁궐 배경.</li><li><strong>죽음:</strong> 죽음이 작품의 주요 소재일 때.</li></ul></section>
+            <section class="admin-tag-guide-card"><h4>조합·설정 키워드</h4><ul><li><strong>게헤 / 헤게:</strong> 게이 × 헤테로 / 헤테로 × 게이.</li><li><strong>알파베타 / 알파오메가:</strong> 주인공 조합이 명확할 때만. 오메가버스 장르와 별도 판단.</li><li><strong>센티넬x가이드:</strong> 센티넬(공) × 가이드(수).</li><li><strong>가이드x센티넬:</strong> 가이드(공) × 센티넬(수).</li><li><strong>아저씨:</strong> 직장인 × 대학생 등 나이 차이가 크게 느껴질 때.</li><li><strong>F1:</strong> 포뮬러1 AU. <strong>짭근:</strong> 비혈연 가족. <strong>찐근:</strong> 친형제.</li></ul></section>
+          </div>
+          <h3 class="admin-tag-guide-section-title">삭제·통일 기준</h3>
+          <div class="admin-tag-guide-cleanup">
+            <section class="admin-tag-guide-card"><ul><li><strong>리맨물</strong> 삭제 → 현대물. 사내연애는 실제 직장 내 관계일 때만.</li><li><strong>첫사랑물</strong> 삭제 → 키워드 첫사랑.</li><li><strong>친구연애물</strong> 삭제 → 키워드 친구에서연인.</li><li><strong>학원물·일상물 키워드</strong> 삭제 → 같은 이름의 장르만 사용.</li></ul></section>
+            <section class="admin-tag-guide-card"><ul><li><strong>피폐·스포츠 키워드</strong> 삭제 → 피폐물·스포츠물 장르만 사용.</li><li><strong>해피엔딩</strong> 삭제.</li><li>확실한 정보만 태깅하고 애매하면 비워두거나 관리자 검토 대상으로 남깁니다.</li><li>기존 작품 데이터의 일괄 수정은 별도 작업으로 진행합니다.</li></ul></section>
+          </div>
+        </div>
+      </details>
       <details class="admin-vocabulary" id="adminVocabulary">
         <summary>필터 단어 관리</summary>
         <div class="admin-vocabulary-body">
@@ -3518,6 +3645,7 @@
                 <summary><span data-admin-multiselect-summary>선택 없음</span></summary>
                 <div class="admin-multiselect-options"></div>
               </details>
+              <span class="admin-tag-limit-note">최대 3개</span>
             </div>
             <div class="admin-multi-field">
               <span class="label">키워드</span>
@@ -3526,6 +3654,7 @@
                 <summary><span data-admin-multiselect-summary>선택 없음</span></summary>
                 <div class="admin-multiselect-options"></div>
               </details>
+              <span class="admin-tag-limit-note">최대 5개</span>
             </div>
             <div class="admin-multi-field">
               <span class="label">공</span>
@@ -3547,7 +3676,15 @@
             <label><span class="label">연재상태</span><select name="연재상태"><option value="">미표기</option><option>단편</option><option>연재중</option><option>완결</option></select></label>
             <label><span class="label">시리즈명</span><input name="시리즈명" placeholder="시리즈명"></label>
             <label><span class="label">시리즈회차</span><input name="시리즈회차" placeholder="1, 2, 上, 下"></label>
-            <label><span class="label">스포일러</span><input name="엔딩" placeholder="해피엔딩"></label>
+            <div class="admin-multi-field">
+              <span class="label">스포일러</span>
+              <input type="hidden" name="엔딩">
+              <details class="admin-multiselect" data-admin-multiselect="엔딩">
+                <summary><span data-admin-multiselect-summary>선택 없음</span></summary>
+                <div class="admin-multiselect-options"></div>
+              </details>
+              <span class="admin-tag-limit-note">결말이 명확한 경우만 선택</span>
+            </div>
             <p class="admin-note wide">시리즈 글의 작가·가격·성인·카테고리·필터·연재상태를 수정하면 같은 시리즈 전체에 적용됩니다.</p>
             <div class="wide top-actions">
               <button class="button primary" type="submit">저장</button>
@@ -3875,12 +4012,15 @@
       "가격": ["무료", "유료"],
       "성인": ["전연령", "성인"],
       "연재상태": ["완결", "연재중", "단편"],
-      "장르": ["현대물", "학원물", "캠게", "노란장판", "리맨물", "판타지", "오메가버스", "가이드버스", "회귀물", "빙의물", "환생물", "재회물", "첫사랑물", "친구연애물", "혐관물", "시대물", "연예계물", "스포츠물", "군부물", "조폭물", "피폐물", "일상물", "리얼물", "수인물", "종교물", "느와르", "청게"],
-      "키워드": ["계약", "재회", "첫사랑", "짝사랑", "동거", "오해", "구원", "집착", "후회", "복수", "비밀연애", "신분차이", "나이차", "소꿉친구", "친구에서연인", "정략결혼", "임신", "육아", "상처", "질투", "쌍방구원", "쌍방짝사랑", "혐관", "배틀연애", "권선징악", "달달물", "코믹", "잔잔물", "피폐", "외전", "궁중물", "환생", "학원물", "사고", "일상물", "죽음", "상실", "사내연애", "원나잇", "기억상실", "좀비아포칼립스", "스폰서", "네임버스", "프로게이머"],
+      "장르": ["현대물", "학원물", "캠게", "노란장판", "리얼물", "판타지", "오메가버스", "가이드버스", "회귀물", "힐링물", "시대물", "연예계물", "스포츠물", "군부물", "피폐물", "일상물", "수인물", "종교물", "느와르", "청게", "네임버스", "조직물"],
+      "키워드": ["계약", "재회", "첫사랑", "짝사랑", "동거", "오해", "구원", "집착", "후회", "비밀연애", "신분차이", "소꿉친구", "친구에서연인", "정략결혼", "임신", "육아", "상처", "질투", "쌍방구원", "쌍방짝사랑", "혐관", "달달물", "코믹", "잔잔물", "궁중물", "사고", "죽음", "상실", "사내연애", "원나잇", "기억상실", "좀비아포칼립스", "스폰서", "프로게이머", "게헤", "헤게", "알파베타", "알파오메가", "센티넬x가이드", "가이드x센티넬", "뱀파이어", "아저씨", "F1", "짭근", "찐근"],
       "공": ["다정공", "헌신공", "강공", "냉혈공", "무심공", "까칠공", "츤데레공", "능글공", "초딩공", "집착공", "광공", "개아가공", "계략공", "후회공", "사랑꾼공", "순정공", "절륜공", "존댓말공", "대형견공", "연하공", "연상공", "재벌공", "능력공", "황제공", "왕자공", "귀족공", "군인공", "배우공", "아이돌공", "조폭공", "양아치공", "인외공", "상처공", "동정공", "헤테로공", "짝사랑공"],
       "수": ["다정수", "단정수", "소심수", "헌신수", "강수", "냉혈수", "무심수", "까칠수", "츤데레수", "허당수", "지랄수", "계략수", "유혹수", "적극수", "잔망수", "명랑수", "순진수", "임신수", "도망수", "굴림수", "후회수", "능글수", "능력수", "순정수", "떡대수", "평범수", "연하수", "연상수", "재벌수", "황제수", "왕자수", "귀족수", "군인수", "배우수", "아이돌수", "조폭수", "양아치수", "인외수", "상처수", "병약수", "동정수", "헤테로수", "짝사랑수"],
-      "스포일러": ["해피엔딩", "새드엔딩", "오픈엔딩", "사망"]
+      "스포일러": ["새드엔딩", "오픈엔딩", "사망"]
     };
+
+    const TAG_LIMITS = { "장르": 3, "키워드": 5 };
+    const ADMIN_FIELD_TAG_GROUPS = { "엔딩": "스포일러" };
 
     const PUBLIC_FILTER_GROUPS = ["카테고리", "가격", "성인", "시리즈여부", "장르", "키워드", "스포일러"];
     const PUBLIC_TAG_GROUPS = ["장르", "키워드"];
@@ -4186,6 +4326,22 @@
 
     function splitTags(value) {
       return normalize(value).split(/[,，、/|·\n]/).map((item) => item.trim()).filter(Boolean);
+    }
+
+    function tagGroupForAdminField(fieldName) {
+      return ADMIN_FIELD_TAG_GROUPS[fieldName] || fieldName;
+    }
+
+    function tagLimitForField(fieldName) {
+      return TAG_LIMITS[tagGroupForAdminField(fieldName)] || 0;
+    }
+
+    function validateTagLimits(post) {
+      for (const [group, limit] of Object.entries(TAG_LIMITS)) {
+        const count = splitTags(post[group]).length;
+        if (count > limit) return `${group}는 최대 ${limit}개까지 선택할 수 있습니다. 현재 ${count}개가 선택되어 있습니다.`;
+      }
+      return "";
     }
 
     function withoutRps(value) {
@@ -5223,6 +5379,12 @@
             });
           }
           checkbox.checked ? state.adminBulkValues.add(option) : state.adminBulkValues.delete(option);
+          const limit = TAG_LIMITS[field] || 0;
+          if (limit && state.adminBulkValues.size > limit) {
+            checkbox.checked = false;
+            state.adminBulkValues.delete(option);
+            alert(`${field}는 최대 ${limit}개까지 선택할 수 있습니다.`);
+          }
           updateAdminBulkValueSummary();
         });
         const text = document.createElement("span");
@@ -5855,10 +6017,7 @@
 
     function renderEndingTags(post, tagRow) {
       const endings = splitTags(post["엔딩"]);
-      const visible = endings.filter((tag) => tag === "해피엔딩");
-      const hidden = endings.filter((tag) => tag && tag !== "해피엔딩");
-      visible.forEach((tag) => tagRow.appendChild(makeTag(tag, false, "spoiler")));
-      if (!hidden.length) return;
+      if (!endings.length) return;
 
       const button = document.createElement("button");
       button.className = "ending-reveal";
@@ -5866,7 +6025,7 @@
       button.textContent = "스포일러 보기";
       button.addEventListener("click", () => {
         button.remove();
-        hidden.forEach((tag) => tagRow.appendChild(makeTag(tag, false, "spoiler")));
+        endings.forEach((tag) => tagRow.appendChild(makeTag(tag, false, "spoiler")));
       });
       tagRow.appendChild(button);
     }
@@ -5895,8 +6054,7 @@
       const fieldName = details.dataset.adminMultiselect;
       const checked = [...details.querySelectorAll('input[type="checkbox"]:checked')]
         .map((input) => input.value);
-      const existing = Array.isArray(details._unknownValues) ? details._unknownValues : [];
-      let values = [...existing, ...checked];
+      let values = checked;
       if (fieldName === "장르") values = values.filter((value) => normalize(value).toUpperCase() !== "RPS");
       values = [...new Set(values.map(normalize).filter(Boolean))];
 
@@ -5906,15 +6064,43 @@
       if (summary) summary.textContent = values.length ? values.join(", ") : "선택 없음";
     }
 
+    function appendAdminMultiSelectOption(details, option, { legacy = false, checked = false } = {}) {
+      const mount = details.querySelector(".admin-multiselect-options");
+      const fieldName = details.dataset.adminMultiselect;
+      const label = document.createElement("label");
+      label.className = `admin-multiselect-option${legacy ? " admin-multiselect-legacy-option" : ""}`;
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = option;
+      checkbox.checked = checked;
+      checkbox.addEventListener("change", () => {
+        const limit = tagLimitForField(fieldName);
+        const selectedCount = details.querySelectorAll('input[type="checkbox"]:checked').length;
+        if (checkbox.checked && limit && selectedCount > limit) {
+          checkbox.checked = false;
+          alert(`${tagGroupForAdminField(fieldName)}는 최대 ${limit}개까지 선택할 수 있습니다.`);
+        }
+        syncAdminMultiValue(details);
+      });
+      const text = document.createElement("span");
+      text.textContent = legacy ? `${option} (기존값)` : option;
+      label.append(checkbox, text);
+      mount.appendChild(label);
+    }
+
     function syncAdminMultiSelectsFromForm() {
       document.querySelectorAll("[data-admin-multiselect]").forEach((details) => {
         const fieldName = details.dataset.adminMultiselect;
+        const tagGroup = tagGroupForAdminField(fieldName);
         const hidden = els.adminForm.elements[fieldName];
         let selected = splitTags(hidden?.value || "");
         if (fieldName === "장르") selected = selected.filter((value) => normalize(value).toUpperCase() !== "RPS");
 
-        const optionValues = new Set(ADMIN_TAG_GROUPS[fieldName] || []);
-        details._unknownValues = selected.filter((value) => !optionValues.has(value));
+        details.querySelectorAll(".admin-multiselect-legacy-option").forEach((item) => item.remove());
+        const optionValues = new Set(ADMIN_TAG_GROUPS[tagGroup] || []);
+        selected.filter((value) => !optionValues.has(value)).forEach((option) => {
+          appendAdminMultiSelectOption(details, option, { legacy: true, checked: true });
+        });
         details.querySelectorAll('input[type="checkbox"]').forEach((input) => {
           input.checked = selected.includes(input.value);
         });
@@ -5925,6 +6111,7 @@
     function buildAdminMultiSelects() {
       document.querySelectorAll("[data-admin-multiselect]").forEach((details) => {
         const fieldName = details.dataset.adminMultiselect;
+        const tagGroup = tagGroupForAdminField(fieldName);
         const mount = details.querySelector(".admin-multiselect-options");
         mount.innerHTML = "";
 
@@ -5933,24 +6120,12 @@
         clear.className = "admin-multiselect-clear";
         clear.textContent = "선택 초기화";
         clear.addEventListener("click", () => {
-          details._unknownValues = [];
           details.querySelectorAll('input[type="checkbox"]').forEach((input) => input.checked = false);
           syncAdminMultiValue(details);
         });
         mount.appendChild(clear);
 
-        (ADMIN_TAG_GROUPS[fieldName] || []).forEach((option) => {
-          const label = document.createElement("label");
-          label.className = "admin-multiselect-option";
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.value = option;
-          checkbox.addEventListener("change", () => syncAdminMultiValue(details));
-          const text = document.createElement("span");
-          text.textContent = option;
-          label.append(checkbox, text);
-          mount.appendChild(label);
-        });
+        (ADMIN_TAG_GROUPS[tagGroup] || []).forEach((option) => appendAdminMultiSelectOption(details, option));
       });
       syncAdminMultiSelectsFromForm();
     }
@@ -6003,7 +6178,15 @@
           checkbox.type = "checkbox";
           checkbox.value = option;
           checkbox.checked = selected.has(option);
-          checkbox.addEventListener("change", () => syncAuthorSelector(details));
+          checkbox.addEventListener("change", () => {
+            const limit = TAG_LIMITS[group] || 0;
+            const selectedCount = details.querySelectorAll('input[type="checkbox"]:checked').length;
+            if (checkbox.checked && limit && selectedCount > limit) {
+              checkbox.checked = false;
+              alert(`${group}는 최대 ${limit}개까지 선택할 수 있습니다.`);
+            }
+            syncAuthorSelector(details);
+          });
           const text = document.createElement("span");
           text.textContent = option;
           label.append(checkbox, text);
@@ -6374,6 +6557,11 @@
     async function savePost(event) {
       event.preventDefault();
       const data = formData();
+      const tagLimitError = validateTagLimits(data);
+      if (tagLimitError) {
+        alert(tagLimitError);
+        return;
+      }
       const action = data._rowNumber && !data._rowNumber.startsWith("local-") ? "update" : "create";
       const actionLabel = action === "create" ? "신규 글 추가" : "글 수정";
       els.status.textContent = "저장 내용을 Supabase에 반영하는 중입니다.";
