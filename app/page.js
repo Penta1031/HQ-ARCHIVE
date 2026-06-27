@@ -712,6 +712,8 @@ function RecommendedView({ onScrollTop }) {
   const [category, setCategory] = useState("전체");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [categorySort, setCategorySort] = useState("latest");
+  const [hyeopMainCategory, setHyeopMainCategory] = useState("전체");
+  const [hyeopSubCategory, setHyeopSubCategory] = useState("전체");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const pickTouchStartX = useRef(null);
@@ -791,15 +793,38 @@ function RecommendedView({ onScrollTop }) {
     return sections;
   }, [searchedItems, category, videoCategories, mainCategories]);
 
+  const hyeopSubCategories = useMemo(() => videoCategories
+    .filter((item) => hyeopMainCategory === "전체" || item.mainCategoryName === hyeopMainCategory)
+    .map((item) => item.name), [videoCategories, hyeopMainCategory]);
+
+  useEffect(() => {
+    if (hyeopMainCategory !== "전체" && !mainCategories.some((item) => item.name === hyeopMainCategory)) {
+      setHyeopMainCategory("전체");
+      setHyeopSubCategory("전체");
+      return;
+    }
+    if (hyeopSubCategory !== "전체" && !hyeopSubCategories.includes(hyeopSubCategory)) setHyeopSubCategory("전체");
+  }, [hyeopMainCategory, hyeopSubCategory, hyeopSubCategories, mainCategories]);
+
   const displayDate = (value) => displayKstDate(value);
   const selectedCategoryItems = useMemo(() => {
     if (!selectedCategory) return [];
     const knownNames = new Set(videoCategories.map((item) => item.name));
-    const categoryItems = selectedCategory === "__hyeopkwae_pick__"
+    let categoryItems = selectedCategory === "__hyeopkwae_pick__"
       ? items.filter((item) => item.isHyeopkwaePick)
       : selectedCategory === "__uncategorized__"
       ? items.filter((item) => !item.categories.some((value) => knownNames.has(value)))
       : items.filter((item) => item.categories.includes(selectedCategory));
+    if (selectedCategory === "__hyeopkwae_pick__") {
+      if (hyeopMainCategory !== "전체") {
+        const selectedMain = mainCategories.find((item) => item.name === hyeopMainCategory);
+        const childNames = new Set(videoCategories.filter((item) => item.mainCategoryName === hyeopMainCategory).map((item) => item.name));
+        categoryItems = selectedMain?.isFallback
+          ? categoryItems.filter((item) => !item.categories.some((value) => knownNames.has(value)))
+          : categoryItems.filter((item) => item.categories.some((value) => childNames.has(value)));
+      }
+      if (hyeopSubCategory !== "전체") categoryItems = categoryItems.filter((item) => item.categories.includes(hyeopSubCategory));
+    }
     const filteredItems = categorySort === "hyeop-pick" ? categoryItems.filter((item) => item.isHyeopkwaePick) : categoryItems;
     const timestamp = (item) => {
       const value = new Date(item.publishedAt || "").getTime();
@@ -812,7 +837,7 @@ function RecommendedView({ onScrollTop }) {
       if (bTime === null) return -1;
       return categorySort === "oldest" ? aTime - bTime : bTime - aTime;
     });
-  }, [items, selectedCategory, categorySort, videoCategories]);
+  }, [items, selectedCategory, categorySort, videoCategories, mainCategories, hyeopMainCategory, hyeopSubCategory]);
   const hyeopkwaePickItems = useMemo(() => searchedItems.filter((item) => item.isHyeopkwaePick), [searchedItems]);
   const selectedCategoryDateGroups = useMemo(() => {
     const groups = [];
@@ -827,6 +852,8 @@ function RecommendedView({ onScrollTop }) {
   const openCategoryList = (value) => {
     setSelectedCategory(value);
     setCategorySort("latest");
+    setHyeopMainCategory("전체");
+    setHyeopSubCategory("전체");
     onScrollTop?.();
   };
   const moveFeatured = (direction) => {
@@ -867,6 +894,12 @@ function RecommendedView({ onScrollTop }) {
   if (selectedCategory) return <div className="px-4 pb-6 pt-4">
     <button type="button" onClick={() => setSelectedCategory("")} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>추천탭으로</button>
     <div className="mt-5 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">CONTENT</p><h2 className="mt-1 text-xl font-black">{selectedCategory === "__hyeopkwae_pick__" ? "혚쾌 PICK" : selectedCategory === "__uncategorized__" ? "미분류" : selectedCategory}</h2><p className="mt-1 text-[10px] font-bold text-neutral-600">{selectedCategoryItems.length}개의 추천 영상</p></div></div>
+    {selectedCategory === "__hyeopkwae_pick__" && <section className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-3" aria-label="혚쾌 PICK 카테고리 필터">
+      <p className="text-[9px] font-black text-neutral-600">상위 카테고리</p>
+      <div className="mt-2"><FilterRow values={["전체", ...mainCategories.map((item) => item.name)]} active={hyeopMainCategory} onChange={(value) => { setHyeopMainCategory(value); setHyeopSubCategory("전체"); }}/></div>
+      <p className="mt-4 text-[9px] font-black text-neutral-600">하위 카테고리</p>
+      <div className="mt-2"><FilterRow values={["전체", ...hyeopSubCategories]} active={hyeopSubCategory} onChange={setHyeopSubCategory} secondary/></div>
+    </section>}
     <div className="mt-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[.03] p-1.5" role="group" aria-label="영상 정렬 및 필터">
       {[["latest","최신순"],["oldest","과거순"],["hyeop-pick","혚쾌 PICK"]].map(([value,label]) => <button type="button" key={value} aria-pressed={categorySort === value} onClick={() => setCategorySort(value)} className={cn("rounded-xl py-2.5 text-[10px] font-black transition", categorySort === value ? "bg-accent text-white" : "text-neutral-500")}>{label}</button>)}
     </div>
