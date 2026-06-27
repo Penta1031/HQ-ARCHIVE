@@ -2580,24 +2580,82 @@
       margin-top: 9px;
     }
 
+    .modal-card.excerpt-editor-card {
+      width: min(calc(100vw - 32px), 480px);
+      max-height: min(94vh, 900px);
+      padding: 0;
+      overflow: auto;
+      background: #181818;
+    }
+
+    .excerpt-editor-card .modal-head {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      align-items: center;
+      margin: 0;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      background: rgba(24, 24, 24, .96);
+      backdrop-filter: blur(14px);
+    }
+
+    .excerpt-head-title {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .excerpt-back {
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #ffffff;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .excerpt-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .excerpt-head-actions .button {
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
     .excerpt-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 260px;
-      gap: 14px;
-      align-items: start;
+      display: block;
     }
 
     .excerpt-preview {
       display: grid;
       justify-items: center;
       gap: 10px;
+      position: sticky;
+      top: 63px;
+      z-index: 3;
+      padding-bottom: 12px;
+      background: #222222;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .34);
     }
 
     #excerptCanvas {
-      width: min(100%, 390px);
+      width: 100%;
       height: auto;
-      border: 1px solid #282a2f;
-      border-radius: 10px;
+      border: 0;
+      border-radius: 0;
       background: #111;
       touch-action: none;
       cursor: grab;
@@ -2616,11 +2674,175 @@
       text-align: center;
     }
 
+    .excerpt-controls {
+      display: grid;
+      gap: 18px;
+      padding: 16px;
+      background: #181818;
+    }
+
+    .excerpt-field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .excerpt-field textarea {
+      min-height: 118px;
+    }
+
+    .excerpt-field.two {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .excerpt-bg-strip,
+    .excerpt-segmented {
+      display: flex;
+      gap: 9px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+
+    .excerpt-bg-strip::-webkit-scrollbar,
+    .excerpt-segmented::-webkit-scrollbar {
+      display: none;
+    }
+
+    .excerpt-editor-card .swatch[data-bg] {
+      display: grid;
+      align-items: end;
+      min-width: 76px;
+      height: 52px;
+      border-radius: 11px;
+      padding: 8px;
+      color: rgba(255, 255, 255, .86);
+      text-align: left;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .11);
+    }
+
+    .excerpt-editor-card .swatch[data-bg="dark"] {
+      background: #101114;
+    }
+
+    .excerpt-editor-card .swatch[data-bg="light"] {
+      background: linear-gradient(135deg, #f7f5ef, #ded8cd);
+      color: #202124;
+    }
+
+    .excerpt-editor-card .swatch[data-bg="purple-blue"] {
+      background: linear-gradient(135deg, #7c3aed, #0284c7);
+    }
+
+    .excerpt-editor-card .swatch[data-bg="dark-purple"] {
+      background: linear-gradient(135deg, #160d21, #615174);
+    }
+
+    .excerpt-editor-card .swatch[data-bg="sky-blue"] {
+      background: linear-gradient(135deg, #edf9ff, #a9d3ea);
+      color: #202124;
+    }
+
+    .excerpt-editor-card .swatch.active,
+    .excerpt-option.active {
+      border-color: #25a9ff;
+      box-shadow: inset 0 0 0 1px #25a9ff, 0 0 0 1px rgba(37, 169, 255, .28);
+    }
+
+    .excerpt-option {
+      min-height: 38px;
+      border: 1px solid #34363c;
+      border-radius: 10px;
+      background: transparent;
+      color: #aeb5bf;
+      padding: 0 12px;
+      font-size: 12px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .excerpt-color-option {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 86px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .excerpt-color-option[data-text-color="white"] {
+      background: #0b0b0c;
+      color: #f4f4f5;
+    }
+
+    .excerpt-color-option[data-text-color="black"] {
+      background: #f4f4f5;
+      color: #202124;
+    }
+
+    .excerpt-switch-row,
     .excerpt-image-controls {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 10px;
+    }
+
+    .excerpt-switch {
+      position: relative;
+      display: inline-flex;
+      width: 47px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .excerpt-switch input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .excerpt-switch span {
+      width: 100%;
+      border-radius: 999px;
+      background: #3b3b3b;
+      transition: background .18s ease;
+      cursor: pointer;
+    }
+
+    .excerpt-switch span::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #ffffff;
+      transition: transform .18s ease;
+    }
+
+    .excerpt-switch input:checked + span {
+      background: #25a9ff;
+    }
+
+    .excerpt-switch input:checked + span::after {
+      transform: translateX(21px);
+    }
+
+    .excerpt-file-button {
+      display: inline-grid;
+      place-items: center;
+      min-height: 42px;
+      border: 1px dashed #4b5563;
+      border-radius: 12px;
+      background: #202020;
+      color: #d4d4d4;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+
+    .excerpt-file-button input {
+      display: none;
     }
 
     .badge.age.adult {
@@ -3882,31 +4104,26 @@
   </div>
 
   <div class="modal" id="excerptModal" hidden>
-    <section class="modal-card wide" role="dialog" aria-modal="true" aria-labelledby="excerptTitle">
+    <section class="modal-card wide excerpt-editor-card" role="dialog" aria-modal="true" aria-labelledby="excerptTitle">
       <div class="modal-head">
-        <h2 id="excerptTitle">발췌짤 만들기</h2>
-        <button class="modal-close" id="excerptClose" type="button" aria-label="닫기">×</button>
+        <div class="excerpt-head-title">
+          <button class="excerpt-back" id="excerptClose" type="button" aria-label="닫기">‹</button>
+          <h2 id="excerptTitle">발췌짤 만들기</h2>
+        </div>
+        <div class="excerpt-head-actions">
+          <button class="button primary" id="excerptDownload" type="button">이미지 저장</button>
+          <button class="button" id="excerptShare" type="button">공유</button>
+        </div>
       </div>
       <div class="excerpt-layout">
         <div class="excerpt-preview">
           <canvas id="excerptCanvas" width="1080" height="1080" aria-label="배경 이미지 위치와 크기를 직접 조절하는 발췌 미리보기"></canvas>
           <p class="excerpt-image-help">이미지를 끌어 위치를 조절하고, 마우스 휠 또는 두 손가락으로 확대·축소하세요.</p>
-          <div class="random-result-actions">
-            <button class="button primary" id="excerptDownload" type="button">이미지 저장</button>
-            <button class="button" id="excerptShare" type="button">공유</button>
-          </div>
         </div>
-        <div class="modal-grid">
-          <label><span class="label">작품 이름</span><input id="excerptWorkTitle"></label>
-          <label><span class="label">작가</span><input id="excerptAuthor"></label>
-          <label><span class="label">발췌 텍스트</span><textarea id="excerptText" placeholder="텍스트를 복붙해 주세요."></textarea></label>
-          <div class="modal-grid two">
-            <label><span class="label">글꼴</span><select id="excerptFont"><option value="Pretendard, system-ui, sans-serif">기본</option><option value="'Nanum Gothic', '나눔고딕', system-ui, sans-serif">나눔고딕</option><option value="'Nanum Myeongjo', '나눔명조', serif">나눔명조</option><option value="'RIDIBatang', 'Nanum Myeongjo', serif">리디명조</option></select></label>
-            <label><span class="label">글자크기 <span id="excerptFontSizeLabel">44</span></span><input id="excerptFontSize" type="range" min="26" max="58" value="44"></label>
-          </div>
-          <div class="modal-grid">
+        <div class="excerpt-controls">
+          <div class="excerpt-field">
             <span class="label">배경</span>
-            <div class="swatches">
+            <div class="excerpt-bg-strip">
               <button class="swatch active" type="button" data-bg="dark">검정</button>
               <button class="swatch" type="button" data-bg="light">하양</button>
               <button class="swatch" type="button" data-bg="purple-blue">보라·파랑</button>
@@ -3914,15 +4131,36 @@
               <button class="swatch" type="button" data-bg="sky-blue">연한 하늘</button>
             </div>
           </div>
-          <div class="modal-grid">
-            <span class="label">글자 색상</span>
-            <div class="swatches">
-              <button class="swatch active" type="button" data-text-color="white">흰색</button>
-              <button class="swatch" type="button" data-text-color="black">검정색</button>
+          <label class="excerpt-field"><span class="label">제목</span><input id="excerptWorkTitle"></label>
+          <label class="excerpt-field"><span class="label">작가</span><input id="excerptAuthor"></label>
+          <label class="excerpt-field"><span class="label">텍스트</span><textarea id="excerptText" placeholder="텍스트를 복붙해 주세요."></textarea></label>
+          <label class="excerpt-field"><span class="label">글꼴</span><select id="excerptFont"><option value="Pretendard, system-ui, sans-serif">기본</option><option value="'Nanum Gothic', '나눔고딕', system-ui, sans-serif">나눔고딕</option><option value="'Nanum Myeongjo', '나눔명조', serif">나눔명조</option><option value="'RIDIBatang', 'Nanum Myeongjo', serif">리디명조</option></select></label>
+          <div class="excerpt-field">
+            <span class="label">글꼴크기 <span id="excerptFontSizeLabel">중간 글씨</span></span>
+            <input id="excerptFontSize" type="hidden" value="44">
+            <div class="excerpt-segmented" aria-label="글꼴크기">
+              <button class="excerpt-option" type="button" data-font-size="30" data-font-label="더 작은 글씨">더 작은 글씨</button>
+              <button class="excerpt-option" type="button" data-font-size="36" data-font-label="작은 글씨">작은 글씨</button>
+              <button class="excerpt-option active" type="button" data-font-size="44" data-font-label="중간 글씨">중간 글씨</button>
+              <button class="excerpt-option" type="button" data-font-size="52" data-font-label="큰 글씨">큰 글씨</button>
             </div>
           </div>
+          <div class="excerpt-field">
+            <span class="label">글자 색상</span>
+            <div class="excerpt-segmented">
+              <button class="excerpt-option excerpt-color-option active" type="button" data-text-color="white">T 흰색</button>
+              <button class="excerpt-option excerpt-color-option" type="button" data-text-color="black">T 검정색</button>
+            </div>
+          </div>
+          <div class="excerpt-switch-row">
+            <span class="label">줄 바꿈</span>
+            <label class="excerpt-switch">
+              <input id="excerptLineBreak" type="checkbox" checked>
+              <span aria-hidden="true"></span>
+            </label>
+          </div>
           <div class="excerpt-image-controls">
-            <label style="flex: 1;"><span class="label">배경 이미지</span><input id="excerptImage" type="file" accept="image/*"></label>
+            <label class="excerpt-file-button">배경 이미지<input id="excerptImage" type="file" accept="image/*"></label>
             <button class="button" id="excerptImageReset" type="button">위치 초기화</button>
           </div>
         </div>
@@ -4076,6 +4314,7 @@
       excerptPost: null,
       excerptBackground: "dark",
       excerptTextColor: "white",
+      excerptLineBreak: true,
       excerptImage: null,
       excerptImageScale: 1,
       excerptImageX: 0,
@@ -4204,6 +4443,7 @@
       excerptFont: $("#excerptFont"),
       excerptFontSize: $("#excerptFontSize"),
       excerptFontSizeLabel: $("#excerptFontSizeLabel"),
+      excerptLineBreak: $("#excerptLineBreak"),
       excerptImage: $("#excerptImage"),
       excerptImageReset: $("#excerptImageReset"),
       excerptDownload: $("#excerptDownload"),
@@ -5685,9 +5925,27 @@
 
     function setExcerptTextColor(value) {
       state.excerptTextColor = value;
-      document.querySelectorAll(".swatch[data-text-color]").forEach((button) => {
+      document.querySelectorAll("[data-text-color]").forEach((button) => {
         button.classList.toggle("active", button.dataset.textColor === value);
       });
+      drawExcerptCanvas();
+    }
+
+    function setExcerptFontSize(value, shouldDraw = true) {
+      const button = document.querySelector(`[data-font-size="${value}"]`);
+      els.excerptFontSize.value = value;
+      if (els.excerptFontSizeLabel) {
+        els.excerptFontSizeLabel.textContent = button?.dataset.fontLabel || value;
+      }
+      document.querySelectorAll("[data-font-size]").forEach((item) => {
+        item.classList.toggle("active", item.dataset.fontSize === value);
+      });
+      if (shouldDraw) drawExcerptCanvas();
+    }
+
+    function setExcerptLineBreak(enabled) {
+      state.excerptLineBreak = Boolean(enabled);
+      if (els.excerptLineBreak) els.excerptLineBreak.checked = state.excerptLineBreak;
       drawExcerptCanvas();
     }
 
@@ -5851,9 +6109,11 @@
       zoomExcerptImageAt(point, state.excerptImageScale * factor);
     }
 
-    function wrapCanvasText(ctx, text, maxWidth) {
+    function wrapCanvasText(ctx, text, maxWidth, preserveLineBreaks = true) {
       const lines = [];
-      normalize(text).split(/\n+/).forEach((paragraph) => {
+      const source = preserveLineBreaks ? normalize(text) : normalize(text).replace(/\s+/g, " ");
+      const paragraphs = preserveLineBreaks ? source.split(/\n+/) : [source];
+      paragraphs.forEach((paragraph) => {
         let line = "";
         [...paragraph].forEach((char) => {
           const next = `${line}${char}`;
@@ -5933,7 +6193,7 @@
       if (quote.length >= 2 && quotePairs[quote[0]] === quote[quote.length - 1]) {
         quote = quote.slice(1, -1).trim();
       }
-      const lines = wrapCanvasText(ctx, quote, width - margin * 2).slice(0, 8);
+      const lines = wrapCanvasText(ctx, quote, width - margin * 2, state.excerptLineBreak).slice(0, 8);
       let y = 270;
       lines.forEach((line) => {
         if (line) {
@@ -6896,18 +7156,22 @@
     els.excerptModal.addEventListener("click", (event) => {
       if (event.target === els.excerptModal) closeExcerptModal();
     });
-    [els.excerptWorkTitle, els.excerptAuthor, els.excerptText, els.excerptFont, els.excerptFontSize].forEach((input) => {
+    setExcerptFontSize(els.excerptFontSize.value || "44", false);
+    [els.excerptWorkTitle, els.excerptAuthor, els.excerptText, els.excerptFont].forEach((input) => {
       input.addEventListener("input", () => {
-        els.excerptFontSizeLabel.textContent = els.excerptFontSize.value;
         drawExcerptCanvas();
       });
+    });
+    document.querySelectorAll("[data-font-size]").forEach((button) => {
+      button.addEventListener("click", () => setExcerptFontSize(button.dataset.fontSize));
     });
     document.querySelectorAll(".swatch[data-bg]").forEach((button) => {
       button.addEventListener("click", () => setExcerptBackground(button.dataset.bg));
     });
-    document.querySelectorAll(".swatch[data-text-color]").forEach((button) => {
+    document.querySelectorAll("[data-text-color]").forEach((button) => {
       button.addEventListener("click", () => setExcerptTextColor(button.dataset.textColor));
     });
+    els.excerptLineBreak.addEventListener("change", () => setExcerptLineBreak(els.excerptLineBreak.checked));
     els.excerptImage.addEventListener("change", (event) => loadExcerptImage(event.target.files[0]));
     els.excerptImageReset.addEventListener("click", resetExcerptImageTransform);
     els.excerptCanvas.addEventListener("pointerdown", handleExcerptPointerDown);
