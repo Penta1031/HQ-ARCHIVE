@@ -985,6 +985,7 @@ function RecommendedVideosAdmin({ onBack }) {
   const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [savingId, setSavingId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const [savedId, setSavedId] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [channelUrl, setChannelUrl] = useState("");
@@ -1362,6 +1363,25 @@ function RecommendedVideosAdmin({ onBack }) {
       setBulkBusy("");
     }
   };
+  const deleteItem = async (item) => {
+    if (!window.confirm(`'${item.title || "제목 없음"}' 추천 영상을 삭제할까요? 삭제 후에는 복구할 수 없습니다.`)) return;
+    setDeletingId(item.id); setSaveError(""); setCollectNotice(""); setSavedId("");
+    try {
+      const deletedCount = await recommendedVideoService.removeMany([item.id]);
+      setItems((current) => current.filter((value) => value.id !== item.id));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(item.id);
+        return next;
+      });
+      await refreshItems();
+      setCollectNotice(`추천 영상 ${deletedCount}개를 삭제했습니다.`);
+    } catch (reason) {
+      setSaveError(reason.message || "추천 영상을 삭제하지 못했습니다.");
+    } finally {
+      setDeletingId("");
+    }
+  };
 
   const uploadDate = (value) => displayKstDate(value, "업로드일 없음");
 
@@ -1455,7 +1475,7 @@ function RecommendedVideosAdmin({ onBack }) {
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">추천 목록 순서</span><input type="number" step="1" value={item.sortOrder} onChange={(event) => updateItem(item.id, { sortOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
           <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">PICK 순서</span><input type="number" step="1" value={item.featuredOrder} onChange={(event) => updateItem(item.id, { featuredOrder: event.target.value })} className="mt-1 w-full bg-transparent text-xs font-black text-neutral-300 outline-none"/></label>
         </div>
-        <button type="button" disabled={Boolean(savingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button>
+        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2"><button type="button" disabled={Boolean(savingId) || Boolean(deletingId) || Boolean(bulkBusy)} onClick={() => saveItem(item)} className="rounded-xl bg-accent py-3 text-xs font-black disabled:opacity-50">{savingId === item.id ? "저장 중…" : savedId === item.id ? "저장됨" : "설정 저장"}</button><button type="button" disabled={Boolean(savingId) || Boolean(deletingId) || Boolean(bulkBusy)} onClick={() => deleteItem(item)} aria-label={`${item.title || "제목 없음"} 삭제`} className="flex items-center justify-center rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-red-400 disabled:opacity-50">{deletingId === item.id ? <RefreshCw size={16} className="animate-spin"/> : <Trash2 size={16}/>}</button></div>
       </div>
     </article>)}</div><div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5"><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">이전</button><span className="text-[10px] font-black text-neutral-500">{page + 1} / {totalPages} · {totalItems}개</span><button type="button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || listLoading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">다음</button></div></> : <div className="mt-4 rounded-2xl border border-dashed border-white/10 py-12 text-center text-xs font-bold text-neutral-600">{hasAdminListFilter ? "검색/필터 조건에 맞는 추천 영상이 없습니다." : "등록된 추천 영상이 없습니다."}</div>}
   </div>;
