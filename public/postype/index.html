@@ -1521,13 +1521,6 @@
       grid-column: 1 / -1;
     }
 
-    .admin-bulk-visibility {
-      display: grid;
-      grid-column: 1 / -1;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 7px;
-    }
-
     .admin-bulk-values.is-disabled {
       opacity: .55;
       pointer-events: none;
@@ -3619,10 +3612,6 @@
           <div class="admin-multiselect-options" id="adminBulkValueOptions"></div>
         </details>
         <button class="button primary admin-bulk-apply" id="adminBulkApply" type="button" disabled>선택값으로 일괄 교체</button>
-        <div class="admin-bulk-visibility">
-          <button class="button" id="adminBulkShow" type="button" disabled>선택 공개</button>
-          <button class="button" id="adminBulkHide" type="button" disabled>선택 미공개</button>
-        </div>
         <button class="button danger admin-bulk-delete" id="adminBulkDelete" type="button" disabled>선택한 글 삭제</button>
       </div>
       <div class="admin-list" id="adminList"></div>
@@ -4177,8 +4166,6 @@
       adminBulkValueSummary: $("#adminBulkValueSummary"),
       adminBulkValueOptions: $("#adminBulkValueOptions"),
       adminBulkApply: $("#adminBulkApply"),
-      adminBulkShow: $("#adminBulkShow"),
-      adminBulkHide: $("#adminBulkHide"),
       adminBulkDelete: $("#adminBulkDelete"),
       adminEditor: $("#adminEditor"),
       adminEditorTitle: $("#adminEditorTitle"),
@@ -5344,8 +5331,6 @@
       els.adminBulkApply.disabled = count === 0
         || !normalize(els.adminBulkField.value)
         || state.adminBulkValues.size === 0;
-      els.adminBulkShow.disabled = count === 0;
-      els.adminBulkHide.disabled = count === 0;
       els.adminBulkDelete.disabled = count === 0;
     }
 
@@ -6677,37 +6662,6 @@
       }
     }
 
-    async function bulkSetVisibility(visible) {
-      const posts = selectedAdminPosts();
-      if (!posts.length) return;
-      const label = visible ? "공개" : "미공개";
-      if (!confirm(`선택한 ${posts.length}개 글을 ${label} 상태로 바꿀까요?`)) return;
-      const updatedPosts = posts.map((post) => withVisibilityPayload({ ...post, "관리자검수": visible ? "Y" : "" }, visible));
-
-      els.status.textContent = `선택한 글을 ${label}로 변경하는 중입니다.`;
-      try {
-        if (!hasSupabaseConfig() && !CONFIG.ADMIN_API_URL) {
-          updatedPosts.forEach(upsertLocal);
-          const updatedByKey = new Map(updatedPosts.map((post) => [adminPostKey(post), post]));
-          state.posts = state.posts.map((post) => updatedByKey.get(adminPostKey(post)) || post);
-          state.adminSelected.clear();
-          render();
-          showAdminResult(`${posts.length}개 글을 이 브라우저에서 ${label}로 변경했습니다.`);
-          return;
-        }
-        for (let index = 0; index < updatedPosts.length; index += 1) {
-          els.status.textContent = `${label} 변경 중 ${index + 1}/${updatedPosts.length}`;
-          await sendAdminAction("update", updatedPosts[index]);
-        }
-        state.adminSelected.clear();
-        await loadData();
-        showAdminResult(`${posts.length}개 글을 Supabase에서 ${label}로 변경했습니다.`);
-      } catch (error) {
-        showAdminResult(`${label} 변경에 실패했습니다: ${error.message}`, "error");
-        alert(`${label} 변경에 실패했습니다. ${error.message}`);
-      }
-    }
-
     async function bulkDeletePosts() {
       const posts = selectedAdminPosts();
       if (!posts.length) return;
@@ -6844,8 +6798,6 @@
     });
     els.adminBulkField.addEventListener("change", buildAdminBulkValueOptions);
     els.adminBulkApply.addEventListener("click", bulkUpdateFilters);
-    els.adminBulkShow.addEventListener("click", () => bulkSetVisibility(true));
-    els.adminBulkHide.addEventListener("click", () => bulkSetVisibility(false));
     els.adminBulkDelete.addEventListener("click", bulkDeletePosts);
     els.adminVocabularyGroup.addEventListener("change", renderAdminVocabulary);
     els.adminVocabularyAdd.addEventListener("click", addVocabularyOption);

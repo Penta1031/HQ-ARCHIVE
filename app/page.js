@@ -6,7 +6,7 @@ import {
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
   ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, RefreshCw, Search, Share2, Shuffle, Trash2, Trophy, Video, X
 } from "lucide-react";
-import { adminService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
+import { adminService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
 import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -60,15 +60,42 @@ const SUB_CATEGORY_OPTIONS = Object.values(CATEGORY_MAP).flat();
 const mainCategoryFor = (subCategory) => Object.entries(CATEGORY_MAP).find(([, values]) => values.includes(subCategory))?.[0] || "기타";
 const parseKeywordText = (value) => String(value || "").split(/[,#]/).map((word) => word.trim()).filter(Boolean);
 const uniqueKeywords = (values) => [...new Set((values || []).map((word) => String(word || "").trim()).filter(Boolean))];
+const APP_TABS = [
+  { key: "home", label: "홈", icon: Home, description: "홈/오늘의 기록/검색" },
+  { key: "calendar", label: "캘린더", icon: CalendarDays, description: "날짜별 아카이브" },
+  { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" },
+  { key: "postype", label: "포타", icon: Search, description: "포타 검색기 탭" }
+];
+const DEFAULT_TAB_VISIBILITY = Object.fromEntries(APP_TABS.map((item) => [item.key, true]));
+const normalizeTabVisibility = (rowsOrSettings = []) => {
+  const next = { ...DEFAULT_TAB_VISIBILITY };
+  if (Array.isArray(rowsOrSettings)) {
+    rowsOrSettings.forEach((row) => {
+      const key = String(row.tab_key || row.key || "").trim();
+      if (key in next) next[key] = row.is_visible !== false;
+    });
+  } else if (rowsOrSettings && typeof rowsOrSettings === "object") {
+    APP_TABS.forEach(({ key }) => { if (key in rowsOrSettings) next[key] = rowsOrSettings[key] !== false; });
+  }
+  if (!Object.values(next).some(Boolean)) next.home = true;
+  return next;
+};
+const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
 
 export default function Page() {
   const [tab, setTab] = useState("home");
+  const [tabVisibility, setTabVisibility] = useState(DEFAULT_TAB_VISIBILITY);
   const [archiveLanguage, setArchiveLanguage] = useState("ko");
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
   const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
   const contentRef = useRef(null);
-  const navigate = (next, keyword = "") => { setTab(next); setSelectedKeyword(keyword); };
+  const visibleTabs = useMemo(() => visibleAppTabs(tabVisibility), [tabVisibility]);
+  const navigate = (next, keyword = "") => {
+    if (tabVisibility[next] === false) return;
+    setTab(next);
+    setSelectedKeyword(keyword);
+  };
   const scrollContentToTop = () => window.requestAnimationFrame(() => contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   const openAdmin = () => { setAdminOpen(true); };
   const closeAdmin = () => {
@@ -81,6 +108,13 @@ export default function Page() {
     setTab("postype");
     setPostypeAdminRequest({ id: Date.now(), credential });
   };
+  useEffect(() => {
+    let active = true;
+    appTabService.list()
+      .then((rows) => { if (active) setTabVisibility(normalizeTabVisibility(rows)); })
+      .catch(() => { if (active) setTabVisibility(DEFAULT_TAB_VISIBILITY); });
+    return () => { active = false; };
+  }, []);
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
@@ -94,8 +128,8 @@ export default function Page() {
             {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} />}
           </div>
         </section>
-        <BottomNav tab={tab} onChange={navigate} />
-        {adminOpen && <AdminHub onClose={closeAdmin} onOpenPostype={openPostypeAdmin} />}
+        <BottomNav tab={tab} onChange={navigate} items={visibleTabs} />
+        {adminOpen && <AdminHub onClose={closeAdmin} onOpenPostype={openPostypeAdmin} tabVisibility={tabVisibility} onTabVisibilityChange={setTabVisibility} />}
       </div>
     </main>
   );
@@ -552,15 +586,15 @@ function PostypeView({ adminRequest = null }) {
     frame?.addEventListener("load", openAdmin);
     return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
   }, [adminRequest?.id, adminRequest?.credential]);
-  return <iframe ref={frameRef} src="postype/index.html?v=20260627-visibility" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
+  return <iframe ref={frameRef} src="postype/index.html?v=20260627-tabs" title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
 }
 
-function AdminHub({ onClose, onOpenPostype }) {
+function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange }) {
   const [authenticated, setAuthenticated] = useState(() => adminService.hasSession());
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [section, setSection] = useState("hub");
-  const sectionTitle = { hub: "관리자 모드", archive: "아카이브 관리", recommended: "추천 영상 관리" }[section] || "관리자 모드";
+  const sectionTitle = { hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리" }[section] || "관리자 모드";
   const authenticate = async (event) => {
     event.preventDefault();
     try {
@@ -582,10 +616,74 @@ function AdminHub({ onClose, onOpenPostype }) {
         {error && <p className="mt-2 text-center text-xs font-bold text-accent">{error}</p>}
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
+        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천·포타 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
-      </div> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
+      </div> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
+    </div>
+  </div>;
+}
+
+function TabVisibilityAdmin({ onBack, tabVisibility, onChange }) {
+  const [settings, setSettings] = useState(() => normalizeTabVisibility(tabVisibility));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    appTabService.list()
+      .then((rows) => {
+        if (!active) return;
+        const next = normalizeTabVisibility(rows);
+        setSettings(next);
+        onChange?.(next);
+      })
+      .catch((reason) => { if (active) setMessage(reason.message || "탭 설정을 불러오지 못했습니다."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [onChange]);
+  const toggle = (key) => setSettings((current) => {
+    const next = normalizeTabVisibility({ ...current, [key]: current[key] === false });
+    return Object.values(next).some(Boolean) ? next : { ...next, home: true };
+  });
+  const save = async () => {
+    if (!Object.values(settings).some(Boolean)) {
+      setMessage("최소 1개 탭은 ON 상태여야 합니다.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      const rows = await appTabService.update(settings);
+      const next = normalizeTabVisibility(rows);
+      setSettings(next);
+      onChange?.(next);
+      setMessage("탭 노출 설정을 저장했습니다.");
+    } catch (reason) {
+      setMessage(reason.message || "탭 노출 설정 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <div className="py-5">
+    <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 홈</button>
+    <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+      <p className="text-xs font-black">하단 탭 노출</p>
+      <p className="mt-1 text-[10px] font-bold leading-4 text-neutral-600">OFF로 둔 탭은 방문자 하단 메뉴에서 숨겨집니다. 관리자 허브의 포타 검색기 진입은 유지됩니다.</p>
+      <div className="mt-4 space-y-2">
+        {APP_TABS.map(({ key, label, icon: Icon, description }) => {
+          const active = settings[key] !== false;
+          return <button key={key} type="button" disabled={loading || saving} onClick={() => toggle(key)} aria-pressed={active} className={cn("flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition disabled:opacity-50", active ? "border-accent/40 bg-accent/10" : "border-white/10 bg-black/40")}>
+            <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", active ? "bg-accent/15 text-accent" : "bg-white/5 text-neutral-600")}><Icon size={18}/></span>
+            <span className="min-w-0 flex-1"><strong className="block text-sm font-black">{label}</strong><span className="mt-0.5 block text-[10px] font-bold text-neutral-600">{description}</span></span>
+            <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black", active ? "bg-accent text-white" : "bg-white/10 text-neutral-500")}>{active ? "ON" : "OFF"}</span>
+          </button>;
+        })}
+      </div>
+      <button type="button" onClick={save} disabled={loading || saving} className="mt-4 w-full rounded-2xl bg-accent py-3 text-xs font-black disabled:opacity-40">{saving ? "저장 중…" : "탭 설정 저장"}</button>
+      {message && <p className={cn("mt-3 text-center text-[10px] font-bold", message.includes("실패") || message.includes("못했습니다") ? "text-accent" : "text-neutral-500")}>{message}</p>}
     </div>
   </div>;
 }
@@ -1561,4 +1659,7 @@ function LoadError({ message }) {
 
 function EmptyState({text}) { return <div className="flex flex-col items-center py-20 text-center"><Archive size={28} className="text-neutral-800"/><p className="mt-3 text-xs font-bold text-neutral-600">{text}</p></div> }
 
-function BottomNav({tab,onChange}) { const items=[["home",Home,"홈"],["calendar",CalendarDays,"캘린더"],["recommended",Video,"추천"],["postype",Search,"포타"]]; return <nav className="safe-bottom absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/90 px-3 pt-2 backdrop-blur-2xl"><div className="grid grid-cols-4">{items.map(([key,Icon,label])=><button key={key} onClick={()=>onChange(key)} className={cn("relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold transition",tab===key?"text-white":"text-neutral-600")}><span className={cn("rounded-2xl px-4 py-1.5 transition",tab===key&&"bg-accent/15 text-accent")}><Icon size={20} strokeWidth={tab===key?2.6:2}/></span>{label}{tab===key&&<span className="absolute -bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>)}</div></nav> }
+function BottomNav({tab,onChange,items = APP_TABS}) {
+  const visibleItems = items.length ? items : APP_TABS.filter((item) => item.key === "home");
+  return <nav className="safe-bottom absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/90 px-3 pt-2 backdrop-blur-2xl"><div className="grid" style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}>{visibleItems.map(({ key, icon: Icon, label })=><button key={key} onClick={()=>onChange(key)} className={cn("relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold transition",tab===key?"text-white":"text-neutral-600")}><span className={cn("rounded-2xl px-4 py-1.5 transition",tab===key&&"bg-accent/15 text-accent")}><Icon size={20} strokeWidth={tab===key?2.6:2}/></span>{label}{tab===key&&<span className="absolute -bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>)}</div></nav>;
+}

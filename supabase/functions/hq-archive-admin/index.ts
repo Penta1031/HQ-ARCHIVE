@@ -38,6 +38,13 @@ async function validSession(token: string, secret: string) {
 
 const supabaseUrl = text(Deno.env.get("SUPABASE_URL")).replace(/\/$/, "");
 const serviceKey = text(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
+const appTabMeta = [
+  { tab_key: "home", label: "홈", sort_order: 10 },
+  { tab_key: "calendar", label: "캘린더", sort_order: 20 },
+  { tab_key: "recommended", label: "추천", sort_order: 30 },
+  { tab_key: "postype", label: "포타", sort_order: 40 },
+];
+const appTabKeys = new Set(appTabMeta.map((item) => item.tab_key));
 async function rest(resource: string, options: RequestInit = {}, count = false) {
   if (!supabaseUrl || !serviceKey) throw new Error("Supabase server secrets are not configured.");
   const response = await fetch(`${supabaseUrl}/rest/v1/${resource}`, {
@@ -88,6 +95,17 @@ async function resolveArchiveThumbnail(sourceUrl: string) {
     return text(data.thumbnailUrl || data.thumbnail_url || data.preview_image_url || data.poster || (!data.isVideo ? data.url : ""));
   }
   return "";
+}
+async function appTabSettingsRows(settings: unknown) {
+  const values = settings && typeof settings === "object" ? settings as Record<string, unknown> : {};
+  const rows = appTabMeta.map((item) => ({
+    ...item,
+    is_visible: values[item.tab_key] !== false,
+  }));
+  if (!rows.some((row) => row.is_visible)) throw new Error("최소 1개 탭은 ON 상태여야 합니다.");
+  const invalidKeys = Object.keys(values).filter((key) => !appTabKeys.has(key));
+  if (invalidKeys.length) throw new Error("허용되지 않은 탭 설정이 포함되어 있습니다.");
+  return rows;
 }
 const escapeLike = (value: string) => value.replace(/[,*()]/g, " ").trim();
 function exactKstArchiveDate(value: unknown) {
@@ -333,6 +351,21 @@ Deno.serve(async (request) => {
       return json(request, { ok: true, token: await issueSession(sessionSecret), expiresIn: sessionMs / 1000 });
     }
     if (!await validSession(text(request.headers.get("x-hq-admin-session")), sessionSecret)) return json(request, { ok: false, error: "관리자 인증이 만료되었습니다." }, 401);
+
+    if (action === "app-tab-settings") {
+      const result = await rest("hq_app_tab_config?select=tab_key,label,sort_order,is_visible&order=sort_order.asc");
+      return json(request, { ok: true, tabs: result.rows });
+    }
+    if (action === "app-tab-settings-update") {
+      const rows = await appTabSettingsRows(payload.settings);
+      const result = await rest("hq_app_tab_config?on_conflict=tab_key", {
+        method: "POST",
+        body: JSON.stringify(rows),
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" }
+      });
+      const sorted = [...result.rows].sort((a: Record<string, unknown>, b: Record<string, unknown>) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+      return json(request, { ok: true, tabs: sorted });
+    }
 
     if (action === "archive-list") {
       const page = Math.max(1, Number(payload.page || 1)); const limit = Math.min(100, Math.max(1, Number(payload.limit || 30)));
