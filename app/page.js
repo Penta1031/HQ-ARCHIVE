@@ -64,8 +64,7 @@ const uniqueKeywords = (values) => [...new Set((values || []).map((word) => Stri
 const APP_TABS = [
   { key: "home", label: "홈", icon: Home, description: "홈/오늘의 기록/검색" },
   { key: "calendar", label: "캘린더", icon: CalendarDays, description: "날짜별 아카이브" },
-  { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" },
-  { key: "postype", label: "포타", icon: Search, description: "포타 검색기 탭" }
+  { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" }
 ];
 const DEFAULT_TAB_VISIBILITY = Object.fromEntries(APP_TABS.map((item) => [item.key, true]));
 const normalizeTabVisibility = (rowsOrSettings = []) => {
@@ -82,10 +81,8 @@ const normalizeTabVisibility = (rowsOrSettings = []) => {
   return next;
 };
 const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
-const POSTYPE_APP_URL = "https://penta1031.github.io/HQ-POSTYPE-SEARCH/";
-const POSTYPE_APP_ORIGIN = new URL(POSTYPE_APP_URL).origin;
-const TAB_LABELS = { home: "홈", calendar: "캘린더", recommended: "추천", postype: "포타" };
-const CONTENT_TYPE_LABELS = { hq_archive: "아카이브", recommended_video: "추천 영상", postype: "포타" };
+const TAB_LABELS = { home: "홈", calendar: "캘린더", recommended: "추천" };
+const CONTENT_TYPE_LABELS = { hq_archive: "아카이브", recommended_video: "추천 영상" };
 const trackContentView = (item, { tabKey = "home", contentType = "hq_archive", urlKey = "link", titleKey = "title" } = {}) => {
   analyticsService.track({
     eventType: "content",
@@ -103,8 +100,6 @@ export default function Page() {
   const [archiveLanguage, setArchiveLanguage] = useState("ko");
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [adminOpen, setAdminOpen] = useState(false);
-  const [postypeAdminRequest, setPostypeAdminRequest] = useState(0);
-  const [postypeExcerptOpen, setPostypeExcerptOpen] = useState(false);
   const contentRef = useRef(null);
   const visibleTabs = useMemo(() => visibleAppTabs(tabVisibility), [tabVisibility]);
   const navigate = (next, keyword = "") => {
@@ -119,11 +114,6 @@ export default function Page() {
     setAdminOpen(false);
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   };
-  const openPostypeAdmin = (credential = "") => {
-    closeAdmin();
-    setTab("postype");
-    setPostypeAdminRequest({ id: Date.now(), credential });
-  };
   useEffect(() => {
     let active = true;
     appTabService.list()
@@ -132,9 +122,6 @@ export default function Page() {
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (tab !== "postype") setPostypeExcerptOpen(false);
-  }, [tab]);
-  useEffect(() => {
     analyticsService.track({ eventType: "tab", tabKey: tab });
   }, [tab]);
 
@@ -142,16 +129,15 @@ export default function Page() {
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
         <Header onAdmin={openAdmin} showLanguage={tab === "home"} language={archiveLanguage} onLanguage={setArchiveLanguage} />
-        <section ref={contentRef} className={cn("min-h-0 flex-1 overscroll-contain no-scrollbar", tab === "postype" ? (postypeExcerptOpen ? "overflow-hidden pb-0" : "overflow-hidden pb-[76px]") : "overflow-y-auto pb-28")}>
-          <div key={tab} className={cn("animate-fade-in", tab === "postype" && "h-full")}>
+        <section ref={contentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
+          <div key={tab} className="animate-fade-in">
             {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "calendar" && <CalendarView />}
             {tab === "recommended" && <RecommendedView onScrollTop={scrollContentToTop} />}
-            {tab === "postype" && <PostypeView adminRequest={postypeAdminRequest} onExcerptOpenChange={setPostypeExcerptOpen} />}
           </div>
         </section>
-        {!postypeExcerptOpen && <BottomNav tab={tab} onChange={navigate} items={visibleTabs} />}
-        {adminOpen && <AdminHub onClose={closeAdmin} onOpenPostype={openPostypeAdmin} tabVisibility={tabVisibility} onTabVisibilityChange={setTabVisibility} />}
+        <BottomNav tab={tab} onChange={navigate} items={visibleTabs} />
+        {adminOpen && <AdminHub onClose={closeAdmin} tabVisibility={tabVisibility} onTabVisibilityChange={setTabVisibility} />}
       </div>
     </main>
   );
@@ -603,31 +589,7 @@ function WinnerView({winner,cup,onBack,onAgain}) {
   return <><AppOverlay><div className="relative mx-auto h-[100dvh] w-full max-w-md overflow-y-auto bg-black px-5 pt-8 text-center no-scrollbar"><div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,#e5000044,transparent_70%)]"/><Medal size={34} className="relative mx-auto text-accent"/><p className="relative mt-3 text-xs font-black tracking-[.25em] text-accent">THE WINNER IS</p><h2 className="relative mt-2 text-3xl font-black">최종 우승</h2><button onClick={()=>setPreview(winner)} aria-label={`${winner.name} 미디어 전체 보기`} className="relative mx-auto mt-6 aspect-square w-[72%] rotate-1 overflow-hidden rounded-[32px] border-2 border-accent shadow-[0_0_60px_#e5000044]"><CandidateMedia item={winner}/><div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"/><p className="pointer-events-none absolute inset-x-5 bottom-5 text-lg font-black">{winner.name}</p></button><button onClick={share} className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black"><Share2 size={17}/>공유하기</button><button onClick={onAgain} className="relative mt-2 w-full rounded-2xl bg-white/5 py-3 text-sm font-bold text-neutral-400">다시 하기</button><button onClick={onBack} className="relative w-full py-3 text-sm font-bold text-neutral-600">월드컵으로 돌아가기</button></div></AppOverlay>{preview&&<MediaPreviewModal item={winner} onClose={()=>setPreview(null)}/>}</>;
 }
 
-function PostypeView({ adminRequest = null, onExcerptOpenChange }) {
-  const frameRef = useRef(null);
-  useEffect(() => {
-    if (!adminRequest) return;
-    const openAdmin = () => frameRef.current?.contentWindow?.postMessage({ type: "hq-open-postype-admin", credential: adminRequest.credential || "" }, POSTYPE_APP_ORIGIN);
-    const frame = frameRef.current;
-    const timer = window.setTimeout(openAdmin, 0);
-    frame?.addEventListener("load", openAdmin);
-    return () => { window.clearTimeout(timer); frame?.removeEventListener("load", openAdmin); };
-  }, [adminRequest?.id, adminRequest?.credential]);
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.origin !== POSTYPE_APP_ORIGIN) return;
-      if (event.data?.type === "hq-postype-excerpt-modal") onExcerptOpenChange?.(Boolean(event.data.open));
-    };
-    window.addEventListener("message", handleMessage);
-    return () => {
-      window.removeEventListener("message", handleMessage);
-      onExcerptOpenChange?.(false);
-    };
-  }, [onExcerptOpenChange]);
-  return <iframe ref={frameRef} src={`${POSTYPE_APP_URL}?v=20260629-excerpt-spacing-v1`} title="혚쾌 포타 검색기" allow="clipboard-read; clipboard-write" className="h-full w-full border-0 bg-black" />;
-}
-
-function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange }) {
+function AdminHub({ onClose, tabVisibility, onTabVisibilityChange }) {
   const [authenticated, setAuthenticated] = useState(() => adminService.hasSession());
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -654,11 +616,10 @@ function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange
         {error && <p className="mt-2 text-center text-xs font-bold text-accent">{error}</p>}
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
-        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천·포타 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
+        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
         <AdminPortalCard icon={BarChart3} label="통계" description="데일리·탭별·데이터별 조회수 확인" active onClick={() => setSection("stats")}/>
-        <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
       </div> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : section === "stats" ? <StatsAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
     </div>
   </div>;
@@ -710,7 +671,7 @@ function TabVisibilityAdmin({ onBack, tabVisibility, onChange }) {
     <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 홈</button>
     <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
       <p className="text-xs font-black">하단 탭 노출</p>
-      <p className="mt-1 text-[10px] font-bold leading-4 text-neutral-600">OFF로 둔 탭은 방문자 하단 메뉴에서 숨겨집니다. 관리자 허브의 포타 검색기 진입은 유지됩니다.</p>
+      <p className="mt-1 text-[10px] font-bold leading-4 text-neutral-600">OFF로 둔 탭은 방문자 하단 메뉴에서 숨겨집니다.</p>
       <div className="mt-4 space-y-2">
         {APP_TABS.map(({ key, label, icon: Icon, description }) => {
           const active = settings[key] !== false;

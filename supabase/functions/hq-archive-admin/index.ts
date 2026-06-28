@@ -51,7 +51,6 @@ const appTabMeta = [
   { tab_key: "home", label: "홈", sort_order: 10 },
   { tab_key: "calendar", label: "캘린더", sort_order: 20 },
   { tab_key: "recommended", label: "추천", sort_order: 30 },
-  { tab_key: "postype", label: "포타", sort_order: 40 },
 ];
 const appTabKeys = new Set(appTabMeta.map((item) => item.tab_key));
 async function rest(resource: string, options: RequestInit = {}, count = false) {
