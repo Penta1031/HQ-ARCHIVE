@@ -1,5 +1,5 @@
 const isGitHubPages = process.env.GITHUB_ACTIONS === "true";
-const repositoryName = "hq-record-archive";
+const repositoryName = "HQ-ARCHIVE";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

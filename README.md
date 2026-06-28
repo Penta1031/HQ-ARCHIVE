@@ -4,7 +4,7 @@
 
 ## 미리보기
 
-https://penta1031.github.io/hq-record-archive/
+https://penta1031.github.io/HQ-ARCHIVE/
 
 ## 시작하기
 
