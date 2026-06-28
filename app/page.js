@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  BarChart3,
   Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
   ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, RefreshCw, Search, Share2, Shuffle, Trash2, Trophy, Video, X
 } from "lucide-react";
-import { adminService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
+import { adminService, analyticsService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
 import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -83,6 +84,18 @@ const normalizeTabVisibility = (rowsOrSettings = []) => {
 const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
 const POSTYPE_APP_URL = "https://penta1031.github.io/HQ-POSTYPE-SEARCH/";
 const POSTYPE_APP_ORIGIN = new URL(POSTYPE_APP_URL).origin;
+const TAB_LABELS = { home: "홈", calendar: "캘린더", recommended: "추천", postype: "포타" };
+const CONTENT_TYPE_LABELS = { hq_archive: "아카이브", recommended_video: "추천 영상", postype: "포타" };
+const trackContentView = (item, { tabKey = "home", contentType = "hq_archive", urlKey = "link", titleKey = "title" } = {}) => {
+  analyticsService.track({
+    eventType: "content",
+    tabKey,
+    contentType,
+    contentId: String(item?.id || item?.youtubeId || item?.link || item?.youtubeUrl || ""),
+    contentTitle: String(item?.[titleKey] || item?.title || item?.name || ""),
+    contentUrl: String(item?.[urlKey] || item?.link || item?.youtubeUrl || item?.sourceUrl || "")
+  });
+};
 
 export default function Page() {
   const [tab, setTab] = useState("home");
@@ -120,6 +133,9 @@ export default function Page() {
   }, []);
   useEffect(() => {
     if (tab !== "postype") setPostypeExcerptOpen(false);
+  }, [tab]);
+  useEffect(() => {
+    analyticsService.track({ eventType: "tab", tabKey: tab });
   }, [tab]);
 
   return (
@@ -287,7 +303,7 @@ function RandomArchiveModal({ item, language = "ko", onAgain, loading = false, o
   return <AppOverlay className="z-[75]"><div onClick={onClose} className="flex h-full items-end justify-center bg-black/80 p-3 backdrop-blur-md"><div onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-[28px] border border-white/10 bg-neutral-950 p-5 shadow-2xl animate-pop-in">
     <div className="flex items-center"><h2 className="text-xl font-black">{t("randomTitle")}</h2><button onClick={onClose} aria-label="랜덤 추천 닫기" className="ml-auto rounded-full bg-white/5 p-2 text-neutral-500"><X size={18}/></button></div>
     <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="aspect-video w-full object-cover"/> : <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800"><Archive size={28} className="text-neutral-700"/></div>}<div className="p-4"><div className="flex items-center text-[10px] font-bold"><span className="rounded border border-accent/60 px-1.5 py-0.5 text-accent">{categoryLabel(item.subCategory)}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><h3 className="mt-3 text-sm font-black leading-6">{item.title}</h3></div></div>
-    <div className="mt-4 grid grid-cols-2 gap-2"><button disabled={loading} onClick={onAgain} className="flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-xs font-black text-neutral-300 disabled:opacity-50"><Shuffle size={14}/>{t("randomAgain")}</button>{item.link ? <a href={item.link} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-accent py-3 text-xs font-black"><ExternalLink size={14}/>{t("openOriginal")}</a> : <button disabled className="rounded-xl bg-neutral-900 py-3 text-xs font-black text-neutral-700">{t("openOriginal")}</button>}</div>
+    <div className="mt-4 grid grid-cols-2 gap-2"><button disabled={loading} onClick={onAgain} className="flex items-center justify-center gap-2 rounded-xl bg-white/5 py-3 text-xs font-black text-neutral-300 disabled:opacity-50"><Shuffle size={14}/>{t("randomAgain")}</button>{item.link ? <a href={item.link} target="_blank" rel="noreferrer" onClick={() => trackContentView(item, { tabKey: "home", contentType: "hq_archive" })} className="flex items-center justify-center gap-2 rounded-xl bg-accent py-3 text-xs font-black"><ExternalLink size={14}/>{t("openOriginal")}</a> : <button disabled className="rounded-xl bg-neutral-900 py-3 text-xs font-black text-neutral-700">{t("openOriginal")}</button>}</div>
   </div></div></AppOverlay>;
 }
 
@@ -301,13 +317,18 @@ function SectionLabel({ label, count, unit = "개", sortOrder, sortLabels = { de
   return <div className="mb-3 mt-6 flex items-center gap-3"><p className="text-xs text-neutral-400">{label} <b className="text-white">{count}{unit}</b></p>{onSort && <button onClick={onSort} className="ml-auto flex items-center gap-1 text-xs font-bold text-neutral-400"><ArrowUpDown size={13}/>{sortOrder === "desc" ? sortLabels.desc : sortLabels.asc}</button>}</div>;
 }
 
-function ArchiveGrid({ items, categoryLabel, emptyText = "조건에 맞는 기록이 없어요." }) {
+function ArchiveGrid({ items, categoryLabel, emptyText = "조건에 맞는 기록이 없어요.", sourceTab = "home" }) {
   if (!items.length) return <EmptyState text={emptyText} />;
-  return <div className="grid grid-cols-2 gap-x-3 gap-y-5">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} categoryLabel={categoryLabel} />)}</div>;
+  return <div className="grid grid-cols-2 gap-x-3 gap-y-5">{items.map((item, index) => <ArchiveCard key={item.id} item={item} index={index} categoryLabel={categoryLabel} sourceTab={sourceTab} />)}</div>;
 }
 
-function ArchiveCard({ item, index = 0, categoryLabel = (value) => value }) {
-  return <article onClick={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")} className={cn("group min-w-0 animate-fade-in", item.link && "cursor-pointer")} style={{ animationDelay: `${index * 35}ms` }}>
+function ArchiveCard({ item, index = 0, categoryLabel = (value) => value, sourceTab = "home" }) {
+  const open = () => {
+    if (!item.link) return;
+    trackContentView(item, { tabKey: sourceTab, contentType: "hq_archive" });
+    window.open(item.link, "_blank", "noopener,noreferrer");
+  };
+  return <article onClick={open} className={cn("group min-w-0 animate-fade-in", item.link && "cursor-pointer")} style={{ animationDelay: `${index * 35}ms` }}>
     <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-neutral-900">
       {item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover transition duration-500 group-active:scale-105" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-neutral-900 to-neutral-800"><Archive size={22} className="text-neutral-700" /></div>}
     </div>
@@ -336,7 +357,7 @@ function KeywordView({ items, tags, query, language = "ko" }) {
 function TodayView({ items, loading = false, todayDate = "", language = "ko" }) {
   const [year, month, day] = (todayDate || "0-0-0").split("-").map(Number);
   return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? archiveText(language, "todayTitle", { month, day }) : archiveText(language, "today")}</h2></div>
-    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); return <article key={item.id} onClick={() => item.link && window.open(item.link, "_blank", "noopener,noreferrer")} onKeyDown={(event) => { if (item.link && (event.key === "Enter" || event.key === " ")) window.open(item.link, "_blank", "noopener,noreferrer"); }} role={item.link ? "link" : undefined} tabIndex={item.link ? 0 : undefined} className={cn("flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3 transition", item.link && "cursor-pointer active:border-accent/60")}><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{archiveText(language, "yearsAgo", { years: ago })}</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
+    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); const open = () => { if (!item.link) return; trackContentView(item, { tabKey: "home", contentType: "hq_archive" }); window.open(item.link, "_blank", "noopener,noreferrer"); }; return <article key={item.id} onClick={open} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") open(); }} role={item.link ? "link" : undefined} tabIndex={item.link ? 0 : undefined} className={cn("flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3 transition", item.link && "cursor-pointer active:border-accent/60")}><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center"><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{archiveText(language, "yearsAgo", { years: ago })}</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
   </div>;
 }
 
@@ -362,7 +383,7 @@ function CalendarView() {
       <div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:firstDay}).map((_,i)=><span key={`e${i}`} />)}{Array.from({length:days},(_,i)=>i+1).map((d)=>{const has=monthly.some((x)=>x.date===`${monthKey}-${pad(d)}`);const isToday=d===todayDay&&month===todayMonth&&year===todayYear;return <button key={d} onClick={()=>{setDay(day===d?null:d);setDisplayLimit(30);}} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",day===d?"bg-accent text-white":isToday?"bg-white text-black":"text-neutral-400")}>{d}{has&&day!==d&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div>
     </div>
     <div className="mt-6 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">{day ? "SELECTED DAY" : "MONTHLY ARCHIVE"}</p><h3 className="mt-1 text-lg font-black">{day ? `${month}월 ${day}일` : `${year}년 ${month}월`}</h3></div><button onClick={()=>{setDay(null);setDisplayLimit(30);}} className={cn("ml-auto text-xs font-bold text-accent",!day&&"invisible")}>전체 보기</button></div>
-    <div className="mt-4">{loading ? <ArchiveSkeleton/> : error ? <LoadError message={error}/> : <ArchiveGrid items={filtered.slice(0, displayLimit)} />}{!loading && filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
+    <div className="mt-4">{loading ? <ArchiveSkeleton/> : error ? <LoadError message={error}/> : <ArchiveGrid items={filtered.slice(0, displayLimit)} sourceTab="calendar" />}{!loading && filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
   </div>;
 }
 
@@ -611,7 +632,7 @@ function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [section, setSection] = useState("hub");
-  const sectionTitle = { hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리" }[section] || "관리자 모드";
+  const sectionTitle = { hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리", stats: "통계" }[section] || "관리자 모드";
   const authenticate = async (event) => {
     event.preventDefault();
     try {
@@ -636,8 +657,9 @@ function AdminHub({ onClose, onOpenPostype, tabVisibility, onTabVisibilityChange
         <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천·포타 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
+        <AdminPortalCard icon={BarChart3} label="통계" description="데일리·탭별·데이터별 조회수 확인" active onClick={() => setSection("stats")}/>
         <AdminPortalCard icon={Search} label="포타 검색기" description="작품과 태그 데이터 관리" active onClick={() => onOpenPostype(password)} />
-      </div> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
+      </div> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : section === "stats" ? <StatsAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
     </div>
   </div>;
 }
@@ -701,6 +723,116 @@ function TabVisibilityAdmin({ onBack, tabVisibility, onChange }) {
       </div>
       <button type="button" onClick={save} disabled={loading || saving} className="mt-4 w-full rounded-2xl bg-accent py-3 text-xs font-black disabled:opacity-40">{saving ? "저장 중…" : "탭 설정 저장"}</button>
       {message && <p className={cn("mt-3 text-center text-[10px] font-bold", message.includes("실패") || message.includes("못했습니다") ? "text-accent" : "text-neutral-500")}>{message}</p>}
+    </div>
+  </div>;
+}
+
+function StatsAdmin({ onBack }) {
+  const pageSize = 30;
+  const today = getKstDate();
+  const defaultFrom = useMemo(() => {
+    const [year, month, day] = today.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day - 13));
+    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  }, [today]);
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(today);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [stats, setStats] = useState({ totals: { views: 0, tabViews: 0, contentViews: 0 }, daily: [], tabs: [], content: [], contentTotal: 0, hasMore: false });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+  useEffect(() => { setPage(0); }, [dateFrom, dateTo, debouncedQuery]);
+  useEffect(() => {
+    let active = true;
+    const id = ++requestId.current;
+    setLoading(true);
+    setError("");
+    analyticsService.stats({ dateFrom, dateTo, query: debouncedQuery, offset: page * pageSize, limit: pageSize })
+      .then((result) => { if (active && id === requestId.current) setStats(result); })
+      .catch((reason) => { if (active && id === requestId.current) setError(reason.message || "통계를 불러오지 못했습니다."); })
+      .finally(() => { if (active && id === requestId.current) setLoading(false); });
+    return () => { active = false; };
+  }, [dateFrom, dateTo, debouncedQuery, page]);
+
+  const dailyMax = Math.max(1, ...stats.daily.map((row) => Number(row.views || 0)));
+  const tabMax = Math.max(1, ...stats.tabs.map((row) => Number(row.views || 0)));
+  const tabsByKey = new Map(stats.tabs.map((row) => [row.tab_key, row]));
+  const totalPages = Math.max(1, Math.ceil(Number(stats.contentTotal || 0) / pageSize));
+  const formatNumber = (value) => Number(value || 0).toLocaleString("ko-KR");
+  const formatSeenAt = (value) => value ? new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-";
+  const resetRange = () => { setDateFrom(defaultFrom); setDateTo(today); setQuery(""); };
+
+  return <div className="py-5">
+    <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 홈</button>
+    <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+      <div className="flex items-start gap-3">
+        <div><p className="text-[10px] font-black tracking-[.18em] text-accent">VIEW STATS</p><h3 className="mt-1 text-base font-black">조회수 통계</h3><p className="mt-1 text-[10px] font-bold leading-4 text-neutral-600">방문자가 탭을 열거나 데이터를 클릭한 기록을 Supabase 기준으로 집계합니다.</p></div>
+        <button type="button" onClick={resetRange} className="ml-auto shrink-0 rounded-xl bg-white/5 px-3 py-2 text-[10px] font-black text-neutral-400">초기화</button>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <AdminInput label="시작일" type="date" value={dateFrom} onChange={setDateFrom}/>
+        <AdminInput label="종료일" type="date" value={dateTo} onChange={setDateTo}/>
+      </div>
+      <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="제목, 링크, 탭, ID 검색"/></div>
+    </div>
+
+    {error && <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[10px] font-bold text-accent">{error}</p>}
+    <div className={cn("transition-opacity", loading && "opacity-45")}>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><p className="text-[9px] font-black text-neutral-600">전체 조회</p><p className="mt-2 text-lg font-black">{formatNumber(stats.totals.views)}</p></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><p className="text-[9px] font-black text-neutral-600">탭 조회</p><p className="mt-2 text-lg font-black">{formatNumber(stats.totals.tabViews)}</p></div>
+        <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><p className="text-[9px] font-black text-neutral-600">데이터 조회</p><p className="mt-2 text-lg font-black">{formatNumber(stats.totals.contentViews)}</p></div>
+      </div>
+
+      <section className="mt-5">
+        <div className="mb-2 flex items-center"><h4 className="text-sm font-black">데일리 조회수</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{stats.dateFrom || dateFrom} ~ {stats.dateTo || dateTo}</span></div>
+        <div className="space-y-2">{stats.daily.length ? stats.daily.map((row) => {
+          const views = Number(row.views || 0);
+          return <div key={row.viewed_on} className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+            <div className="flex items-center text-xs"><time className="font-black text-neutral-300">{row.viewed_on}</time><span className="ml-auto font-black text-accent">{formatNumber(views)}</span></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(4, Math.round((views / dailyMax) * 100))}%` }}/></div>
+            <p className="mt-1 text-[9px] font-bold text-neutral-600">탭 {formatNumber(row.tab_views)} · 데이터 {formatNumber(row.content_views)}</p>
+          </div>;
+        }) : <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs font-bold text-neutral-600">아직 기록된 조회수가 없습니다.</div>}</div>
+      </section>
+
+      <section className="mt-6">
+        <h4 className="mb-2 text-sm font-black">탭별 조회수</h4>
+        <div className="space-y-2">{APP_TABS.map((tabItem) => {
+          const row = tabsByKey.get(tabItem.key) || { views: 0, content_views: 0 };
+          const views = Number(row.views || 0);
+          return <div key={tabItem.key} className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+            <div className="flex items-center"><span className="text-xs font-black">{TAB_LABELS[tabItem.key] || tabItem.label}</span><span className="ml-auto text-xs font-black text-accent">{formatNumber(views)}</span></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/5"><span className="block h-full rounded-full bg-accent" style={{ width: `${views ? Math.max(4, Math.round((views / tabMax) * 100)) : 0}%` }}/></div>
+            <p className="mt-1 text-[9px] font-bold text-neutral-600">이 탭에서 열린 데이터 {formatNumber(row.content_views)}</p>
+          </div>;
+        })}</div>
+      </section>
+
+      <section className="mt-6">
+        <div className="mb-2 flex items-center"><h4 className="text-sm font-black">데이터별 조회수</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{formatNumber(stats.contentTotal)}개</span></div>
+        <div className="space-y-2">{stats.content.length ? stats.content.map((item) => <article key={`${item.content_type}-${item.content_id}`} className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+          <div className="flex items-start gap-2">
+            <span className="shrink-0 rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">{CONTENT_TYPE_LABELS[item.content_type] || item.content_type || "데이터"}</span>
+            <div className="min-w-0 flex-1"><h5 className="line-clamp-2 text-xs font-black leading-5">{item.content_title || "(제목 없음)"}</h5><p className="mt-1 truncate text-[9px] font-bold text-neutral-600">{item.content_url || item.content_id}</p></div>
+            <span className="shrink-0 text-sm font-black text-accent">{formatNumber(item.views)}</span>
+          </div>
+          <p className="mt-2 text-[9px] font-bold text-neutral-600">마지막 조회 {formatSeenAt(item.last_viewed_at)} · {TAB_LABELS[item.tab_key] || item.tab_key}</p>
+        </article>) : <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs font-bold text-neutral-600">{debouncedQuery ? "검색 조건에 맞는 데이터 조회수가 없습니다." : "아직 데이터 클릭 기록이 없습니다."}</div>}</div>
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5">
+          <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0 || loading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">이전</button>
+          <span className="text-[10px] font-black text-neutral-500">{page + 1} / {totalPages}</span>
+          <button type="button" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1 || loading} className="rounded-lg px-2 py-1 text-[10px] font-black text-neutral-400 disabled:opacity-30">다음</button>
+        </div>
+      </section>
     </div>
   </div>;
 }
@@ -866,6 +998,7 @@ function RecommendedView({ onScrollTop }) {
     });
     return groups;
   }, [selectedCategoryItems]);
+  const trackRecommendedOpen = (item) => trackContentView(item, { tabKey: "recommended", contentType: "recommended_video", urlKey: "youtubeUrl" });
   const openCategoryList = (value) => {
     setSelectedCategory(value);
     setCategorySort("latest");
@@ -902,8 +1035,8 @@ function RecommendedView({ onScrollTop }) {
   const featuredItem = showFeatured ? featuredItems[featuredIndex % featuredItems.length] : null;
   const previousFeaturedItem = showFeatured && previousFeaturedIndex !== null ? featuredItems[previousFeaturedIndex % featuredItems.length] : null;
   const featuredCard = (item, leaving = false) => <article key={`${leaving ? "leaving" : "active"}-${item.id}`} aria-hidden={leaving || undefined} onTouchStart={leaving ? undefined : (event) => { pickTouchStartX.current = event.touches[0].clientX; }} onTouchEnd={leaving ? undefined : finishFeaturedSwipe} onTouchCancel={leaving ? undefined : () => { pickTouchStartX.current = null; }} className={cn("col-start-1 row-start-1 touch-pan-y select-none overflow-hidden border-y border-accent/25 bg-neutral-900 shadow-[0_16px_50px_#e5000014]", leaving ? "pointer-events-none animate-banner-out" : "relative z-10 animate-banner-in")}>
-    <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block aspect-video w-full overflow-hidden bg-black">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
-    <div className="h-[132px] overflow-hidden px-4 py-3"><a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="line-clamp-2 h-10 text-sm font-black leading-5 active:text-accent">{item.title || "제목 없음"}</a><p className="mt-1.5 h-4 truncate text-[9px] font-bold leading-4 text-neutral-600">{displayDate(item.publishedAt)}</p>
+    <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackRecommendedOpen(item)} className="block aspect-video w-full overflow-hidden bg-black">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <div className="flex h-full items-center justify-center text-neutral-700"><Video size={28}/></div>}</a>
+    <div className="h-[132px] overflow-hidden px-4 py-3"><a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackRecommendedOpen(item)} className="line-clamp-2 h-10 text-sm font-black leading-5 active:text-accent">{item.title || "제목 없음"}</a><p className="mt-1.5 h-4 truncate text-[9px] font-bold leading-4 text-neutral-600">{displayDate(item.publishedAt)}</p>
       <div className="mt-2 flex h-[26px] flex-wrap gap-1.5 overflow-hidden">{item.categories.length ? item.categories.map((value) => <span key={value} className="h-6 shrink-0 rounded-full bg-white/5 px-2 py-1 text-[9px] font-bold text-neutral-400">{value}</span>) : <span className="text-[9px] font-bold text-neutral-700">미분류</span>}</div>
     </div>
   </article>;
@@ -926,7 +1059,7 @@ function RecommendedView({ onScrollTop }) {
     <div className="mt-6 space-y-7">{selectedCategoryDateGroups.length ? selectedCategoryDateGroups.map((group) => <section key={group.date}>
       <div className="mb-3 flex items-center gap-3"><time className="text-xs font-black text-neutral-300">{group.date}</time><span className="h-px flex-1 bg-white/10"/><span className="text-[9px] font-bold text-neutral-600">{group.items.length}개</span></div>
       <div className="space-y-3">{group.items.map((item) => <article key={`${selectedCategory}-${item.id}`} className="overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
-        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
+        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackRecommendedOpen(item)} className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={24}/>}</div>
           <div className="p-3"><div className="flex items-start gap-2"><h3 className="min-w-0 flex-1 text-sm font-black leading-5">{item.title || "제목 없음"}</h3>{item.isHyeopkwaePick && <span className="shrink-0 rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">혚쾌 PICK</span>}</div><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
         </a>
@@ -946,7 +1079,7 @@ function RecommendedView({ onScrollTop }) {
     {category === "전체" && !loading && !error && hyeopkwaePickItems.length > 0 && <section className="mt-7">
       <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">혚쾌 PICK 모아보기</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{hyeopkwaePickItems.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList("__hyeopkwae_pick__")} aria-label="혚쾌 PICK 전체 목록 보기" className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
       <div className="-mx-4 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max snap-x snap-mandatory gap-3 pb-1">{hyeopkwaePickItems.map((item) => <article key={`hyeop-pick-${item.id}`} className="w-[68vw] min-w-[210px] max-w-[250px] snap-start overflow-hidden rounded-2xl border border-accent/25 bg-neutral-900/70">
-        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
+        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackRecommendedOpen(item)} className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={22}/>}</div>
           <div className="p-3"><div className="mb-2 inline-flex rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">혚쾌 PICK</div><h4 className="line-clamp-2 min-h-10 text-xs font-black leading-5">{item.title || "제목 없음"}</h4><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
         </a>
@@ -956,7 +1089,7 @@ function RecommendedView({ onScrollTop }) {
     {loading ? <div className="mt-5"><ListSkeleton/></div> : error ? <div className="mt-5"><LoadError message={error}/></div> : categorySections.length ? <div className="mt-7 space-y-8">{categorySections.map((section) => <section key={section.key}>
       <div className="mb-3 flex items-center"><div><h3 className="text-base font-black">{section.title}</h3><p className="mt-1 text-[9px] font-bold text-neutral-600">{section.items.length}개의 추천 영상</p></div><button type="button" onClick={() => openCategoryList(section.key)} aria-label={`${section.key === "__uncategorized__" ? "미분류" : section.key} 전체 목록 보기`} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-neutral-500 transition active:bg-accent/15 active:text-accent"><ChevronRight size={18}/></button></div>
       <div className="-mx-4 overflow-x-auto px-4 no-scrollbar"><div className="flex w-max snap-x snap-mandatory gap-3 pb-1">{section.items.map((item) => <article key={`${section.key}-${item.id}`} className="w-[68vw] min-w-[210px] max-w-[250px] snap-start overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70">
-        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" className="block active:bg-white/5">
+        <a href={item.youtubeUrl} target="_blank" rel="noopener noreferrer" onClick={() => trackRecommendedOpen(item)} className="block active:bg-white/5">
           <div className="flex aspect-video w-full items-center justify-center overflow-hidden bg-black text-neutral-700">{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover"/> : <Video size={22}/>}</div>
           <div className="p-3"><h4 className="line-clamp-2 min-h-10 text-xs font-black leading-5">{item.title || "제목 없음"}</h4><p className="mt-2 text-[9px] font-bold text-neutral-600">{displayDate(item.publishedAt)}</p></div>
         </a>

@@ -344,6 +344,50 @@ async function refreshArchiveThumbnails(payload: Record<string, unknown>) {
   return { checked: ids.length, updated, skipped, missing: missing.length, errors: errors.slice(0, 20), items };
 }
 
+const kstDayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
+function dateOnly(value: unknown) {
+  const candidate = text(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(candidate) ? candidate : "";
+}
+function shiftDate(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+}
+async function viewStats(payload: Record<string, unknown>) {
+  const today = kstDayFormatter.format(new Date());
+  let dateTo = dateOnly(payload.dateTo) || today;
+  let dateFrom = dateOnly(payload.dateFrom) || shiftDate(dateTo, -13);
+  if (dateFrom > dateTo) [dateFrom, dateTo] = [dateTo, dateFrom];
+  const offset = Math.max(0, Number(payload.offset || 0));
+  const limit = Math.min(100, Math.max(1, Number(payload.limit || 30)));
+  const query = text(payload.query).slice(0, 120);
+  const [dailyResult, tabResult, contentResult] = await Promise.all([
+    rest("rpc/hq_admin_view_daily", { method: "POST", body: JSON.stringify({ p_from: dateFrom, p_to: dateTo }) }),
+    rest("rpc/hq_admin_view_tabs", { method: "POST", body: JSON.stringify({ p_from: dateFrom, p_to: dateTo }) }),
+    rest("rpc/hq_admin_view_content", { method: "POST", body: JSON.stringify({ p_from: dateFrom, p_to: dateTo, p_query: query, p_offset: offset, p_limit: limit }) }),
+  ]);
+  const daily = dailyResult.rows as Record<string, unknown>[];
+  const tabs = tabResult.rows as Record<string, unknown>[];
+  const content = contentResult.rows as Record<string, unknown>[];
+  const totals = daily.reduce((sum, row) => ({
+    views: sum.views + Number(row.views || 0),
+    tabViews: sum.tabViews + Number(row.tab_views || 0),
+    contentViews: sum.contentViews + Number(row.content_views || 0),
+  }), { views: 0, tabViews: 0, contentViews: 0 });
+  const contentTotal = Number(content[0]?.total_count || 0);
+  return {
+    dateFrom,
+    dateTo,
+    totals,
+    daily,
+    tabs,
+    content,
+    contentTotal,
+    hasMore: offset + content.length < contentTotal,
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors(request) });
   if (request.method !== "POST") return json(request, { ok: false, error: "POST required" }, 405);
@@ -411,6 +455,7 @@ Deno.serve(async (request) => {
     }
     if (action === "archive-publish") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "PATCH", body: JSON.stringify({ status: "published" }), headers: { Prefer: "return=minimal" } }); return json(request, { ok: true }); }
     if (action === "twitter-search") return json(request, { ok: true, items: await twitterSearch(payload) });
+    if (action === "view-stats") return json(request, { ok: true, ...await viewStats(payload) });
 
     if (action === "recommended-video-list") {
       const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_hyeopkwae_pick,is_active,source,channel_id,channel_title,created_at,updated_at";
