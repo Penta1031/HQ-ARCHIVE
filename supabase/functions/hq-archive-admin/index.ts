@@ -1,5 +1,14 @@
-const allowedOrigins = (Deno.env.get("HQ_ALLOWED_ORIGINS") || "https://penta1031.github.io,http://localhost:3000")
-  .split(",").map((value) => value.trim()).filter(Boolean);
+const defaultAllowedOrigins = [
+  "https://penta1031.github.io",
+  "https://hq-archive.vercel.app",
+  "https://hq-archive-penta1031s-projects.vercel.app",
+  "https://hq-archive-git-main-penta1031s-projects.vercel.app",
+  "http://localhost:3000"
+];
+const allowedOrigins = [...new Set([
+  ...defaultAllowedOrigins,
+  ...(Deno.env.get("HQ_ALLOWED_ORIGINS") || "").split(",")
+])].map((value) => value.trim()).filter(Boolean);
 const encoder = new TextEncoder();
 const sessionMs = 30 * 60 * 1000;
 

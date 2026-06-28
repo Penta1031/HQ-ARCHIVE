@@ -1,4 +1,11 @@
-const allowedOrigins = (Deno.env.get("HQ_ALLOWED_ORIGINS") || "https://penta1031.github.io,http://localhost:3000").split(",").map((value) => value.trim());
+const defaultAllowedOrigins = [
+  "https://penta1031.github.io",
+  "https://hq-archive.vercel.app",
+  "https://hq-archive-penta1031s-projects.vercel.app",
+  "https://hq-archive-git-main-penta1031s-projects.vercel.app",
+  "http://localhost:3000"
+];
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...(Deno.env.get("HQ_ALLOWED_ORIGINS") || "").split(",")])].map((value) => value.trim()).filter(Boolean);
 function cors(request: Request) { const origin = request.headers.get("origin") || ""; return { "Access-Control-Allow-Origin": allowedOrigins.includes(origin) ? origin : allowedOrigins[0], "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", Vary: "Origin" }; }
 function json(request: Request, data: unknown, status = 200) { return new Response(JSON.stringify(data), { status, headers: { ...cors(request), "Content-Type": "application/json" } }); }
 const text = (value: unknown) => String(value ?? "").trim();
