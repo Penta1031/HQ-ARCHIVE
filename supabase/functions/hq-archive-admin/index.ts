@@ -482,6 +482,25 @@ Deno.serve(async (request) => {
       return json(request, { ok: true, count: rows.length });
     }
     if (action === "archive-publish") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "PATCH", body: JSON.stringify({ status: "published" }), headers: { Prefer: "return=minimal" } }); return json(request, { ok: true }); }
+    if (action === "archive-index-save") {
+      const kind = text(payload.kind); const item = payload.item || {}; const name = text(item.name); const id = Number(item.id || 0);
+      const tables: Record<string, string> = { category: "hq_archive_categories", subcategory: "hq_archive_subcategories", keyword: "hq_archive_keywords" };
+      const table = tables[kind];
+      if (!table || !name) throw new Error("인덱스 종류와 이름을 확인해주세요.");
+      const row: Record<string, unknown> = { name, sort_order: Math.max(0, Number(item.sortOrder || 0)), is_active: true };
+      if (kind === "subcategory") { const categoryId = Number(item.categoryId || 0); if (!categoryId) throw new Error("대분류를 선택해주세요."); row.category_id = categoryId; }
+      const result = id
+        ? await rest(`${table}?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=representation" } })
+        : await rest(table, { method: "POST", body: JSON.stringify(row), headers: { Prefer: "return=representation" } });
+      return json(request, { ok: true, item: result.rows[0] });
+    }
+    if (action === "archive-index-delete") {
+      const kind = text(payload.kind); const id = Number(payload.id || 0);
+      const tables: Record<string, string> = { category: "hq_archive_categories", subcategory: "hq_archive_subcategories", keyword: "hq_archive_keywords" };
+      const table = tables[kind]; if (!table || !id) throw new Error("삭제할 인덱스를 확인해주세요.");
+      await rest(`${table}?id=eq.${id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+      return json(request, { ok: true });
+    }
     if (action === "twitter-search") return json(request, { ok: true, items: await twitterSearch(payload) });
     if (action === "view-stats") return json(request, { ok: true, ...await viewStats(payload) });
     if (action === "search-stats") return json(request, { ok: true, ...await searchStats(payload) });
