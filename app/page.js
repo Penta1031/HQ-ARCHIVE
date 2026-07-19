@@ -198,6 +198,7 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
   const [todayLoadedDate, setTodayLoadedDate] = useState("");
   const [randomItem, setRandomItem] = useState(null);
   const [randomLoading, setRandomLoading] = useState(false);
+  const lastTrackedSearch = useRef("");
   const todayDate = useKstToday();
   const t = (key, values) => archiveText(language, key, values);
   const categoryLabel = (value) => archiveCategoryLabel(language, value);
@@ -209,7 +210,17 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
     let active = true;
     setLoading(true); setError(""); setItems([]); setPage(1);
     archiveService.page({ page: 1, limit: 30, query: requestQuery, mainCategory, subCategory, sortOrder })
-      .then((result) => { if (!active) return; setItems(result.items); setTotal(result.total); setHasMore(result.hasMore); })
+      .then((result) => {
+        if (!active) return;
+        setItems(result.items); setTotal(result.total); setHasMore(result.hasMore);
+        const normalized = requestQuery.trim();
+        const signature = `${normalized}|${mainCategory}|${subCategory}|${result.total}`;
+        if (normalized && lastTrackedSearch.current !== signature) {
+          lastTrackedSearch.current = signature;
+          const queryKind = /^#/.test(normalized) ? "keyword" : /^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/.test(normalized) ? "date" : "title";
+          analyticsService.trackSearch({ query: normalized.replace(/^#/, ""), queryKind, resultCount: result.total, tabKey: "home" });
+        }
+      })
       .catch((reason) => { if (!active) return; setError(reason.message || "기록을 불러오지 못했어요."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -688,7 +699,94 @@ function TabVisibilityAdmin({ onBack, tabVisibility, onChange }) {
   </div>;
 }
 
+function shiftIsoDate(value, days) {
+  const [year, month, day] = value.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return `${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-${pad(next.getUTCDate())}`;
+}
+
+function StatsCalendarRange({ value, maxDate, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [selectingEnd, setSelectingEnd] = useState(false);
+  const [monthDate, setMonthDate] = useState(() => new Date(`${value.to}T00:00:00`));
+  useEffect(() => { if (!open) setDraft(value); }, [open, value]);
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const days = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  const monthKey = `${year}-${pad(month + 1)}`;
+  const choose = (date) => {
+    if (!selectingEnd) { setDraft({ from: date, to: date }); setSelectingEnd(true); return; }
+    setDraft(date < draft.from ? { from: date, to: draft.from } : { from: draft.from, to: date });
+    setSelectingEnd(false);
+  };
+  const label = value.from === value.to ? value.from : `${value.from} ~ ${value.to}`;
+  return <div className="relative">
+    <button type="button" onClick={() => { setOpen((current) => !current); setSelectingEnd(false); }} aria-label="통계 기간 선택" aria-expanded={open} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black text-neutral-400"><CalendarDays size={14}/><span>{label}</span></button>
+    {open && <div className="absolute right-0 top-11 z-50 w-[300px] rounded-2xl border border-white/10 bg-neutral-950 p-3 shadow-2xl">
+      <div className="flex items-center justify-between"><button type="button" onClick={() => setMonthDate(new Date(year, month - 1, 1))} className="rounded-lg p-2 text-neutral-500"><ChevronLeft size={16}/></button><strong className="text-xs">{year}년 {month + 1}월</strong><button type="button" onClick={() => setMonthDate(new Date(year, month + 1, 1))} disabled={`${year}-${pad(month + 1)}` >= maxDate.slice(0, 7)} className="rounded-lg p-2 text-neutral-500 disabled:opacity-20"><ChevronRight size={16}/></button></div>
+      <div className="mt-2 grid grid-cols-7 text-center text-[9px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((day) => <span key={day}>{day}</span>)}</div>
+      <div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({ length: firstDay }).map((_, index) => <span key={`empty-${index}`}/>)}{Array.from({ length: days }, (_, index) => index + 1).map((day) => {
+        const date = `${monthKey}-${pad(day)}`; const disabled = date > maxDate; const edge = date === draft.from || date === draft.to; const inside = date > draft.from && date < draft.to;
+        return <button type="button" key={date} disabled={disabled} onClick={() => choose(date)} className={cn("mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold", edge ? "bg-accent text-white" : inside ? "bg-accent/15 text-white" : "text-neutral-400", disabled && "opacity-20")}>{day}</button>;
+      })}</div>
+      <div className="mt-3 flex items-center text-[9px] font-bold text-neutral-500"><span>{draft.from}</span><span className="mx-2">~</span><span>{selectingEnd ? "종료일 선택" : draft.to}</span></div>
+      <div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setOpen(false)} className="rounded-lg bg-white/5 px-3 py-2 text-[10px] font-black text-neutral-400">취소</button><button type="button" onClick={() => { onChange(selectingEnd ? { from: draft.from, to: draft.from } : draft); setSelectingEnd(false); setOpen(false); }} className="rounded-lg bg-accent px-3 py-2 text-[10px] font-black text-white">기간 적용</button></div>
+    </div>}
+  </div>;
+}
+
 function StatsAdmin({ onBack }) {
+  const pageSize = 30;
+  const today = getKstDate();
+  const yesterday = shiftIsoDate(today, -1);
+  const [section, setSection] = useState("views");
+  const [viewRange, setViewRange] = useState({ from: yesterday, to: yesterday });
+  const [searchRange, setSearchRange] = useState({ from: yesterday, to: yesterday });
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [searchLimit, setSearchLimit] = useState(20);
+  const [viewStats, setViewStats] = useState({ totals: { views: 0, tabViews: 0, contentViews: 0 }, daily: [], tabs: [], content: [], contentTotal: 0 });
+  const [searchStats, setSearchStats] = useState({ totals: { searches: 0, visitors: 0, zeroResults: 0 }, top: [], recent: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(timer); }, [query]);
+  useEffect(() => { setPage(0); }, [viewRange, debouncedQuery]);
+  useEffect(() => {
+    let active = true; setLoading(true); setError("");
+    const task = section === "views"
+      ? analyticsService.stats({ dateFrom: viewRange.from, dateTo: viewRange.to, query: debouncedQuery, offset: page * pageSize, limit: pageSize }).then((result) => { if (active) setViewStats(result); })
+      : analyticsService.searchStats({ dateFrom: searchRange.from, dateTo: searchRange.to, limit: searchLimit }).then((result) => { if (active) setSearchStats(result); });
+    task.catch((reason) => { if (active) setError(reason.message || "통계를 불러오지 못했습니다."); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [section, viewRange, searchRange, debouncedQuery, page, searchLimit]);
+  const formatNumber = (value) => Number(value || 0).toLocaleString("ko-KR");
+  const formatSeenAt = (value) => value ? new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-";
+  const totalPages = Math.max(1, Math.ceil(Number(viewStats.contentTotal || 0) / pageSize));
+  const searchKind = { title: "제목", keyword: "키워드", date: "날짜" };
+  return <div className="py-5">
+    <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 홈</button>
+    <div className="flex items-start"><div><p className="text-[10px] font-black tracking-[.18em] text-accent">ARCHIVE STATS</p><h3 className="mt-1 text-base font-black">아카이브 통계</h3></div><div className="ml-auto"><StatsCalendarRange value={section === "views" ? viewRange : searchRange} maxDate={yesterday} onChange={section === "views" ? setViewRange : setSearchRange}/></div></div>
+    <div className="mt-4 grid grid-cols-2 border-b border-white/10">{[["views","조회 통계"],["searches","검색 통계"]].map(([key,label]) => <button type="button" key={key} onClick={() => setSection(key)} className={cn("border-b-2 py-3 text-[11px] font-black", section === key ? "border-accent text-white" : "border-transparent text-neutral-600")}>{label}</button>)}</div>
+    {error && <p className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[10px] font-bold text-accent">{error}</p>}
+    <div className={cn("transition-opacity", loading && "opacity-45")}>
+      {section === "views" ? <>
+        <div className="mt-4 grid grid-cols-3 gap-2">{[["전체 조회",viewStats.totals.views],["탭 조회",viewStats.totals.tabViews],["떡밥 조회",viewStats.totals.contentViews]].map(([label,value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><p className="text-[9px] font-black text-neutral-600">{label}</p><p className="mt-2 text-lg font-black">{formatNumber(value)}</p></div>)}</div>
+        {viewRange.from !== viewRange.to && <section className="mt-5"><div className="mb-2 flex items-center"><h4 className="text-sm font-black">데일리 조회 추이</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{viewRange.from} ~ {viewRange.to}</span></div><StatsLineChart rows={viewStats.daily}/></section>}
+        <div className="mt-4"><SearchBar value={query} onChange={setQuery} placeholder="떡밥 제목, 링크, 탭 검색"/></div>
+        <section className="mt-5"><div className="mb-2 flex items-center"><h4 className="text-sm font-black">탭별 떡밥 조회</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{formatNumber(viewStats.contentTotal)}개</span></div><div className="space-y-2">{viewStats.content.length ? viewStats.content.map((item) => <article key={`${item.content_type}-${item.content_id}-${item.tab_key}`} className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-start gap-2"><span className="shrink-0 rounded-full bg-accent/15 px-2 py-1 text-[8px] font-black text-accent">{TAB_LABELS[item.tab_key] || item.tab_key}</span><div className="min-w-0 flex-1"><h5 className="line-clamp-2 text-xs font-black leading-5">{item.content_title || "(제목 없음)"}</h5><p className="mt-1 truncate text-[9px] font-bold text-neutral-600">{item.content_url || item.content_id}</p></div><span className="shrink-0 text-sm font-black text-accent">{formatNumber(item.views)}</span></div><p className="mt-2 text-[9px] font-bold text-neutral-600">마지막 조회 {formatSeenAt(item.last_viewed_at)}</p></article>) : <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs font-bold text-neutral-600">선택 기간의 떡밥 조회 기록이 없습니다.</div>}</div><div className="mt-4 flex items-center justify-between"><button type="button" onClick={() => setPage((value) => Math.max(0,value-1))} disabled={!page} className="text-[10px] font-black text-neutral-500 disabled:opacity-30">이전</button><span className="text-[10px] font-black text-neutral-500">{page+1} / {totalPages}</span><button type="button" onClick={() => setPage((value) => Math.min(totalPages-1,value+1))} disabled={page>=totalPages-1} className="text-[10px] font-black text-neutral-500 disabled:opacity-30">다음</button></div></section>
+      </> : <>
+        <div className="mt-4 grid grid-cols-3 gap-2">{[["검색 횟수",searchStats.totals.searches],["검색 방문자",searchStats.totals.visitors],["결과 없음",searchStats.totals.zeroResults]].map(([label,value]) => <div key={label} className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><p className="text-[9px] font-black text-neutral-600">{label}</p><p className="mt-2 text-lg font-black">{formatNumber(value)}</p></div>)}</div>
+        <section className="mt-5"><div className="mb-2 flex items-end"><div><h4 className="text-sm font-black">많이 검색한 조건</h4><p className="mt-1 text-[9px] font-bold text-neutral-600">선택 기간 합산</p></div><select value={searchLimit} onChange={(event) => setSearchLimit(Number(event.target.value))} className="ml-auto rounded-lg border border-white/10 bg-neutral-900 px-2 py-1.5 text-[10px] font-black"><option value={5}>5개</option><option value={10}>10개</option><option value={20}>20개</option></select></div><div className="space-y-2">{searchStats.top.map((item,index) => <div key={`${item.query_kind}-${item.query_text}`} className="flex items-center rounded-xl border border-white/10 bg-white/[.03] p-3"><span className="w-6 text-[10px] font-black text-neutral-600">{index+1}</span><span className="rounded-full bg-white/5 px-2 py-1 text-[8px] font-black text-neutral-400">{searchKind[item.query_kind] || item.query_kind}</span><strong className="ml-2 min-w-0 flex-1 truncate text-xs">{item.query_text}</strong><span className="text-xs font-black text-accent">{formatNumber(item.searches)}</span></div>)}</div></section>
+        <section className="mt-6"><div className="mb-2"><h4 className="text-sm font-black">검색 기록</h4><p className="mt-1 text-[9px] font-bold text-neutral-600">{searchRange.from === searchRange.to ? `${searchRange.from} 일자` : `${searchRange.from} ~ ${searchRange.to}`} 기준</p></div><div className="space-y-2">{searchStats.recent.map((item,index) => <div key={`${item.searched_at}-${index}`} className="rounded-xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-center"><span className="rounded-full bg-white/5 px-2 py-1 text-[8px] font-black text-neutral-400">{searchKind[item.query_kind] || item.query_kind}</span><strong className="ml-2 min-w-0 flex-1 truncate text-xs">{item.query_text}</strong><span className={cn("text-[10px] font-black", Number(item.result_count) ? "text-neutral-400" : "text-accent")}>{formatNumber(item.result_count)}건</span></div><p className="mt-2 text-[9px] font-bold text-neutral-600">{formatSeenAt(item.searched_at)} · {TAB_LABELS[item.tab_key] || item.tab_key}</p></div>)}</div></section>
+      </>}
+    </div>
+  </div>;
+}
+
+function LegacyStatsAdmin({ onBack }) {
   const pageSize = 30;
   const today = getKstDate();
   const defaultFrom = useMemo(() => {
@@ -754,6 +852,11 @@ function StatsAdmin({ onBack }) {
       </div>
 
       <section className="mt-5">
+        <div className="mb-2 flex items-center"><h4 className="text-sm font-black">기간별 조회수</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{stats.dateFrom || dateFrom} ~ {stats.dateTo || dateTo}</span></div>
+        <StatsLineChart rows={stats.daily} />
+      </section>
+
+      <section className="mt-5">
         <div className="mb-2 flex items-center"><h4 className="text-sm font-black">데일리 조회수</h4><span className="ml-auto text-[10px] font-bold text-neutral-600">{stats.dateFrom || dateFrom} ~ {stats.dateTo || dateTo}</span></div>
         <div className="space-y-2">{stats.daily.length ? stats.daily.map((row) => {
           const views = Number(row.views || 0);
@@ -795,6 +898,53 @@ function StatsAdmin({ onBack }) {
         </div>
       </section>
     </div>
+  </div>;
+}
+
+function StatsLineChart({ rows = [] }) {
+  const ordered = [...rows].filter((row) => row?.viewed_on).sort((a, b) => String(a.viewed_on).localeCompare(String(b.viewed_on)));
+  const formatNumber = (value) => Number(value || 0).toLocaleString("ko-KR");
+  if (!ordered.length) return <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs font-bold text-neutral-600">선택한 기간의 조회 기록이 없습니다.</div>;
+
+  const width = 360;
+  const height = 170;
+  const padX = 34;
+  const padTop = 18;
+  const padBottom = 34;
+  const plotWidth = width - padX * 2;
+  const plotHeight = height - padTop - padBottom;
+  const maxViews = Math.max(1, ...ordered.map((row) => Number(row.views || 0)));
+  const points = ordered.map((row, index) => {
+    const x = ordered.length === 1 ? width / 2 : padX + (plotWidth * index) / (ordered.length - 1);
+    const value = Number(row.views || 0);
+    const y = padTop + plotHeight - (value / maxViews) * plotHeight;
+    return { x, y, value, date: String(row.viewed_on) };
+  });
+  const linePoints = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const areaPoints = `${padX},${height - padBottom} ${linePoints} ${width - padX},${height - padBottom}`;
+  const guides = [maxViews, Math.round(maxViews / 2), 0].map((value) => {
+    const y = padTop + plotHeight - (value / maxViews) * plotHeight;
+    return { value, y };
+  });
+  const first = points[0];
+  const last = points[points.length - 1];
+  const peak = points.reduce((best, point) => point.value > best.value ? point : best, points[0]);
+
+  return <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-accent/10 to-white/[.03] p-3">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="기간별 조회수 꺾은선 그래프" className="block h-auto w-full">
+      {guides.map((guide) => <g key={guide.value}>
+        <line x1={padX} y1={guide.y} x2={width - padX} y2={guide.y} className="stroke-white/10" strokeWidth="1" />
+        <text x="4" y={guide.y + 3} className="fill-neutral-500 text-[10px] font-bold">{formatNumber(guide.value)}</text>
+      </g>)}
+      <polygon points={areaPoints} className="fill-accent/15" />
+      <polyline points={linePoints} className="fill-none stroke-accent" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {points.map((point) => <circle key={`${point.date}-${point.x}`} cx={point.x} cy={point.y} r="3.6" className="fill-accent stroke-white" strokeWidth="1.4">
+        <title>{`${point.date} 조회 ${formatNumber(point.value)}`}</title>
+      </circle>)}
+      <text x={padX} y={height - 10} className="fill-neutral-500 text-[10px] font-bold">{first.date.slice(5)}</text>
+      <text x={width - padX} y={height - 10} textAnchor="end" className="fill-neutral-500 text-[10px] font-bold">{last.date.slice(5)}</text>
+      <text x={Math.min(width - 8, peak.x + 7)} y={Math.max(12, peak.y - 7)} className="fill-red-200 text-[10px] font-black">{formatNumber(peak.value)}</text>
+    </svg>
   </div>;
 }
 
@@ -1067,6 +1217,7 @@ const DEFAULT_RECOMMENDED_VIDEO_CATEGORIES = [
   ["승협이", "라이브"], ["승협이", "기록"], ["승협이", "하기"], ["유회승", "소작실"], ["유회승", "하루의마무리"],
   ["유회승", "승구리당당수다당"], ["라이브", "우리 얘기 좀 합시다"], ["에딧", "연말결산"], ["에딧", "모음집"]
 ].map(([mainCategoryName, name], index) => ({ id: `default-child-${index}`, name, mainCategoryName, sortOrder: index + 1 }));
+const RECOMMENDED_UNCATEGORIZED_FILTER = "__uncategorized__";
 
 function RecommendedVideosAdmin({ onBack }) {
   const pageSize = 30;
@@ -1509,7 +1660,7 @@ function RecommendedVideosAdmin({ onBack }) {
         <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">노출</span><select value={adminVisibilityFilter} onChange={(event) => setAdminVisibilityFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">노출 ON</option><option value="false">노출 OFF</option></select></label>
         <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">오늘의 PICK</span><select value={adminFeaturedFilter} onChange={(event) => setAdminFeaturedFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">지정</option><option value="false">해제</option></select></label>
         <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">혚쾌 PICK</span><select value={adminHyeopkwaePickFilter} onChange={(event) => setAdminHyeopkwaePickFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="all">전체</option><option value="true">지정</option><option value="false">해제</option></select></label>
-        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">하위 콘텐츠</span><select value={adminCategoryFilter} onChange={(event) => setAdminCategoryFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="">전체</option>{categoriesByMain.map((main) => <optgroup key={main.id} label={main.name}>{main.children.map((categoryItem) => <option key={categoryItem.id} value={categoryItem.name}>{categoryItem.name}</option>)}</optgroup>)}</select></label>
+        <label className="rounded-xl bg-black/40 px-3 py-2.5"><span className="block text-[9px] font-black text-neutral-600">하위 콘텐츠</span><select value={adminCategoryFilter} onChange={(event) => setAdminCategoryFilter(event.target.value)} className="mt-1 w-full bg-transparent text-[10px] font-black outline-none"><option value="">전체</option><option value={RECOMMENDED_UNCATEGORIZED_FILTER}>하위 콘텐츠 미분류</option>{categoriesByMain.map((main) => <optgroup key={main.id} label={main.name}>{main.children.map((categoryItem) => <option key={categoryItem.id} value={categoryItem.name}>{categoryItem.name}</option>)}</optgroup>)}</select></label>
         <button type="button" onClick={resetAdminFilters} disabled={!activeAdminFilterCount} className="col-span-2 rounded-xl border border-white/10 bg-black/40 py-2.5 text-[10px] font-black text-neutral-400 disabled:opacity-40">필터 초기화</button>
       </div>
     </details>

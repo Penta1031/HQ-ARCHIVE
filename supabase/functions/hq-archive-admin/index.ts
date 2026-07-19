@@ -396,6 +396,26 @@ async function viewStats(payload: Record<string, unknown>) {
   };
 }
 
+async function searchStats(payload: Record<string, unknown>) {
+  const today = kstDayFormatter.format(new Date());
+  let dateTo = dateOnly(payload.dateTo) || shiftDate(today, -1);
+  let dateFrom = dateOnly(payload.dateFrom) || dateTo;
+  if (dateFrom > dateTo) [dateFrom, dateTo] = [dateTo, dateFrom];
+  const limit = Math.min(20, Math.max(1, Number(payload.limit || 20)));
+  const result = await rest("rpc/hq_admin_search_stats", {
+    method: "POST",
+    body: JSON.stringify({ p_from: dateFrom, p_to: dateTo, p_limit: limit }),
+  });
+  const data = (Array.isArray(result.rows) ? result.rows[0] : result.rows || {}) as Record<string, unknown>;
+  return {
+    dateFrom,
+    dateTo,
+    totals: data.totals || { searches: 0, visitors: 0, zeroResults: 0 },
+    top: data.top || [],
+    recent: data.recent || [],
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors(request) });
   if (request.method !== "POST") return json(request, { ok: false, error: "POST required" }, 405);
@@ -464,6 +484,7 @@ Deno.serve(async (request) => {
     if (action === "archive-publish") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "PATCH", body: JSON.stringify({ status: "published" }), headers: { Prefer: "return=minimal" } }); return json(request, { ok: true }); }
     if (action === "twitter-search") return json(request, { ok: true, items: await twitterSearch(payload) });
     if (action === "view-stats") return json(request, { ok: true, ...await viewStats(payload) });
+    if (action === "search-stats") return json(request, { ok: true, ...await searchStats(payload) });
 
     if (action === "recommended-video-list") {
       const fields = "id,youtube_id,youtube_url,title,published_at,thumbnail_url,categories,admin_comment,sort_order,featured_order,is_featured,is_hyeopkwae_pick,is_active,source,channel_id,channel_title,created_at,updated_at";
@@ -485,7 +506,8 @@ Deno.serve(async (request) => {
         const q = escapeLike(query);
         if (q) params.set("or", `(title.ilike.*${q}*,channel_title.ilike.*${q}*,youtube_id.ilike.*${q}*,admin_comment.ilike.*${q}*)`);
       }
-      if (category && category.length <= 120 && !/[{},"]/.test(category)) params.set("categories", `cs.{${category}}`);
+      if (category === "__uncategorized__") params.set("categories", "eq.{}");
+      else if (category && category.length <= 120 && !/[{},"]/.test(category)) params.set("categories", `cs.{${category}}`);
       if (activeFilter) params.set("is_active", `eq.${activeFilter}`);
       if (featuredFilter) params.set("is_featured", `eq.${featuredFilter}`);
       if (hyeopkwaePickFilter) params.set("is_hyeopkwae_pick", `eq.${hyeopkwaePickFilter}`);
