@@ -902,6 +902,7 @@ function LegacyStatsAdmin({ onBack }) {
 }
 
 function StatsLineChart({ rows = [] }) {
+  const [selectedDate, setSelectedDate] = useState("");
   const ordered = [...rows].filter((row) => row?.viewed_on).sort((a, b) => String(a.viewed_on).localeCompare(String(b.viewed_on)));
   const formatNumber = (value) => Number(value || 0).toLocaleString("ko-KR");
   if (!ordered.length) return <div className="rounded-2xl border border-dashed border-white/10 py-10 text-center text-xs font-bold text-neutral-600">선택한 기간의 조회 기록이 없습니다.</div>;
@@ -929,22 +930,27 @@ function StatsLineChart({ rows = [] }) {
   const first = points[0];
   const last = points[points.length - 1];
   const peak = points.reduce((best, point) => point.value > best.value ? point : best, points[0]);
+  const selectedPoint = points.find((point) => point.date === selectedDate) || null;
+  const selectPoint = (point) => setSelectedDate((current) => current === point.date ? "" : point.date);
 
   return <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-accent/10 to-white/[.03] p-3">
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="기간별 조회수 꺾은선 그래프" className="block h-auto w-full">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="기간별 조회수 꺾은선 그래프. 날짜 점을 누르면 해당 날짜 조회수를 확인할 수 있습니다." className="block h-auto w-full">
       {guides.map((guide) => <g key={guide.value}>
         <line x1={padX} y1={guide.y} x2={width - padX} y2={guide.y} className="stroke-white/10" strokeWidth="1" />
         <text x="4" y={guide.y + 3} className="fill-neutral-500 text-[10px] font-bold">{formatNumber(guide.value)}</text>
       </g>)}
       <polygon points={areaPoints} className="fill-accent/15" />
       <polyline points={linePoints} className="fill-none stroke-accent" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      {points.map((point) => <circle key={`${point.date}-${point.x}`} cx={point.x} cy={point.y} r="3.6" className="fill-accent stroke-white" strokeWidth="1.4">
-        <title>{`${point.date} 조회 ${formatNumber(point.value)}`}</title>
-      </circle>)}
+      {selectedPoint && <line x1={selectedPoint.x} y1={padTop} x2={selectedPoint.x} y2={height - padBottom} className="stroke-white/30" strokeWidth="1" strokeDasharray="3 3" />}
+      {points.map((point) => <g key={`${point.date}-${point.x}`} role="button" tabIndex="0" aria-label={`${point.date} 조회 ${formatNumber(point.value)}회`} onClick={() => selectPoint(point)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectPoint(point); } }} className="cursor-pointer outline-none">
+        <circle cx={point.x} cy={point.y} r="12" className="fill-transparent" />
+        <circle cx={point.x} cy={point.y} r={selectedDate === point.date ? "5.5" : "3.6"} className={selectedDate === point.date ? "fill-white stroke-accent" : "fill-accent stroke-white"} strokeWidth="1.8"><title>{`${point.date} 조회 ${formatNumber(point.value)}회`}</title></circle>
+      </g>)}
       <text x={padX} y={height - 10} className="fill-neutral-500 text-[10px] font-bold">{first.date.slice(5)}</text>
       <text x={width - padX} y={height - 10} textAnchor="end" className="fill-neutral-500 text-[10px] font-bold">{last.date.slice(5)}</text>
       <text x={Math.min(width - 8, peak.x + 7)} y={Math.max(12, peak.y - 7)} className="fill-red-200 text-[10px] font-black">{formatNumber(peak.value)}</text>
     </svg>
+    {selectedPoint && <div className="mt-2 flex items-center rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[10px] font-bold"><CalendarDays size={13} className="mr-2 text-accent"/><time className="text-neutral-400">{selectedPoint.date}</time><span className="ml-auto text-xs font-black text-accent">조회 {formatNumber(selectedPoint.value)}회</span></div>}
   </div>;
 }
 
