@@ -401,7 +401,7 @@ async function searchStats(payload: Record<string, unknown>) {
   let dateTo = dateOnly(payload.dateTo) || shiftDate(today, -1);
   let dateFrom = dateOnly(payload.dateFrom) || dateTo;
   if (dateFrom > dateTo) [dateFrom, dateTo] = [dateTo, dateFrom];
-  const limit = Math.min(20, Math.max(1, Number(payload.limit || 20)));
+  const limit = Math.min(100, Math.max(1, Number(payload.limit || 20)));
   const result = await rest("rpc/hq_admin_search_stats", {
     method: "POST",
     body: JSON.stringify({ p_from: dateFrom, p_to: dateTo, p_limit: limit }),
