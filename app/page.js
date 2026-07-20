@@ -199,12 +199,14 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
   const [randomItem, setRandomItem] = useState(null);
   const [randomLoading, setRandomLoading] = useState(false);
   const lastTrackedSearch = useRef("");
-  const todayDate = useKstToday();
+  const liveTodayDate = useKstToday();
+  const [todayDate, setTodayDate] = useState("");
   const t = (key, values) => archiveText(language, key, values);
   const categoryLabel = (value) => archiveCategoryLabel(language, value);
   const mains = MAIN_CATEGORY_ORDER;
   const subs = ["전체", ...(mainCategory === "전체" ? SUB_CATEGORY_OPTIONS : (CATEGORY_MAP[mainCategory] || []))];
 
+  useEffect(() => { if (liveTodayDate && !todayDate) setTodayDate(liveTodayDate); }, [liveTodayDate, todayDate]);
   useEffect(() => { const timer = setTimeout(() => setRequestQuery(query), 350); return () => clearTimeout(timer); }, [query]);
   useEffect(() => {
     let active = true;
@@ -281,7 +283,7 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
         {hasMore && !loading && <button disabled={loadingMore} onClick={loadMore} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400 disabled:opacity-60">{loadingMore ? t("loadingMore") : t("more")}</button>}
       </div>}
       {subTab === "keywords" && (keywordLoading ? <div className="px-4 pt-5"><ArchiveSkeleton/></div> : <KeywordView items={keywordData.items} tags={keywordData.tags} query={query} language={language} />)}
-      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} language={language} />}
+      {subTab === "today" && <TodayView items={todayItems} loading={todayLoading} todayDate={todayDate} liveTodayDate={liveTodayDate} onDateChange={setTodayDate} language={language} />}
       {subTab === "archive" && <FloatingPortal><button disabled={randomLoading || !total} onClick={pickRandom} className="fixed bottom-24 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-full border border-accent/40 bg-[#120000]/95 px-4 text-[11px] font-black text-[#ff5a5a] shadow-[0_10px_30px_rgba(0,0,0,.38)] backdrop-blur-md transition active:border-accent active:bg-accent active:text-white disabled:opacity-50 md:right-[calc((100vw-28rem)/2+1rem)]"><Shuffle size={13}/>{t("random")}</button></FloatingPortal>}
       {randomItem && <RandomArchiveModal item={randomItem} language={language} onAgain={pickRandom} loading={randomLoading} onClose={() => setRandomItem(null)} />}
     </div>
@@ -351,10 +353,14 @@ function KeywordView({ items, tags, query, language = "ko" }) {
   </div>;
 }
 
-function TodayView({ items, loading = false, todayDate = "", language = "ko" }) {
-  const [year, month, day] = (todayDate || "0-0-0").split("-").map(Number);
-  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? archiveText(language, "todayTitle", { month, day }) : archiveText(language, "today")}</h2></div>
-    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = year - Number(item.date.slice(0, 4)); const open = () => { if (!item.link) return; trackContentView(item, { tabKey: "home", contentType: "hq_archive" }); window.open(item.link, "_blank", "noopener,noreferrer"); }; return <article key={item.id} onClick={open} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") open(); }} role={item.link ? "link" : undefined} tabIndex={item.link ? 0 : undefined} className={cn("flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3 transition", item.link && "cursor-pointer active:border-accent/60")}><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><span className="rounded border border-accent/40 px-1.5 py-0.5 text-[9px] font-black text-accent">{archiveCategoryLabel(language, item.subCategory)}</span><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{archiveText(language, "yearsAgo", { years: ago })}</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
+function TodayView({ items, loading = false, todayDate = "", liveTodayDate = "", onDateChange, language = "ko" }) {
+  const [selectedYear, month, day] = (todayDate || "0-0-0").split("-").map(Number);
+  const liveYear = Number((liveTodayDate || todayDate || "0").slice(0, 4));
+  const daysInMonth = month ? new Date(Date.UTC(2000, month, 0)).getUTCDate() : 31;
+  const setMonthDay = (nextMonth, nextDay) => onDateChange?.(`${liveYear}-${pad(nextMonth)}-${pad(Math.min(nextDay, new Date(Date.UTC(2000, nextMonth, 0)).getUTCDate()))}`);
+  const moveDay = (amount) => { const date = new Date(Date.UTC(2000, month - 1, day + amount)); setMonthDay(date.getUTCMonth() + 1, date.getUTCDate()); };
+  return <div className="px-4 pt-5"><div className="relative overflow-hidden rounded-3xl bg-accent p-5"><div className="absolute -right-6 -top-8 text-[100px] font-black text-white/10">{day || ""}</div><p className="text-xs font-bold text-white/70">ON THIS DAY</p><h2 className="mt-2 text-2xl font-black">{todayDate ? archiveText(language, "todayTitle", { month, day }) : archiveText(language, "today")}</h2></div><div className="mt-3 flex items-end gap-2 rounded-2xl border border-white/10 bg-neutral-900/70 p-3"><button type="button" onClick={()=>moveDay(-1)} aria-label="이전 날짜" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400"><ChevronLeft size={17}/></button><div className="grid min-w-0 flex-1 grid-cols-2 gap-2"><AdminSelect label="월" value={String(month)} onChange={(value)=>setMonthDay(Number(value),day)} options={Array.from({length:12},(_,index)=>String(index+1))} optionLabels={Object.fromEntries(Array.from({length:12},(_,index)=>[String(index+1),`${index+1}월`]))}/><AdminSelect label="일" value={String(day)} onChange={(value)=>setMonthDay(month,Number(value))} options={Array.from({length:daysInMonth},(_,index)=>String(index+1))} optionLabels={Object.fromEntries(Array.from({length:daysInMonth},(_,index)=>[String(index+1),`${index+1}일`]))}/></div><button type="button" onClick={()=>moveDay(1)} aria-label="다음 날짜" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 text-neutral-400"><ChevronRight size={17}/></button><button type="button" onClick={()=>onDateChange?.(liveTodayDate)} disabled={todayDate===liveTodayDate} className="h-10 shrink-0 rounded-xl bg-white px-3 text-[10px] font-black text-black disabled:bg-white/5 disabled:text-neutral-600">오늘</button></div>
+    {loading ? <div className="mt-6"><ListSkeleton/></div> : <div className="mt-6 space-y-3">{items.map((item) => { const ago = (liveYear || selectedYear) - Number(item.date.slice(0, 4)); const open = () => { if (!item.link) return; trackContentView(item, { tabKey: "home", contentType: "hq_archive" }); window.open(item.link, "_blank", "noopener,noreferrer"); }; return <article key={item.id} onClick={open} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") open(); }} role={item.link ? "link" : undefined} tabIndex={item.link ? 0 : undefined} className={cn("flex items-center gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-3 transition", item.link && "cursor-pointer active:border-accent/60")}><img src={item.thumbnailUrl} alt="" className="h-16 w-14 rounded-xl object-cover" /><div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><span className="rounded border border-accent/40 px-1.5 py-0.5 text-[9px] font-black text-accent">{archiveCategoryLabel(language, item.subCategory)}</span><time className="text-[10px] font-bold text-neutral-500">{item.date}</time><span className="ml-auto rounded-full bg-accent/15 px-2 py-1 text-[10px] font-black text-accent">{archiveText(language, "yearsAgo", { years: ago })}</span></div><h3 className="mt-2 truncate text-[13px] font-bold">{item.title}</h3></div></article>; })}</div>}
   </div>;
 }
 
