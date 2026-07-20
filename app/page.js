@@ -250,6 +250,12 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
     catch (reason) { setError(reason.message || "다음 기록을 불러오지 못했어요."); }
     finally { setLoadingMore(false); }
   };
+  const loadMoreToday = async () => {
+    if (!todayHasMore || todayLoadingMore || !todayDate) return;
+    setTodayLoadingMore(true);
+    try { const nextPage = todayPage + 1; const result = await archiveService.today({ monthDay: todayDate.slice(5), page: nextPage, limit: 30 }); setTodayItems((current) => [...current, ...result.items.filter((item) => item.date !== todayDate)]); setTodayPage(nextPage); setTodayHasMore(nextPage * 30 < result.total); }
+    finally { setTodayLoadingMore(false); }
+  };
 
   const pickRandom = async () => {
     if (!total || randomLoading) return;
@@ -1798,12 +1804,6 @@ function ArchiveIndexAdmin({ onBack }) {
     try { setData(await archiveIndexService.list()); }
     catch (error) { setMessage(error.message || "인덱스를 불러오지 못했습니다."); }
     finally { setLoading(false); }
-  };
-  const loadMoreToday = async () => {
-    if (!todayHasMore || todayLoadingMore || !todayDate) return;
-    setTodayLoadingMore(true);
-    try { const nextPage = todayPage + 1; const result = await archiveService.today({ monthDay: todayDate.slice(5), page: nextPage, limit: 30 }); setTodayItems((current) => [...current, ...result.items.filter((item) => item.date !== todayDate)]); setTodayPage(nextPage); setTodayHasMore(nextPage * 30 < result.total); }
-    finally { setTodayLoadingMore(false); }
   };
   useEffect(() => { load(); }, []);
   const reset = (nextTab = tab) => setForm({ id: "", name: "", categoryId: nextTab === "subcategory" ? String(data.categories[0]?.id || "") : "", sortOrder: 0 });
