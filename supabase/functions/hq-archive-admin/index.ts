@@ -447,6 +447,12 @@ Deno.serve(async (request) => {
 
     if (action === "archive-list") {
       const page = Math.max(1, Number(payload.page || 1)); const limit = Math.min(100, Math.max(1, Number(payload.limit || 30)));
+      if (/^\d{2}-\d{2}$/.test(text(payload.monthDay))) {
+        const ids = await categoryIds(text(payload.mainCategory) === "전체" ? "" : text(payload.mainCategory), text(payload.subCategory) === "전체" ? "" : text(payload.subCategory));
+        const result = await rest("rpc/hq_admin_archive_month_day", { method: "POST", body: JSON.stringify({ p_month_day: text(payload.monthDay), p_status: text(payload.status) || "published", p_query: text(payload.query), p_category_id: ids.category_id, p_subcategory_id: ids.subcategory_id, p_offset: (page - 1) * limit, p_limit: limit }) });
+        const data = (Array.isArray(result.rows) ? result.rows[0] : result.rows || {}) as Record<string, unknown>;
+        return json(request, { ok: true, items: data.items || [], total: Number(data.total || 0), page, hasMore: page * limit < Number(data.total || 0) });
+      }
       const params = new URLSearchParams({ select: "*,category:hq_archive_categories(name),subcategory:hq_archive_subcategories(name)", order: "occurred_on.desc.nullslast,id.desc", offset: String((page - 1) * limit), limit: String(limit) });
       if (payload.status) params.set("status", `eq.${text(payload.status)}`);
       if (payload.dateFrom) params.set("occurred_on", `gte.${text(payload.dateFrom)}`);
