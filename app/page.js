@@ -633,7 +633,6 @@ function AdminHub({ onClose, tabVisibility, onTabVisibilityChange }) {
         {error && <p className="mt-2 text-center text-xs font-bold text-accent">{error}</p>}
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
-        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={ListTree} label="인덱스 관리" description="대분류·소분류·키워드 추가·수정·삭제" active onClick={() => setSection("index")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
