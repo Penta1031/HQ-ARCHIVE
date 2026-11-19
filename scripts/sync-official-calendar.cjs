@@ -11,7 +11,7 @@ vm.runInContext(fs.readFileSync(path.join(wiki,'wiki-data.js'),'utf8'),context);
  }
  const normalize=value=>String(value||'').normalize('NFKC').replace(/^\s*\[[^\]]+\]\s*/,'').toLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
  const data=JSON.parse(fs.readFileSync(path.join(wiki,'calendar-schedules.json'),'utf8'));
- const days=data.days.map(day=>({...day,events:day.events.map(event=>{
+ const days=data.days.map(day=>({...day,events:day.events.filter(event=>!/kwang[\s._-]*jin|광진/i.test(event.title)).map(event=>{
   const title=normalize(event.title);
   const matches=[...links.values()].filter(({item})=>item.date===day.date&&((item.officialTitle&&title===normalize(item.officialTitle))||(normalize(item.title).length>=4&&title.includes(normalize(item.title)))));
   const match=matches.length===1?matches[0]:null;
