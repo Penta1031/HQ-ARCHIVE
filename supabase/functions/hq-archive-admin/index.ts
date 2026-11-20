@@ -51,6 +51,7 @@ const appTabMeta = [
   { tab_key: "home", label: "홈", sort_order: 10 },
   { tab_key: "calendar", label: "캘린더", sort_order: 20 },
   { tab_key: "recommended", label: "추천", sort_order: 30 },
+  { tab_key: "index", label: "모아보기", sort_order: 40 },
 ];
 const appTabKeys = new Set(appTabMeta.map((item) => item.tab_key));
 async function rest(resource: string, options: RequestInit = {}, count = false) {
@@ -124,6 +125,10 @@ function exactKstArchiveDate(value: unknown) {
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? candidate : "";
 }
+function twitterStatusId(value: unknown) {
+  const match = text(value).match(/(?:x|twitter)\.com\/[^/]+\/status\/(\d+)/i);
+  return match?.[1] || "";
+}
 function kstTimestampRange(value: unknown) {
   const date = exactKstArchiveDate(value);
   if (!date) return null;
@@ -141,7 +146,12 @@ async function categoryIds(mainCategory: string, subCategory: string) {
   return { category_id: categoryId, subcategory_id: subs.rows[0]?.id || null };
 }
 async function archiveRow(item: Record<string, unknown>, status?: string) {
-  const ids = await categoryIds(text(item.mainCategory), text(item.subCategory));
+  const mainCategory = text(item.mainCategory);
+  const subCategory = text(item.subCategory);
+  const ids = await categoryIds(mainCategory, subCategory);
+  if (mainCategory && !ids.category_id) throw new Error(`대분류 '${mainCategory}'를 찾지 못했습니다. 분류 목록을 새로고침해주세요.`);
+  if (subCategory && !ids.subcategory_id) throw new Error(`소분류 '${subCategory}'를 '${mainCategory}'에서 찾지 못했습니다. 다른 소분류를 선택해주세요.`);
+  if ((status || text(item.status) || "published") === "published" && !ids.subcategory_id) throw new Error("게시할 기록의 소분류를 선택해주세요.");
   const rawKeywords = text(item.rawKeywords);
   const keywords = rawKeywords
     ? rawKeywords.split(/[,#]/).map(text).filter(Boolean)
@@ -151,7 +161,8 @@ async function archiveRow(item: Record<string, unknown>, status?: string) {
     account: text(item.account) || null, ...ids,
     keywords,
     thumbnail_url: text(item.thumbnailUrl) || null, status: status || text(item.status) || "published",
-    source_type: text(item.sourceType) || "manual"
+    source_type: text(item.sourceType) || "manual",
+    twitter_conversation_id: text(item.twitterConversationId) || null
   };
 }
 function mappedArchive(row: Record<string, unknown>) {
@@ -160,7 +171,8 @@ function mappedArchive(row: Record<string, unknown>) {
   return {
     id: row.id, title: row.title, date: row.occurred_on || "", link: row.source_url || "", account: row.account || "",
     mainCategory: category?.name || "", subCategory: subcategory?.name || "", keywords: row.keywords || [],
-    rawKeywords: Array.isArray(row.keywords) ? row.keywords.join(", ") : "", thumbnailUrl: row.thumbnail_url || "", status: row.status
+    rawKeywords: Array.isArray(row.keywords) ? row.keywords.join(", ") : "", thumbnailUrl: row.thumbnail_url || "", status: row.status,
+    twitterConversationId: row.thread_root_tweet_id || row.twitter_conversation_id || "", twitterStatusId: twitterStatusId(row.source_url)
   };
 }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -171,7 +183,7 @@ async function allowedRecommendedVideoCategories() {
 function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>, allowedCategories: Set<string>) {
   if (!uuidPattern.test(id)) throw new Error("추천 영상 ID가 올바르지 않습니다.");
   if (typeof updates.isActive !== "boolean" || typeof updates.isFeatured !== "boolean") throw new Error("노출 및 PICK 설정이 올바르지 않습니다.");
-  if (updates.isHyeopkwaePick !== undefined && typeof updates.isHyeopkwaePick !== "boolean") throw new Error("혚쾌 PICK 설정이 올바르지 않습니다.");
+  if (updates.isHyeopkwaePick !== undefined && typeof updates.isHyeopkwaePick !== "boolean") throw new Error("HQ PICK 설정이 올바르지 않습니다.");
   if (!Array.isArray(updates.categories)) throw new Error("카테고리 값이 올바르지 않습니다.");
   const categories = [...new Set(updates.categories.map(text).filter(Boolean))];
   if (categories.some((category) => !allowedCategories.has(category))) throw new Error("허용되지 않은 추천 영상 카테고리가 포함되어 있습니다.");
@@ -186,6 +198,15 @@ function recommendedVideoUpdateRow(id: string, updates: Record<string, unknown>,
     admin_comment: text(updates.adminComment) || null
   };
   if (typeof updates.isHyeopkwaePick === "boolean") row.is_hyeopkwae_pick = updates.isHyeopkwaePick;
+  if (updates.publishedAt !== undefined) {
+    const publishedAt = text(updates.publishedAt);
+    if (!publishedAt) row.published_at = null;
+    else {
+      const publishedDate = new Date(publishedAt);
+      if (Number.isNaN(publishedDate.getTime())) throw new Error("업로드 날짜가 올바르지 않습니다.");
+      row.published_at = publishedDate.toISOString();
+    }
+  }
   return row;
 }
 function booleanFilter(value: unknown) {
@@ -253,32 +274,57 @@ async function refreshRecommendedVideoPublishedDates() {
 
   return { checked, updated, missing };
 }
-async function twitterSearch(payload: Record<string, unknown>) {
+async function twitterSearch(payload: Record<string, unknown>, cursorSecret: string) {
   const bearer = text(Deno.env.get("X_BEARER_TOKEN"));
   if (!bearer) throw new Error("X_BEARER_TOKEN is not configured.");
   const username = text(payload.twitterId).replace(/^@/, "");
   const startDate = text(payload.startDate);
   const endDate = text(payload.endDate);
-  if (!username || !/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) throw new Error("계정과 날짜 범위를 확인해주세요.");
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(username) || !exactKstArchiveDate(startDate) || !exactKstArchiveDate(endDate)) throw new Error("계정과 날짜 범위를 확인해주세요.");
+  const days = (Date.parse(endDate) - Date.parse(startDate)) / 86_400_000 + 1;
+  if (days < 1 || days > 31) throw new Error("한 번에 최대 31일 범위만 조회할 수 있습니다.");
+  if (startDate < "2006-03-22") throw new Error("2006년 3월 22일 이후 날짜를 선택해주세요.");
   const headers = { Authorization: `Bearer ${bearer}` };
   const start = new Date(`${startDate}T00:00:00+09:00`);
-  let end = new Date(`${endDate}T23:59:59+09:00`);
+  let end = new Date(new Date(`${endDate}T00:00:00+09:00`).getTime() + 86_400_000);
   const now = new Date();
-  if (end > now) end = new Date(now.getTime() - 60_000);
+  if (end.getTime() > now.getTime() - 60_000) end = new Date(now.getTime() - 60_000);
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end) throw new Error("조회 날짜 범위가 올바르지 않습니다.");
+  const pageSize = Math.min(100, Math.max(10, Math.floor(Number(payload.pageSize) || 100)));
+  let nextToken = "";
+  let frozenEnd = end.toISOString();
+  if (payload.cursor) {
+    try {
+      const [encoded, signed] = text(payload.cursor).split(".");
+      if (!encoded || signed !== await signature(encoded, cursorSecret)) throw new Error();
+      const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encoded.length / 4) * 4, "=");
+      const cursor = JSON.parse(atob(base64));
+      if (cursor.kind !== "twitter-search" || cursor.exp <= Date.now() || cursor.username !== username.toLowerCase() || cursor.startDate !== startDate || cursor.endDate !== endDate || cursor.pageSize !== pageSize || !cursor.nextToken || !Number.isFinite(Date.parse(cursor.endTime))) throw new Error();
+      nextToken = cursor.nextToken;
+      frozenEnd = cursor.endTime;
+    } catch { throw new Error("이어받기 정보가 만료되었거나 조회 조건이 바뀌었습니다. 처음부터 다시 수집해주세요."); }
+  }
   const params = new URLSearchParams({
     query: `from:${username}`,
-    max_results: "100",
+    max_results: String(pageSize),
     start_time: start.toISOString(),
-    end_time: end.toISOString(),
+    end_time: frozenEnd,
     expansions: "attachments.media_keys",
-    "tweet.fields": "created_at,text,author_id,in_reply_to_user_id,referenced_tweets,attachments",
+    "tweet.fields": "created_at,text,author_id,in_reply_to_user_id,referenced_tweets,attachments,conversation_id",
     "media.fields": "type,url,preview_image_url,width,height,variants"
   });
-  const tweetsResponse = await fetch(`https://api.x.com/2/tweets/search/recent?${params}`, { headers });
+  if (nextToken) params.set("next_token", nextToken);
+  const quota = await rest("rpc/hq_reserve_twitter_search", { method: "POST", body: "{}" });
+  const usage = quota.rows as { allowed?: boolean; remaining?: number; reason?: string };
+  if (usage.allowed !== true) throw new Error(usage.reason === "daily" ? "오늘 수집 한도 10회를 모두 사용했습니다. 한국 시간 자정 이후 다시 시도해주세요." : "요청이 너무 빠릅니다. 2초 후 다시 눌러주세요.");
+  let tweetsResponse: Response;
+  try {
+    tweetsResponse = await fetch(`https://api.x.com/2/tweets/search/all?${params}`, { headers, signal: AbortSignal.timeout(20_000) });
+  } catch { throw new Error("X 응답을 받지 못했습니다. 자동 재시도는 하지 않습니다. 이번 요청은 일일 한도에 포함됩니다."); }
   if (!tweetsResponse.ok) {
     const details = await tweetsResponse.json().catch(() => ({}));
-    throw new Error(text(details.detail || details.title) || `X search failed (${tweetsResponse.status}).`);
+    const message = tweetsResponse.status === 429 ? "X 호출 제한에 도달했습니다. 잠시 후 다시 시도해주세요." : tweetsResponse.status === 402 ? "X API 크레딧 또는 결제 한도를 확인해주세요." : tweetsResponse.status === 401 || tweetsResponse.status === 403 ? "X API 인증 또는 전체 검색 접근 권한을 확인해주세요." : text(details.errors?.[0]?.message || details.detail || details.title) || "X 검색 요청을 처리하지 못했습니다.";
+    throw new Error(`${message} (X ${tweetsResponse.status}) 이번 요청은 일일 한도에 포함됩니다.`);
   }
   const result = await tweetsResponse.json();
   const media = new Map((result.includes?.media || []).map((item: Record<string, unknown>) => [item.media_key, item]));
@@ -287,7 +333,7 @@ async function twitterSearch(payload: Record<string, unknown>) {
     const parts = Object.fromEntries(kstFormatter.formatToParts(new Date(text(value))).map(({ type, value }) => [type, value]));
     return `${parts.year}-${parts.month}-${parts.day}`;
   };
-  return (result.data || []).filter((tweet: Record<string, unknown>) => {
+  const items = (result.data || []).filter((tweet: Record<string, unknown>) => {
     const references = Array.isArray(tweet.referenced_tweets) ? tweet.referenced_tweets as Record<string, unknown>[] : [];
     if (references.some((item) => item.type === "retweeted")) return false;
     return !tweet.in_reply_to_user_id || tweet.in_reply_to_user_id === tweet.author_id;
@@ -299,11 +345,18 @@ async function twitterSearch(payload: Record<string, unknown>) {
     const mp4 = variants.filter((item) => text(item.content_type).includes("mp4")).sort((a, b) => Number(b.bit_rate || 0) - Number(a.bit_rate || 0))[0];
     return {
       id: `twitter-${tweet.id}`, title: text(tweet.text), date: kstDate(tweet.created_at),
-      link: `https://x.com/${username}/status/${tweet.id}`, account: username, mainCategory: "SNS", subCategory: "공식 트위터",
+      link: `https://x.com/${username}/status/${tweet.id}`, account: username, mainCategory: "", subCategory: "",
       keywords: [], rawKeywords: "", thumbnailUrl: text(chosen?.preview_image_url || chosen?.url),
-      mediaUrl: text(mp4?.url || chosen?.url), mediaType: chosen?.type === "photo" ? "image" : chosen ? "video" : "text", sourceType: "twitter"
+      mediaUrl: text(mp4?.url || chosen?.url), mediaType: chosen?.type === "photo" ? "image" : chosen ? "video" : "text", sourceType: "twitter",
+      twitterConversationId: text(tweet.conversation_id || tweet.id)
     };
   });
+  let cursor = "";
+  if (result.meta?.next_token) {
+    const encoded = base64Url(encoder.encode(JSON.stringify({ kind: "twitter-search", username: username.toLowerCase(), startDate, endDate, pageSize, endTime: frozenEnd, nextToken: result.meta.next_token, exp: Date.now() + sessionMs })));
+    cursor = `${encoded}.${await signature(encoded, cursorSecret)}`;
+  }
+  return { items, cursor, hasMore: Boolean(cursor), fetched: (result.data || []).length, remainingRequests: Number(usage.remaining || 0), warning: result.errors?.length ? "X에서 일부 데이터를 반환하지 못했습니다. 수집 결과를 확인해주세요." : "" };
 }
 async function refreshArchiveThumbnails(payload: Record<string, unknown>) {
   const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
@@ -447,6 +500,12 @@ Deno.serve(async (request) => {
 
     if (action === "archive-list") {
       const page = Math.max(1, Number(payload.page || 1)); const limit = Math.min(100, Math.max(1, Number(payload.limit || 30)));
+      if (/^\d{2}-\d{2}$/.test(text(payload.monthDay))) {
+        const ids = await categoryIds(text(payload.mainCategory) === "전체" ? "" : text(payload.mainCategory), text(payload.subCategory) === "전체" ? "" : text(payload.subCategory));
+        const result = await rest("rpc/hq_admin_archive_month_day", { method: "POST", body: JSON.stringify({ p_month_day: text(payload.monthDay), p_status: text(payload.status) || "published", p_query: text(payload.query), p_category_id: ids.category_id, p_subcategory_id: ids.subcategory_id, p_offset: (page - 1) * limit, p_limit: limit }) });
+        const data = (Array.isArray(result.rows) ? result.rows[0] : result.rows || {}) as Record<string, unknown>;
+        return json(request, { ok: true, items: data.items || [], total: Number(data.total || 0), page, hasMore: page * limit < Number(data.total || 0) });
+      }
       const params = new URLSearchParams({ select: "*,category:hq_archive_categories(name),subcategory:hq_archive_subcategories(name)", order: "occurred_on.desc.nullslast,id.desc", offset: String((page - 1) * limit), limit: String(limit) });
       if (payload.status) params.set("status", `eq.${text(payload.status)}`);
       if (payload.dateFrom) params.set("occurred_on", `gte.${text(payload.dateFrom)}`);
@@ -474,15 +533,35 @@ Deno.serve(async (request) => {
       await rest(`hq_archive_contents?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(row), headers: { Prefer: "return=minimal" } });
       return json(request, { ok: true });
     }
+    if (action === "archive-thread-update") {
+      const id = Number(payload.id);
+      if (!Number.isSafeInteger(id) || id <= 0) throw new Error("기록 ID가 올바르지 않습니다.");
+      const current = await rest(`hq_archive_contents?select=status&id=eq.${id}&limit=1`);
+      if (!current.rows.length) throw new Error("기록을 찾지 못했습니다.");
+      const row = await archiveRow(payload.item || {}, text(current.rows[0].status));
+      const result = await rest("rpc/hq_update_archive_thread", { method: "POST", body: JSON.stringify({ p_id: id, p_item: row }) });
+      return json(request, { ok: true, affectedCount: Number(result.rows) });
+    }
+    if (action === "archive-thread-info") {
+      const id = Number(payload.id);
+      if (!Number.isSafeInteger(id) || id <= 0) throw new Error("기록 ID가 올바르지 않습니다.");
+      const result = await rest("rpc/hq_archive_thread_counts", { method: "POST", body: JSON.stringify({ p_id: id }) });
+      return json(request, { ok: true, total: Number(result.rows[0]?.total || 0), applicable: Number(result.rows[0]?.applicable || 0) });
+    }
     if (action === "archive-refresh-thumbnails") return json(request, { ok: true, ...await refreshArchiveThumbnails(payload) });
     if (action === "archive-delete") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "DELETE" }); return json(request, { ok: true }); }
     if (action === "archive-save-drafts") {
       const rows = []; for (const item of payload.items || []) rows.push(await archiveRow(item, "draft"));
-      await rest("hq_archive_contents", { method: "POST", body: JSON.stringify(rows), headers: { Prefer: "return=minimal" } });
-      return json(request, { ok: true, count: rows.length });
+      if (!rows.length) return json(request, { ok: true, count: 0, inserted: 0, skipped: 0 });
+      const result = await rest("hq_archive_contents?on_conflict=tweet_id", {
+        method: "POST",
+        body: JSON.stringify(rows),
+        headers: { Prefer: "resolution=ignore-duplicates,return=representation" }
+      });
+      return json(request, { ok: true, count: rows.length, inserted: result.rows.length, skipped: rows.length - result.rows.length });
     }
     if (action === "archive-publish") { await rest(`hq_archive_contents?id=eq.${Number(payload.id)}`, { method: "PATCH", body: JSON.stringify({ status: "published" }), headers: { Prefer: "return=minimal" } }); return json(request, { ok: true }); }
-    if (action === "twitter-search") return json(request, { ok: true, items: await twitterSearch(payload) });
+    if (action === "twitter-search") return json(request, { ok: true, ...await twitterSearch(payload, sessionSecret) });
     if (action === "view-stats") return json(request, { ok: true, ...await viewStats(payload) });
     if (action === "search-stats") return json(request, { ok: true, ...await searchStats(payload) });
 

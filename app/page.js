@@ -1843,6 +1843,21 @@ function ArchiveAdmin({ onBack }) {
   const [twitterId, setTwitterId] = useState("");
   const [twitterFrom, setTwitterFrom] = useState("");
   const [twitterTo, setTwitterTo] = useState("");
+  const [twitterPage, setTwitterPage] = useState(null);
+  const [twitterPending, setTwitterPending] = useState(null);
+  const [twitterMessage, setTwitterMessage] = useState("");
+  const [twitterError, setTwitterError] = useState("");
+  const [twitterCooling, setTwitterCooling] = useState(false);
+  const twitterRequestRef = useRef(false);
+  useEffect(() => {
+    setTwitterPage(null); setTwitterPending(null); setTwitterMessage(""); setTwitterError("");
+  }, [twitterId, twitterFrom, twitterTo]);
+  useEffect(() => {
+    if (!twitterCooling) return;
+    const timer = setTimeout(() => setTwitterCooling(false), 2000);
+    return () => clearTimeout(timer);
+  }, [twitterCooling]);
+
   const calendarMonthKey = `${adminYear}-${pad(adminMonth)}`;
   const formKeywords = useMemo(() => uniqueKeywords(Array.isArray(form.keywords) && form.keywords.length ? form.keywords : parseKeywordText(form.rawKeywords)), [form.keywords, form.rawKeywords]);
   const keywordOptions = useMemo(() => uniqueKeywords([...adminKeywordOptions, ...formKeywords]).sort((a, b) => a.localeCompare(b, "ko")), [adminKeywordOptions, formKeywords]);
@@ -1981,10 +1996,26 @@ function ArchiveAdmin({ onBack }) {
     if (!selectedRawItems.length || !confirm(`선택한 ${selectedRawItems.length}개를 Raw 시트에서 영구 삭제할까요?`)) return;
     setBusy(true); const result = await runMany(selectedRawItems, (item) => archiveService.removeRaw(item.id)); const done = new Set(selectedRawItems.map((item) => item.id)); setRawItems((current) => current.filter((item) => !done.has(item.id))); setSelectedRaw([]); setBusy(false); alert(`삭제 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
   };
-  const fetchTwitter = async () => {
-    if (!twitterId || !twitterFrom || !twitterTo) return alert("트위터 계정과 시작·종료 날짜를 모두 입력해주세요.");
-    if (twitterFrom > twitterTo) return alert("시작 날짜가 종료 날짜보다 늦을 수 없습니다.");
-    setBusy(true); try { const result = await archiveService.fetchTwitter({ twitterId, startDate: twitterFrom, endDate: twitterTo }); alert(`${result.count || 0}개의 트윗을 Raw 시트에 추가했습니다.`); await loadRaw(); } catch (error) { alert(error.message); } finally { setBusy(false); }
+  const fetchTwitter = async (continueSearch = false) => {
+    if (twitterRequestRef.current || busy || twitterCooling) return;
+    setTwitterError("");
+    if (!twitterId || !twitterFrom || !twitterTo) return setTwitterError("트위터 계정과 시작·종료 날짜를 모두 입력해주세요.");
+    const days = (Date.parse(twitterTo) - Date.parse(twitterFrom)) / 86400000 + 1;
+    if (!Number.isFinite(days) || days < 1 || days > 31) return setTwitterError("시작·종료 날짜를 확인해주세요. 최대 31일 범위만 수집할 수 있습니다.");
+    if (continueSearch && !twitterPage?.cursor && !twitterPending) return;
+    twitterRequestRef.current = true;
+    setBusy(true);
+    try {
+      const result = await archiveService.fetchTwitter({ twitterId, startDate: twitterFrom, endDate: twitterTo, cursor: continueSearch ? twitterPage?.cursor || "" : "", pendingPage: twitterPending });
+      setTwitterPending(null); setTwitterPage(result);
+      setTwitterMessage(`조회 ${result.fetched}건 · 저장 ${result.count}건 · 중복 제외 ${result.skipped}건${result.fetched > result.found ? ` · 리트윗/타인 답글 제외 ${result.fetched - result.found}건` : ""}. ${result.hasMore ? "남은 결과는 다음 100건 수집 버튼으로 가져오세요." : "이 기간의 수집을 완료했습니다."}${result.warning ? ` ${result.warning}` : ""}`);
+      await loadRaw();
+    } catch (error) {
+      if (error.pendingTwitterPage) setTwitterPending(error.pendingTwitterPage);
+      setTwitterError(error.pendingTwitterPage ? `조회한 자료 저장에 실패했습니다. 저장 재시도는 X를 다시 호출하지 않습니다. ${error.message}` : error.message);
+    } finally {
+      twitterRequestRef.current = false; setBusy(false); setTwitterCooling(true);
+    }
   };
   const toggle = (id, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; setter((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]); };
   const toggleAll = (rows, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; const ids = rows.map((item) => item.id); setter((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]); };
@@ -1996,7 +2027,18 @@ function ArchiveAdmin({ onBack }) {
     <div className="mt-4 grid grid-cols-3 border-b border-white/10">{[["list","목록 관리"],["calendar","캘린더 관리"],["import","불러오기"]].map(([key,label])=><button key={key} onClick={()=>{setAdminTab(key);setFormOpen(false);}} className={cn("border-b-2 py-3 text-[11px] font-black",adminTab===key?"border-accent text-white":"border-transparent text-neutral-600")}>{label}</button>)}</div>
     {adminTab === "list" && <><button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button><div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div><div className="mt-3 grid grid-cols-2 gap-2"><AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체",...Object.keys(CATEGORY_MAP)]}/><AdminSelect label="소분류 필터" value={subFilter} onChange={(value)=>{setSubFilter(value);if(value!=="전체")setMainFilter(mainCategoryFor(value));}} options={["전체",...SUB_CATEGORY_OPTIONS]}/><AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/><AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/></div><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>{bulkPanel()}<p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {total}개 · {page}페이지</p></>}
     {adminTab === "calendar" && <div className="mt-4"><div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-center justify-center gap-2"><AdminSelect label="년도" value={String(adminYear)} onChange={(value)=>{setAdminYear(+value);setAdminDate(`${value}-${pad(adminMonth)}-01`);}} options={adminYears.map(String)}/><AdminSelect label="월" value={String(adminMonth)} onChange={(value)=>{setAdminMonth(+value);setAdminDate(`${adminYear}-${pad(value)}-01`);}} options={Array.from({length:12},(_,i)=>String(i+1))}/></div><div className="mt-4 grid grid-cols-7 text-center text-[9px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((value)=><span key={value}>{value}</span>)}</div><div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:new Date(adminYear,adminMonth-1,1).getDay()}).map((_,i)=><span key={`admin-empty-${i}`}/>)}{Array.from({length:new Date(adminYear,adminMonth,0).getDate()},(_,i)=>i+1).map((value)=>{const date=`${calendarMonthKey}-${pad(value)}`;const has=calendarMonthItems.some((item)=>item.date===date);return <button key={value} onClick={()=>setAdminDate(date)} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",adminDate===date?"bg-accent text-white":"text-neutral-400")}>{value}{has&&adminDate!==date&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div></div><div className="mt-4 flex items-center"><p className="text-xs font-black">{adminDate} <span className="text-neutral-500">{calendarItems.length}개</span></p><button onClick={()=>openForm(null,adminDate)} className="ml-auto rounded-lg bg-accent px-3 py-2 text-[10px] font-black">+ 추가</button></div></div>}
-    {adminTab === "import" && <div className="mt-4"><div className="rounded-2xl border border-[#1DA1F2]/30 bg-[#1DA1F2]/5 p-4"><h3 className="text-sm font-black text-[#55acee]">트위터 데이터 수집</h3><AdminInput label="트위터 계정 ID (@ 제외)" value={twitterId} onChange={setTwitterId}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={twitterFrom} onChange={setTwitterFrom}/><AdminInput label="종료 날짜" type="date" value={twitterTo} onChange={setTwitterTo}/></div><button disabled={busy} onClick={fetchTwitter} className="mt-3 w-full rounded-xl bg-[#1DA1F2] py-3 text-xs font-black disabled:opacity-50">{busy?"수집 중…":"트윗 수집하여 Raw 시트에 추가"}</button></div><div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4"><h3 className="text-sm font-black">Raw 데이터 조회 및 게시</h3><AdminInput label="계정 필터 (선택)" value={rawAccount} onChange={setRawAccount}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={rawFrom} onChange={setRawFrom}/><AdminInput label="종료 날짜" type="date" value={rawTo} onChange={setRawTo}/></div><button disabled={busy} onClick={loadRaw} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black">{busy?"불러오는 중…":"Raw 데이터 조회하기"}</button></div>{rawLoaded&&<><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={rawFiltered.length>0&&rawFiltered.every((item)=>selectedRaw.includes(item.id))} onChange={()=>toggleAll(rawFiltered,true)} className="h-4 w-4 accent-[#e50000]"/>전체 선택</label><span className="ml-2 text-[10px] font-bold text-neutral-600">{rawFiltered.length}개</span><button disabled={!selectedRaw.length||busy} onClick={removeSelectedRaw} className="ml-auto rounded-lg bg-accent/10 px-2.5 py-2 text-[10px] font-black text-accent disabled:opacity-40">삭제</button><button disabled={!selectedRaw.length||busy} onClick={publishSelectedRaw} className="ml-2 rounded-lg bg-accent px-2.5 py-2 text-[10px] font-black disabled:opacity-40">게시 ({selectedRaw.length})</button></div>{bulkPanel(true)}</>}</div>}
+    {adminTab === "import" && <div className="mt-4"><div className="rounded-2xl border border-[#1DA1F2]/30 bg-[#1DA1F2]/5 p-4"><h3 className="text-sm font-black text-[#55acee]">트위터 데이터 수집</h3>
+      <p className="mt-2 text-xs leading-5 text-neutral-400">클릭당 최대 100건 · 최대 31일 · 하루 전체 합산 10회. 한국 시간 자정에 한도가 초기화됩니다. 다음 페이지와 재시도는 자동으로 호출하지 않습니다.</p>
+      <fieldset disabled={busy}>
+      <div className="my-3 flex gap-2">{[["새요","Tody_N"],["펜타","Penta_1031"]].map(([name,account])=><button key={account} type="button" aria-pressed={twitterId===account} onClick={()=>setTwitterId(account)} className={cn("flex-1 rounded-xl border px-3 py-2.5 text-[11px] font-black",twitterId===account?"border-[#1DA1F2] bg-[#1DA1F2] text-white":"border-white/10 bg-white/5 text-neutral-400")}>{name} <span className="text-[9px]">@{account}</span></button>)}</div>
+      <AdminInput label="트위터 계정 ID (@ 제외)" value={twitterId} onChange={setTwitterId}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={twitterFrom} onChange={setTwitterFrom}/><AdminInput label="종료 날짜" type="date" value={twitterTo} onChange={setTwitterTo}/></div>
+      <button disabled={busy || twitterCooling || (!twitterPending && twitterPage?.remainingRequests === 0)} onClick={()=>fetchTwitter()} className="mt-3 w-full rounded-xl bg-[#1DA1F2] py-3 text-xs font-black disabled:opacity-50">{busy ? "수집 중…" : twitterPending ? "조회한 자료 저장 재시도" : twitterPage ? "처음부터 최대 100건 수집" : "최대 100건 수집하여 임시 저장"}</button>
+      {!twitterPending && twitterPage?.hasMore && <button disabled={busy || twitterCooling || twitterPage.remainingRequests === 0} onClick={()=>fetchTwitter(true)} className="mt-2 w-full rounded-xl border border-[#1DA1F2]/40 py-3 text-xs font-black text-[#55acee] disabled:opacity-50">다음 100건 수집</button>}
+      </fieldset>
+      {twitterPage?.remainingRequests !== undefined && <p className="mt-2 text-xs text-neutral-400">오늘 남은 수집 요청: {twitterPage.remainingRequests}회 / 10회</p>}
+      {twitterMessage && <p role="status" className="mt-3 text-xs leading-5 text-neutral-300">{twitterMessage}</p>}
+      {twitterError && <p role="alert" className="mt-3 text-xs leading-5 text-red-400">{twitterError}</p>}
+      </div><div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4"><h3 className="text-sm font-black">Raw 데이터 조회 및 게시</h3><AdminInput label="계정 필터 (선택)" value={rawAccount} onChange={setRawAccount}/><div className="mt-2 grid grid-cols-2 gap-2"><AdminInput label="시작 날짜" type="date" value={rawFrom} onChange={setRawFrom}/><AdminInput label="종료 날짜" type="date" value={rawTo} onChange={setRawTo}/></div><button disabled={busy} onClick={loadRaw} className="mt-3 w-full rounded-xl bg-accent py-3 text-xs font-black">{busy?"불러오는 중…":"Raw 데이터 조회하기"}</button></div>{rawLoaded&&<><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={rawFiltered.length>0&&rawFiltered.every((item)=>selectedRaw.includes(item.id))} onChange={()=>toggleAll(rawFiltered,true)} className="h-4 w-4 accent-[#e50000]"/>전체 선택</label><span className="ml-2 text-[10px] font-bold text-neutral-600">{rawFiltered.length}개</span><button disabled={!selectedRaw.length||busy} onClick={removeSelectedRaw} className="ml-auto rounded-lg bg-accent/10 px-2.5 py-2 text-[10px] font-black text-accent disabled:opacity-40">삭제</button><button disabled={!selectedRaw.length||busy} onClick={publishSelectedRaw} className="ml-2 rounded-lg bg-accent px-2.5 py-2 text-[10px] font-black disabled:opacity-40">게시 ({selectedRaw.length})</button></div>{bulkPanel(true)}</>}</div>}
     {formOpen && <form onSubmit={save} className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4">
       <div className="mb-3 flex items-center"><h3 className="text-sm font-black">{editing ? "기록 수정" : "새 기록"}</h3><button type="button" onClick={() => {setEditing(null);setForm(blank);setThumbnailMessage("");setFormOpen(false);}} className="ml-auto"><X size={16}/></button></div>
       <div className="grid grid-cols-2 gap-2">
