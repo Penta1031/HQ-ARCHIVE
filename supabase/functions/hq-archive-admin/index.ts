@@ -315,16 +315,16 @@ async function twitterSearch(payload: Record<string, unknown>, cursorSecret: str
   });
   if (nextToken) params.set("next_token", nextToken);
   const quota = await rest("rpc/hq_reserve_twitter_search", { method: "POST", body: "{}" });
-  const usage = quota.rows as { allowed?: boolean; remaining?: number; reason?: string };
-  if (usage.allowed !== true) throw new Error(usage.reason === "daily" ? "오늘 수집 한도 10회를 모두 사용했습니다. 한국 시간 자정 이후 다시 시도해주세요." : "요청이 너무 빠릅니다. 2초 후 다시 눌러주세요.");
+  const usage = quota.rows as { allowed?: boolean; reason?: string };
+  if (usage.allowed !== true) throw new Error("요청이 너무 빠릅니다. 2초 후 다시 눌러주세요.");
   let tweetsResponse: Response;
   try {
     tweetsResponse = await fetch(`https://api.x.com/2/tweets/search/all?${params}`, { headers, signal: AbortSignal.timeout(20_000) });
-  } catch { throw new Error("X 응답을 받지 못했습니다. 자동 재시도는 하지 않습니다. 이번 요청은 일일 한도에 포함됩니다."); }
+  } catch { throw new Error("X 응답을 받지 못했습니다. 자동 재시도는 하지 않습니다."); }
   if (!tweetsResponse.ok) {
     const details = await tweetsResponse.json().catch(() => ({}));
     const message = tweetsResponse.status === 429 ? "X 호출 제한에 도달했습니다. 잠시 후 다시 시도해주세요." : tweetsResponse.status === 402 ? "X API 크레딧 또는 결제 한도를 확인해주세요." : tweetsResponse.status === 401 || tweetsResponse.status === 403 ? "X API 인증 또는 전체 검색 접근 권한을 확인해주세요." : text(details.errors?.[0]?.message || details.detail || details.title) || "X 검색 요청을 처리하지 못했습니다.";
-    throw new Error(`${message} (X ${tweetsResponse.status}) 이번 요청은 일일 한도에 포함됩니다.`);
+    throw new Error(`${message} (X ${tweetsResponse.status})`);
   }
   const result = await tweetsResponse.json();
   const media = new Map((result.includes?.media || []).map((item: Record<string, unknown>) => [item.media_key, item]));
@@ -356,7 +356,7 @@ async function twitterSearch(payload: Record<string, unknown>, cursorSecret: str
     const encoded = base64Url(encoder.encode(JSON.stringify({ kind: "twitter-search", username: username.toLowerCase(), startDate, endDate, pageSize, endTime: frozenEnd, nextToken: result.meta.next_token, exp: Date.now() + sessionMs })));
     cursor = `${encoded}.${await signature(encoded, cursorSecret)}`;
   }
-  return { items, cursor, hasMore: Boolean(cursor), fetched: (result.data || []).length, remainingRequests: Number(usage.remaining || 0), warning: result.errors?.length ? "X에서 일부 데이터를 반환하지 못했습니다. 수집 결과를 확인해주세요." : "" };
+  return { items, cursor, hasMore: Boolean(cursor), fetched: (result.data || []).length, warning: result.errors?.length ? "X에서 일부 데이터를 반환하지 못했습니다. 수집 결과를 확인해주세요." : "" };
 }
 async function refreshArchiveThumbnails(payload: Record<string, unknown>) {
   const ids = [...new Set((Array.isArray(payload.ids) ? payload.ids : []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
