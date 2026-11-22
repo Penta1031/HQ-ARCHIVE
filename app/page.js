@@ -10,7 +10,7 @@ import {
 import { adminService, analyticsService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
 import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
 
-import { GalleryView, galleryService, galleryClassifications, applyGalleryClassification } from "../components/GalleryView";
+import { GalleryView, galleryService, galleryClassifications, applyGalleryClassification, warmGallery } from "../components/GalleryView";
 
 const pad = (n) => String(n).padStart(2, "0");
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -111,7 +111,7 @@ export default function Page() {
     setSelectedKeyword(keyword);
   };
   const scrollContentToTop = () => window.requestAnimationFrame(() => contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" }));
-  const openAdmin = () => { setAdminOpen(true); };
+  const openAdmin = () => { galleryService.invalidate(); setAdminOpen(true); };
   const closeAdmin = () => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setAdminOpen(false);
@@ -124,6 +124,11 @@ export default function Page() {
       .catch(() => { if (active) setTabVisibility(DEFAULT_TAB_VISIBILITY); });
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (tabVisibility.gallery === false || tab !== "home" || adminOpen) return;
+    const timer = window.setTimeout(warmGallery, 250);
+    return () => window.clearTimeout(timer);
+  }, [tabVisibility.gallery, tab, adminOpen]);
   useEffect(() => {
     analyticsService.track({ eventType: "tab", tabKey: tab });
   }, [tab]);

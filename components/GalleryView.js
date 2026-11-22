@@ -390,7 +390,7 @@ async function findArchivePost(t) {
 const GALLERY_PAGE_SIZE = 30;
 const GALLERY_METADATA_BATCH_SIZE = 150;
 
-async function readGalleryRecords({ cursor, limit, order = "desc", date = "", signal }) {
+async function readGalleryRecords({ cursor, limit, order = "desc", date = "", signal, publicGallery = false }) {
   const params = new URLSearchParams({
     select: "id,title,occurred_on,source_url,thumbnail_url,keywords,main_category,sub_category",
     order: `occurred_on.${order}.nullslast,id.${order}`,
@@ -403,14 +403,19 @@ async function readGalleryRecords({ cursor, limit, order = "desc", date = "", si
     params.append("occurred_on", `gte.${date}-01`);
     params.append("occurred_on", `lt.${localDate(new Date(year, month, 1))}`);
   }
+  const conditions = [];
+  if (publicGallery) {
+    conditions.push("or(keywords.cs.{갤러리:직접등록},main_category.is.null,main_category.not.in.(무대영상,라이브,유튜브),and(main_category.eq.유튜브,sub_category.in.(쇼츠,숏츠)))");
+  }
   if (cursor) {
     const operator = order === "asc" ? "gt" : "lt";
     const { id, date: cursorDate } = cursor;
     const after = cursorDate
       ? `or(occurred_on.${operator}.${cursorDate},and(occurred_on.eq.${cursorDate},id.${operator}.${id}),occurred_on.is.null)`
       : `and(occurred_on.is.null,id.${operator}.${id})`;
-    params.set("and", `(${after})`);
+    conditions.push(after);
   }
+  if (conditions.length) params.set("and", `(${conditions.join(",")})`);
   const { rows } = await supabaseRequest(`hq_archive_public?${params}`, { signal });
   const last = rows.at(-1);
   return {
@@ -492,6 +497,7 @@ async function resolveGalleryMedia(t, signal) {
 let galleryService = {
   invalidate() {
     catalogPromise = null, catalogAt = 0;
+    warmedGallery = null;
   },
   async bulkClassification(t, e) {
     let a = arguments.length > 2 && void 0 !== arguments[2] && arguments[2],
@@ -1206,7 +1212,7 @@ function galleryPreview(record) {
 }
 
 async function loadGalleryPage({ previous, limit, date, order, type, category, signal }) {
-  const firstPage = previous ? null : readGalleryRecords({ date, order, signal, limit: GALLERY_METADATA_BATCH_SIZE });
+  const firstPage = previous ? null : readGalleryRecords({ date, order, signal, publicGallery: true, limit: GALLERY_METADATA_BATCH_SIZE });
   const [hidden, initial] = await Promise.all([
     previous?.hidden || galleryService.hiddenKeys().then(keys => new Set(keys)), firstPage
   ]);
@@ -1218,7 +1224,7 @@ async function loadGalleryPage({ previous, limit, date, order, type, category, s
   while (count < limit && cursor !== null) {
     signal.throwIfAborted();
     const page = pendingPage || await readGalleryRecords({
-      cursor, date, order, signal, limit: GALLERY_METADATA_BATCH_SIZE
+      cursor, date, order, signal, publicGallery: true, limit: GALLERY_METADATA_BATCH_SIZE
     });
     pendingPage = null;
     records.push(...page.records.map(galleryPreview));
@@ -1227,6 +1233,35 @@ async function loadGalleryPage({ previous, limit, date, order, type, category, s
       !hidden.has(card.key) && matchesGalleryFilters(card, date, type, category)).length;
   }
   return { records, hidden, cursor };
+}
+
+let warmedGallery = null;
+const GALLERY_WARMUP_TTL = 30_000;
+
+function warmGallery() {
+  if (warmedGallery && Date.now() - warmedGallery.startedAt < GALLERY_WARMUP_TTL) return;
+  const entry = { startedAt: Date.now() };
+  entry.page = loadGalleryPage({
+    previous: null, limit: GALLERY_PAGE_SIZE, date: "", order: "desc",
+    type: "all", category: "전체", signal: AbortSignal.timeout(GALLERY_WARMUP_TTL)
+  }).then(page => {
+    if (warmedGallery === entry) {
+      const cards = galleryCards(page.records, "desc").filter(card => !page.hidden.has(card.key));
+      for (const card of cards.slice(0, 6)) {
+        const src = galleryTileSource(card);
+        if (!src) continue;
+        const thumbnail = new Image();
+        thumbnail.referrerPolicy = "no-referrer";
+        thumbnail.fetchPriority = "low";
+        thumbnail.src = src;
+      }
+    }
+    return page;
+  }).catch(() => {
+    if (warmedGallery === entry) warmedGallery = null;
+    return null;
+  });
+  warmedGallery = entry;
 }
 
 function GalleryView(t) {
@@ -1315,7 +1350,12 @@ function GalleryView(t) {
     v(true);
     A("");
     try {
-      const page = await loadGalleryPage({
+      const canUseWarmup = !previous && !d && g === "desc" && z === "all" && Y === "전체";
+      const warmup = canUseWarmup && warmedGallery && Date.now() - warmedGallery.startedAt < GALLERY_WARMUP_TTL
+        ? warmedGallery.page : null;
+      const prepared = warmup ? await warmup : null;
+      request.signal.throwIfAborted();
+      const page = prepared || await loadGalleryPage({
         previous, limit, date: d, order: g, type: z, category: Y, signal: request.signal
       });
       if (request.signal.aborted) return;
@@ -1740,4 +1780,4 @@ function GalleryView(t) {
   });
 }
 
-export { GalleryView, galleryService, galleryClassifications, applyGalleryClassification };
+export { GalleryView, galleryService, galleryClassifications, applyGalleryClassification, warmGallery };
