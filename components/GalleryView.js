@@ -1429,6 +1429,7 @@ function GalleryView(t) {
   }, [tS]);
   const tU = React.useMemo(() => tS.filter(card => matchesGalleryFilters(card, d, z, Y))
     .sort((left, right) => compareGalleryDate(left, right, g)), [tS, d, g, z, Y]);
+  const firstScreenKeys = new Set(tU.slice(0, 6).map(card => card.key));
   let tG = React.useMemo(() => {
       let t = tU.slice(0, T);
       if ("gallery" === h) return t.length ? [["gallery", t]] : [];
@@ -1711,7 +1712,8 @@ function GalleryView(t) {
               }), galleryTileSource(t) && jsxRuntime.jsx("img", {
                 src: galleryTileSource(t),
                 alt: t.title || "혚쾌 투샷",
-                loading: "lazy",
+                loading: paginated && firstScreenKeys.has(t.key) ? "eager" : "lazy",
+                fetchPriority: paginated && firstScreenKeys.has(t.key) ? "high" : undefined,
                 referrerPolicy: "no-referrer",
                 className: "relative h-full w-full bg-neutral-900 object-cover",
                 onError: t => {
