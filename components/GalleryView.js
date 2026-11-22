@@ -974,12 +974,32 @@ function GalleryLightbox(t) {
       photos: a,
       selectedKey: o,
       onSelect: r,
-      onClose: m
+      onClose: m,
+      hiddenKeys
     } = t,
     n = React.useRef(null),
     c = a.findIndex(t => t.key === o),
-    d = a[c],
+    selected = a[c],
     p = React.useRef(null);
+  const [detail, setDetail] = React.useState(null);
+  const [mediaIndex, setMediaIndex] = React.useState(0);
+  React.useEffect(() => {
+    setMediaIndex(0);
+    if (!selected?.deferred) return;
+    const controller = new AbortController();
+    resolveGalleryMedia([selected], controller.signal).then(([record]) => {
+      if (controller.signal.aborted) return;
+      const media = record.media.filter(item => !hiddenKeys?.has(galleryImageKey(item.url)));
+      setDetail({ key: selected.key, media });
+    }).catch(() => {
+      if (!controller.signal.aborted) setDetail({ key: selected.key, media: [] });
+    });
+    return () => controller.abort();
+  }, [selected, hiddenKeys]);
+  const resolved = detail?.key === selected?.key ? detail : null;
+  const original = resolved?.media[mediaIndex];
+  const d = original ? { ...selected, ...original, isVideo: original.type === "video" } : selected;
+  const pending = selected?.deferred && !resolved;
   if (React.useEffect(() => {
     var t;
     let e = document.activeElement,
@@ -1008,7 +1028,17 @@ function GalleryLightbox(t) {
     },
     children: [jsxRuntime.jsxs("div", {
       className: "mx-auto flex w-full max-w-3xl items-center justify-between gap-4",
-      children: [jsxRuntime.jsx("p", {
+      children: [resolved?.media.length > 1 && jsxRuntime.jsx("div", {
+        className: "flex flex-wrap gap-2",
+        "aria-label": "게시물의 미디어",
+        children: resolved.media.map((item, index) => jsxRuntime.jsx("button", {
+          type: "button",
+          className: buttonClass,
+          "aria-pressed": mediaIndex === index,
+          onClick: () => setMediaIndex(index),
+          children: `${index + 1} / ${resolved.media.length}`
+        }, index))
+      }), jsxRuntime.jsx("p", {
         className: "text-sm text-neutral-300",
         children: (null === (e = d.date) || void 0 === e ? void 0 : e.replace(/-/g, ".")) || "날짜 미등록"
       }), jsxRuntime.jsx("button", {
@@ -1031,7 +1061,25 @@ function GalleryLightbox(t) {
         }
         p.current = null;
       },
-      children: [d.isVideo ? d.external ? jsxRuntime.jsxs("div", {
+      children: [pending || (selected.deferred && !original) ? jsxRuntime.jsxs("div", {
+        className: "flex max-h-full flex-col items-center gap-3",
+        children: [d.thumbnailUrl && jsxRuntime.jsx("img", {
+          src: d.thumbnailUrl,
+          alt: d.title || "미리보기",
+          referrerPolicy: "no-referrer",
+          className: "max-h-[55dvh] max-w-full object-contain"
+        }), jsxRuntime.jsx("p", {
+          role: "status",
+          className: "text-sm text-neutral-400",
+          children: pending ? "원본 불러오는 중…" : "원본 미디어를 불러오지 못했어요."
+        }), jsxRuntime.jsx("a", {
+          href: safeUrl(d.link),
+          target: "_blank",
+          rel: "noopener noreferrer",
+          className: buttonClass,
+          children: "원본 게시물 보기"
+        })]
+      }) : d.isVideo ? d.external ? jsxRuntime.jsxs("div", {
         className: "flex max-h-full flex-col items-center gap-4",
         children: [jsxRuntime.jsx("img", {
           src: d.poster || d.thumbnailUrl,
@@ -1125,18 +1173,54 @@ function matchesGalleryFilters(card, date, type, category) {
   return inferred === category;
 }
 
+function galleryTileSource(card) {
+  const source = card.isVideo || card.deferred ? card.poster || card.thumbnailUrl : card.url;
+  const safeSource = safeUrl(source);
+  if (!safeSource) return undefined;
+  const url = new URL(safeSource);
+  if (url.hostname === "pbs.twimg.com" && url.pathname.startsWith("/media/")) {
+    url.searchParams.set("name", "small");
+  }
+  return url.href;
+}
+
+function galleryPreview(record) {
+  const cached = snapshotById.get(String(record.id));
+  if (cached?.link === record.link && cached.thumbnailUrl === record.thumbnailUrl && cached.media?.length) {
+    return { ...record, media: cached.media };
+  }
+  const directVideo = /\.(mp4|webm)(?:$|\?)/i.test(record.link);
+  const video = directVideo || /video|youtube|youtu\.be|instagram.*\/reel|\/shorts\//i.test(record.thumbnailUrl + record.link)
+    || /^(릴스|쇼츠|숏츠|틱톡)$/.test(record.subCategory);
+  const url = directVideo ? record.link : record.thumbnailUrl || record.link;
+  const deferred = /^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//i.test(record.link);
+  const media = galleryImageKey(url) && (video || record.thumbnailUrl || deferred) ? [{
+    url,
+    poster: record.thumbnailUrl,
+    type: video ? "video" : "image",
+    external: video && !directVideo,
+    deferred
+  }] : [];
+  return { ...record, media };
+}
+
 async function loadGalleryPage({ previous, limit, date, order, type, category, signal }) {
-  const hidden = previous?.hidden || new Set(await galleryService.hiddenKeys());
+  const firstPage = previous ? null : readGalleryRecords({ date, order, signal, limit: GALLERY_PAGE_SIZE });
+  const [hidden, initial] = await Promise.all([
+    previous?.hidden || galleryService.hiddenKeys().then(keys => new Set(keys)), firstPage
+  ]);
   const records = [...(previous?.records || [])];
   let cursor = previous?.cursor;
+  let pendingPage = initial;
   let count = galleryCards(records, order).filter(card =>
     !hidden.has(card.key) && matchesGalleryFilters(card, date, type, category)).length;
   while (count < limit && cursor !== null) {
     signal.throwIfAborted();
-    const page = await readGalleryRecords({
+    const page = pendingPage || await readGalleryRecords({
       cursor, date, order, signal, limit: Math.min(GALLERY_PAGE_SIZE, limit - count)
     });
-    records.push(...await resolveGalleryMedia(page.records, signal));
+    pendingPage = null;
+    records.push(...page.records.map(galleryPreview));
     cursor = page.nextCursor;
     count = galleryCards(records, order).filter(card =>
       !hidden.has(card.key) && matchesGalleryFilters(card, date, type, category)).length;
@@ -1583,8 +1667,8 @@ function GalleryView(t) {
                 "aria-hidden": "true",
                 className: "absolute inset-0 flex items-center justify-center p-4",
                 children: "미리보기를 불러올 수 없어요"
-              }), jsxRuntime.jsx("img", {
-                src: t.isVideo ? t.poster || t.thumbnailUrl : t.url,
+              }), galleryTileSource(t) && jsxRuntime.jsx("img", {
+                src: galleryTileSource(t),
                 alt: t.title || "혚쾌 투샷",
                 loading: "lazy",
                 referrerPolicy: "no-referrer",
@@ -1635,6 +1719,7 @@ function GalleryView(t) {
     }), I && jsxRuntime.jsx(GalleryLightbox, {
       photos: paginated ? tU.slice(0, T) : tU,
       selectedKey: I,
+      hiddenKeys: y,
       onSelect: tT,
       onClose: () => P(null)
     }), !a && $ && ReactDOM.createPortal(jsxRuntime.jsx("button", {
