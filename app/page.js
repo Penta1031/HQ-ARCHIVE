@@ -367,6 +367,7 @@ function CalendarView() {
   const [officialError, setOfficialError] = useState(false);
   const [officialLimit, setOfficialLimit] = useState(1);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [scheduleRecords, setScheduleRecords] = useState(null);
   const [officialRetry, setOfficialRetry] = useState(0);
   useEffect(() => {
     let active = true;setOfficialError(false);
@@ -380,10 +381,27 @@ function CalendarView() {
   useEffect(() => { if (selectedSchedule) document.getElementById("calendarArchiveRecords")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [selectedSchedule]);
   const monthKey = `${year}-${pad(month)}`;
   const [todayYear, todayMonth, todayDay] = (liveToday || getKstDate()).split("-").map(Number);
-  const filtered = (selectedSchedule ? monthly.filter(item => selectedSchedule.recordIds.includes(Number(item.id))) : day ? monthly.filter((x) => x.date === `${monthKey}-${pad(day)}`) : monthly).sort((a,b) => b.date.localeCompare(a.date));
-  const officialDays = (official?.days || []).filter(entry => entry.date.startsWith(monthKey));
-  const monthlyIds = new Set(monthly.map(item => Number(item.id)));
-  const scheduleList = officialDays.filter(entry => !day || entry.date === `${monthKey}-${pad(day)}`).flatMap(entry => entry.events.map((event, index) => ({ ...event, date: entry.date, key: `${entry.date}-${index}`, linked: event.recordIds.some(id => monthlyIds.has(id)) })));
+  const officialDays = useMemo(() => (official?.days || []).filter(entry => entry.date.startsWith(monthKey)), [official, monthKey]);
+  useEffect(() => {
+    if (!officialDays.length) return;
+    let active = true;
+    const ids = officialDays.flatMap(entry => entry.events.flatMap(event => event.recordIds));
+    archiveService.byIds(ids).then(items => {
+      if (active) setScheduleRecords({ monthKey, items });
+    }).catch(() => {
+      if (active) setScheduleRecords(null);
+    });
+    return () => { active = false; };
+  }, [officialDays, monthKey]);
+  const recordsById = new Map(monthly.map(item => [Number(item.id), item]));
+  if (scheduleRecords?.monthKey === monthKey) {
+    for (const item of scheduleRecords.items) recordsById.set(Number(item.id), item);
+  }
+  const visibleRecords = selectedSchedule
+    ? selectedSchedule.recordIds.map(id => recordsById.get(id)).filter(Boolean)
+    : monthly.filter(item => !day || item.date === `${monthKey}-${pad(day)}`);
+  const filtered = [...visibleRecords].sort((a, b) => b.date.localeCompare(a.date));
+  const scheduleList = officialDays.filter(entry => !day || entry.date === `${monthKey}-${pad(day)}`).flatMap(entry => entry.events.map((event, index) => ({ ...event, date: entry.date, key: `${entry.date}-${index}`, linked: event.recordIds.some(id => recordsById.has(id)) })));
   const firstDay = new Date(year, month - 1, 1).getDay(); const days = new Date(year, month, 0).getDate();
   const changeMonth = (delta) => { const d = new Date(year, month - 1 + delta, 1); setYear(d.getFullYear()); setMonth(d.getMonth() + 1); setDay(null); setDisplayLimit(30); setSelectedSchedule(null); setOfficialLimit(1); };
   useEffect(() => { let active = true; setLoading(true); setError(""); setMonthly([]); archiveService.calendar({year,month}).then((result)=>{if(!active)return;setMonthly(result.items);setMonthTotal(result.total);}).catch((reason)=>{if(!active)return;setError(reason.message||"캘린더 기록을 불러오지 못했어요.");}).finally(()=>{if(active)setLoading(false);}); return()=>{active=false;}; },[year,month]);
@@ -400,7 +418,7 @@ function CalendarView() {
     </section>
     <div className="mt-6 flex items-end"><div><p className="text-[10px] font-black tracking-[.18em] text-neutral-600">{day ? "SELECTED DAY" : "MONTHLY ARCHIVE"}</p><h3 className="mt-1 text-lg font-black">{selectedSchedule ? "관련 떡밥" : day ? `${month}월 ${day}일` : `${year}년 ${month}월`}</h3></div><button onClick={()=>{setDay(null);setDisplayLimit(30);setSelectedSchedule(null);}} className={cn("ml-auto text-xs font-bold text-accent",!day&&!selectedSchedule&&"invisible")}>전체 보기</button></div>
     {selectedSchedule&&<p className="mt-2 text-sm leading-relaxed text-neutral-400">{selectedSchedule.title}</p>}
-    <div id="calendarArchiveRecords" className="mt-4" aria-live="polite">{loading ? <ArchiveSkeleton/> : error ? <LoadError message={error}/> : <ArchiveGrid items={filtered.slice(0, displayLimit)} sourceTab="calendar" />}{!loading && filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
+    <div id="calendarArchiveRecords" className="mt-4" aria-live="polite">{loading && !selectedSchedule ? <ArchiveSkeleton/> : error && !selectedSchedule ? <LoadError message={error}/> : <ArchiveGrid items={filtered.slice(0, displayLimit)} sourceTab="calendar" />}{filtered.length > displayLimit && <button onClick={() => setDisplayLimit((limit) => limit + 30)} className="mt-6 w-full rounded-xl border border-white/10 bg-neutral-900 py-3 text-xs font-bold text-neutral-400">더보기 (+30)</button>}</div>
   </div>;
 }
 
