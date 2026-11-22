@@ -40,7 +40,8 @@ function GalleryDatePicker(t) {
   let {
       value: e,
       onChange: a,
-      counts: l
+      counts: l,
+      partialCounts = false
     } = t,
     [o, m] = React.useState(!1),
     [n, c] = React.useState(() => (e || [...l.keys()].sort().at(-1) || new Intl.DateTimeFormat("sv-SE", {
@@ -49,7 +50,7 @@ function GalleryDatePicker(t) {
     d = React.useRef(null),
     p = React.useRef(null),
     [g, u] = n.split("-").map(Number),
-    h = [...new Set([g, new Date().getFullYear(), ...[...l.keys()].map(t => Number(t.slice(0, 4)))])].sort((t, e) => e - t),
+    h = [...new Set([g, new Date().getFullYear(), ...(partialCounts ? Array.from({ length: Math.max(0, new Date().getFullYear() - 2017 + 1) }, (_, index) => 2017 + index) : []), ...[...l.keys()].map(t => Number(t.slice(0, 4)))])].sort((t, e) => e - t),
     b = new Date(g, u - 1, 1).getDay(),
     x = new Date(g, u, 0).getDate(),
     w = t => c(localDate(new Date(g, u - 1 + t, 1)).slice(0, 7)),
@@ -166,7 +167,7 @@ function GalleryDatePicker(t) {
             o = "".concat(n, "-").concat(pad(s)),
             r = l.get(o) || 0;
           return jsxRuntime.jsxs("button", {
-            "aria-label": "".concat(g, "년 ").concat(u, "월 ").concat(s, "일, 콘텐츠 ").concat(r, "개"),
+            "aria-label": `${g}년 ${u}월 ${s}일` + (partialCounts ? "" : `, 콘텐츠 ${r}개`),
             "aria-pressed": e === o,
             onClick: () => y(o),
             className: "relative mx-auto flex h-10 w-10 items-center justify-center rounded-full text-sm ".concat(e === o ? "bg-accent text-white" : r ? "font-bold text-white hover:bg-white/10" : "text-neutral-600 hover:bg-white/5"),
@@ -179,7 +180,7 @@ function GalleryDatePicker(t) {
         className: "mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs",
         children: [jsxRuntime.jsx("span", {
           className: "text-neutral-500",
-          children: "빨간 점 \xb7 기록이 있는 날"
+          children: partialCounts ? "빨간 점 · 불러온 기록이 있는 날" : "빨간 점 · 기록이 있는 날"
         }), jsxRuntime.jsx("button", {
           onClick: () => y(n),
           className: "rounded-lg bg-white/10 px-3 py-2 text-neutral-300",
@@ -386,6 +387,107 @@ async function findArchivePost(t) {
   } : null;
 }
 
+const GALLERY_PAGE_SIZE = 30;
+
+async function readGalleryRecords({ cursor, limit, order = "desc", date = "", signal }) {
+  const params = new URLSearchParams({
+    select: "id,title,occurred_on,source_url,thumbnail_url,keywords,main_category,sub_category",
+    order: `occurred_on.${order}.nullslast,id.${order}`,
+    limit: String(limit),
+    or: `(${searchTerms.map(term => `title.ilike.*${term}*`).join(",")},keywords.cs.{갤러리:직접등록},keywords.cs.{투샷},keywords.cs.{갤러리:셀카},keywords.cs.{갤러리:투샷},keywords.cs.{갤러리:커플릴스},keywords.cs.{갤러리:쇼츠},sub_category.in.(릴스,쇼츠,숏츠,틱톡))`
+  });
+  if (date.length === 10) params.set("occurred_on", `eq.${date}`);
+  if (date.length === 7) {
+    const [year, month] = date.split("-").map(Number);
+    params.append("occurred_on", `gte.${date}-01`);
+    params.append("occurred_on", `lt.${localDate(new Date(year, month, 1))}`);
+  }
+  if (cursor) {
+    const operator = order === "asc" ? "gt" : "lt";
+    const { id, date: cursorDate } = cursor;
+    const after = cursorDate
+      ? `or(occurred_on.${operator}.${cursorDate},and(occurred_on.eq.${cursorDate},id.${operator}.${id}),occurred_on.is.null)`
+      : `and(occurred_on.is.null,id.${operator}.${id})`;
+    params.set("and", `(${after})`);
+  }
+  const { rows } = await supabaseRequest(`hq_archive_public?${params}`, { signal });
+  const last = rows.at(-1);
+  return {
+    nextCursor: rows.length === limit ? { id: last.id, date: last.occurred_on } : null,
+    records: rows.map(row => ({
+      id: row.id,
+      title: row.title || "",
+      date: row.occurred_on || "",
+      link: row.source_url || "",
+      thumbnailUrl: row.thumbnail_url || "",
+      keywords: row.keywords || [],
+      mainCategory: row.main_category || "",
+      subCategory: row.sub_category || ""
+    })).filter(isGalleryRecord)
+  };
+}
+
+async function resolveGalleryMedia(t, signal) {
+  let e = 0,
+    a = Array(t.length);
+  await Promise.all(Array.from({
+    length: 3
+  }, async () => {
+    for (; e < t.length;) {
+      signal?.throwIfAborted();
+      let i = e++,
+        s = t[i],
+        l = snapshotById.get(String(s.id));
+      if (l && l.link === s.link && l.thumbnailUrl === s.thumbnailUrl) {
+        a[i] = {
+          ...l,
+          ...s
+        };
+        continue;
+      }
+      let o = [],
+        r = !1;
+      if (/^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//i.test(s.link)) try {
+        let t = await lookupTweetMedia(s.link, {
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12e3)]) : AbortSignal.timeout(12e3)
+        });
+        o = t.media || (t.images || []).map(t => ({
+          url: "string" == typeof t ? t : t.url,
+          type: "image"
+        })), t.isVideo && t.url && !o.some(e => e.url === t.url) && o.push({
+          url: t.url,
+          type: "video",
+          poster: t.thumbnailUrl || s.thumbnailUrl
+        }), !o.length && t.url && (o = [{
+          url: t.url,
+          type: t.isVideo ? "video" : "image",
+          poster: t.thumbnailUrl
+        }]);
+      } catch (t) {
+        r = !0;
+      }
+      !o.length && /\.(mp4|webm)(?:$|\?)/i.test(s.link) && (o = [{
+        url: s.link,
+        type: "video",
+        poster: s.thumbnailUrl
+      }]), !o.length && s.thumbnailUrl && (o = /video|youtube|youtu\.be|instagram.*\/reel|\/shorts\//i.test(s.thumbnailUrl + s.link) ? [{
+        url: s.link,
+        poster: s.thumbnailUrl,
+        type: "video",
+        external: !0
+      }] : [{
+        url: s.thumbnailUrl,
+        type: "image"
+      }]), a[i] = {
+        ...s,
+        media: o.filter(t => galleryImageKey(t.url)),
+        mediaFailed: r
+      };
+    }
+  }));
+  return a;
+}
+
 let galleryService = {
   invalidate() {
     catalogPromise = null, catalogAt = 0;
@@ -471,85 +573,14 @@ let galleryService = {
       refresh: t = !1
     } = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : {};
     return catalogPromise && !t && Date.now() - catalogAt < 3e5 ? catalogPromise : (catalogAt = Date.now(), catalogPromise = (async () => {
-      let t = [];
-      for (let e = 0;; e += 1e3) {
-        let a = new URLSearchParams({
-            select: "*",
-            order: "occurred_on.desc.nullslast,id.desc",
-            limit: "1000",
-            offset: String(e),
-            or: "(".concat(searchTerms.map(t => "title.ilike.*".concat(t, "*")).join(","), ",keywords.cs.{갤러리:직접등록},keywords.cs.{투샷},keywords.cs.{갤러리:셀카},keywords.cs.{갤러리:투샷},keywords.cs.{갤러리:커플릴스},keywords.cs.{갤러리:쇼츠},sub_category.in.(릴스,쇼츠,숏츠,틱톡))")
-          }),
-          {
-            rows: i
-          } = await supabaseRequest("hq_archive_public?".concat(a));
-        if (t.push(...i.map(t => ({
-          id: t.id,
-          title: t.title || "",
-          date: t.occurred_on || "",
-          link: t.source_url || "",
-          thumbnailUrl: t.thumbnail_url || "",
-          keywords: t.keywords || [],
-          mainCategory: t.main_category || "",
-          subCategory: t.sub_category || ""
-        })).filter(isGalleryRecord)), i.length < 1e3) break;
-      }
-      let e = 0,
-        a = Array(t.length);
-      return await Promise.all(Array.from({
-        length: 3
-      }, async () => {
-        for (; e < t.length;) {
-          let i = e++,
-            s = t[i],
-            l = snapshotById.get(String(s.id));
-          if (l && l.link === s.link && l.thumbnailUrl === s.thumbnailUrl) {
-            a[i] = {
-              ...l,
-              ...s
-            };
-            continue;
-          }
-          let o = [],
-            r = !1;
-          if (/^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//i.test(s.link)) try {
-            let t = await lookupTweetMedia(s.link, {
-              signal: AbortSignal.timeout(12e3)
-            });
-            o = t.media || (t.images || []).map(t => ({
-              url: "string" == typeof t ? t : t.url,
-              type: "image"
-            })), t.isVideo && t.url && !o.some(e => e.url === t.url) && o.push({
-              url: t.url,
-              type: "video",
-              poster: t.thumbnailUrl || s.thumbnailUrl
-            }), !o.length && t.url && (o = [{
-              url: t.url,
-              type: t.isVideo ? "video" : "image",
-              poster: t.thumbnailUrl
-            }]);
-          } catch (t) {
-            r = !0;
-          }
-          !o.length && /\.(mp4|webm)(?:$|\?)/i.test(s.link) && (o = [{
-            url: s.link,
-            type: "video",
-            poster: s.thumbnailUrl
-          }]), !o.length && s.thumbnailUrl && (o = /video|youtube|youtu\.be|instagram.*\/reel|\/shorts\//i.test(s.thumbnailUrl + s.link) ? [{
-            url: s.link,
-            poster: s.thumbnailUrl,
-            type: "video",
-            external: !0
-          }] : [{
-            url: s.thumbnailUrl,
-            type: "image"
-          }]), a[i] = {
-            ...s,
-            media: o.filter(t => galleryImageKey(t.url)),
-            mediaFailed: r
-          };
-        }
-      })), a;
+      const records = [];
+      let cursor = null;
+      do {
+        const page = await readGalleryRecords({ cursor, limit: 1000 });
+        records.push(...page.records);
+        cursor = page.nextCursor;
+      } while (cursor);
+      return resolveGalleryMedia(records);
     })().catch(t => {
       throw catalogPromise = null, t;
     }));
@@ -1056,6 +1087,63 @@ function GalleryLightbox(t) {
 
 let previewHiddenKey = "hq-gallery-preview-hidden";
 
+const duplicateImageKeys = new Map(duplicateGroups.flatMap(group => {
+  const keys = group.map(galleryImageKey).filter(Boolean);
+  return keys.map(key => [key, keys[0]]);
+}));
+
+function compareGalleryDate(left, right, order) {
+  if (!left.date !== !right.date) return left.date ? -1 : 1;
+  return (order === "asc" ? 1 : -1)
+    * (left.date.localeCompare(right.date) || Number(left.id) - Number(right.id));
+}
+
+function galleryCards(records, order) {
+  const seen = new Set();
+  return [...records].sort((left, right) => compareGalleryDate(left, right, order)).flatMap(record => {
+    const media = record.media || (record.images || []).map(url => ({ url, type: "image" }));
+    return media.flatMap(item => {
+      const key = galleryImageKey(item.url);
+      const identity = item.type === "image" ? duplicateImageKeys.get(key) || key : key;
+      if (!key || seen.has(identity)) return [];
+      seen.add(identity);
+      return [{ ...record, ...item, key, isVideo: item.type === "video" }];
+    });
+  });
+}
+
+function matchesGalleryFilters(card, date, type, category) {
+  if (date && !card.date.startsWith(date)) return false;
+  if (type !== "all" && (type === "video") !== card.isVideo) return false;
+  if (category === "전체") return true;
+  const main = card.isVideo ? "video" : "image";
+  const manual = galleryClassifications.find(item => item.main === main && (card.keywords || []).includes(item.keyword));
+  if (manual) return manual.sub === category;
+  const inferred = card.isVideo
+    ? (/쇼츠|숏츠|shorts/i.test(`${card.subCategory || ""} ${card.title || ""}`) ? "쇼츠" : "커플릴스")
+    : (/셀카(?!봉)|거셀/.test(`${card.title || ""} ${(card.keywords || []).join(" ")}`) ? "셀카" : "투샷");
+  return inferred === category;
+}
+
+async function loadGalleryPage({ previous, limit, date, order, type, category, signal }) {
+  const hidden = previous?.hidden || new Set(await galleryService.hiddenKeys());
+  const records = [...(previous?.records || [])];
+  let cursor = previous?.cursor;
+  let count = galleryCards(records, order).filter(card =>
+    !hidden.has(card.key) && matchesGalleryFilters(card, date, type, category)).length;
+  while (count < limit && cursor !== null) {
+    signal.throwIfAborted();
+    const page = await readGalleryRecords({
+      cursor, date, order, signal, limit: Math.min(GALLERY_PAGE_SIZE, limit - count)
+    });
+    records.push(...await resolveGalleryMedia(page.records, signal));
+    cursor = page.nextCursor;
+    count = galleryCards(records, order).filter(card =>
+      !hidden.has(card.key) && matchesGalleryFilters(card, date, type, category)).length;
+  }
+  return { records, hidden, cursor };
+}
+
 function GalleryView(t) {
   let {
       previewRecords: e = null,
@@ -1131,6 +1219,46 @@ function GalleryView(t) {
     [th, tb] = React.useState(""),
     [tw, tA] = React.useState(!1),
     [tN, t_] = React.useState("");
+  const paginated = !a && !n;
+  const [publicPage, setPublicPage] = React.useState(null);
+  const pageRequest = React.useRef(null);
+  const pageKey = JSON.stringify([d, g, z, Y, N, m]);
+  const fetchPage = React.useCallback(async (previous, limit) => {
+    if (pageRequest.current) return;
+    const request = new AbortController();
+    pageRequest.current = request;
+    v(true);
+    A("");
+    try {
+      const page = await loadGalleryPage({
+        previous, limit, date: d, order: g, type: z, category: Y, signal: request.signal
+      });
+      if (request.signal.aborted) return;
+      setPublicPage({ ...page, key: pageKey });
+      w(page.records);
+      j(page.hidden);
+      H(limit);
+    } catch {
+      if (!request.signal.aborted) A("갤러리를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      if (pageRequest.current === request) {
+        pageRequest.current = null;
+        v(false);
+      }
+    }
+  }, [d, g, z, Y, pageKey]);
+  React.useEffect(() => {
+    if (!paginated) return;
+    w([]);
+    j(new Set());
+    setPublicPage(null);
+    H(GALLERY_PAGE_SIZE);
+    fetchPage(null, GALLERY_PAGE_SIZE);
+    return () => {
+      pageRequest.current?.abort();
+      pageRequest.current = null;
+    };
+  }, [paginated, fetchPage]);
   React.useEffect(() => {
     let t = () => {
       galleryService.invalidate(), _(t => t + 1);
@@ -1147,6 +1275,7 @@ function GalleryView(t) {
       passive: !0
     }), i(), () => e.removeEventListener("scroll", i);
   }, [a]), React.useEffect(() => {
+    if (paginated) return;
     let t = !0;
     return v(!0), A(""), Promise.all([c.list({
       refresh: N > 0
@@ -1160,55 +1289,22 @@ function GalleryView(t) {
     }), () => {
       t = !1;
     };
-  }, [c, N, m]), React.useEffect(() => {
-    H(48), P(null);
-  }, [d, g, z, Y, C]), React.useEffect(() => {
+  }, [c, N, m, paginated]), React.useEffect(() => {
+    if (!paginated) H(48);
+    P(null);
+  }, [d, g, z, Y, C, paginated]), React.useEffect(() => {
     tu(new Set());
   }, [d, g, z, Y, C]);
-  let tC = React.useMemo(() => function (t) {
-      let e = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : [],
-        a = new Map();
-      for (let t of e) {
-        let e = t.map(galleryImageKey).filter(Boolean);
-        e.forEach(t => a.set(t, e[0]));
-      }
-      let i = new Set();
-      return [...t].sort((t, e) => (t.date || "9999-99-99").localeCompare(e.date || "9999-99-99") || String(t.id || "").localeCompare(String(e.id || ""), "en", {
-        numeric: !0
-      })).flatMap(t => (t.media || (t.images || []).map(t => ({
-        url: t,
-        type: "image"
-      }))).flatMap(e => {
-        let {
-            url: s
-          } = e,
-          l = galleryImageKey(s),
-          o = "image" === e.type && a.get(l) || l;
-        return !l || i.has(o) ? [] : (i.add(o), [{
-          ...t,
-          ...e,
-          key: l,
-          url: s,
-          isVideo: "video" === e.type
-        }]);
-      }));
-    }(x, duplicateGroups), [x]),
-    tS = React.useMemo(() => tC.filter(t => a && C ? y.has(t.key) : !y.has(t.key)), [tC, y, a, C]),
-    tF = React.useMemo(() => {
-      let t = new Map();
-      return tS.forEach(e => {
-        e.date && t.set(e.date, (t.get(e.date) || 0) + 1);
-      }), t;
-    }, [tS]),
-    tU = React.useMemo(() => tS.filter(t => {
-      var e;
-      return (!d || (null === (e = t.date) || void 0 === e ? void 0 : e.startsWith(d))) && ("all" === z || "video" === z === t.isVideo) && ("전체" === Y || function (t) {
-        let e = t.isVideo || "video" === t.type ? "video" : "image",
-          a = galleryClassifications.find(a => a.main === e && (t.keywords || []).includes(a.keyword));
-        return a ? a.sub : "video" === e ? /쇼츠|숏츠|shorts/i.test("".concat(t.subCategory || "", " ").concat(t.title || "")) ? "쇼츠" : "커플릴스" : /셀카(?!봉)|거셀/.test("".concat(t.title || "", " ").concat((t.keywords || []).join(" "))) ? "셀카" : "투샷";
-      }(t) === Y);
-    }).sort((t, e) => ("asc" === g ? 1 : -1) * (String(t.date).localeCompare(String(e.date)) || Number(t.id) - Number(e.id))), [tS, d, g, z, Y]),
-    tG = React.useMemo(() => {
+  const tC = React.useMemo(() => galleryCards(x, paginated ? g : "asc"), [x, paginated, g]);
+  const tS = React.useMemo(() => tC.filter(card => a && C ? y.has(card.key) : !y.has(card.key)), [tC, y, a, C]);
+  const tF = React.useMemo(() => {
+    const counts = new Map();
+    for (const card of tS) if (card.date) counts.set(card.date, (counts.get(card.date) || 0) + 1);
+    return counts;
+  }, [tS]);
+  const tU = React.useMemo(() => tS.filter(card => matchesGalleryFilters(card, d, z, Y))
+    .sort((left, right) => compareGalleryDate(left, right, g)), [tS, d, g, z, Y]);
+  let tG = React.useMemo(() => {
       let t = tU.slice(0, T);
       if ("gallery" === h) return t.length ? [["gallery", t]] : [];
       let e = new Map();
@@ -1349,7 +1445,8 @@ function GalleryView(t) {
     }), jsxRuntime.jsx(GalleryDatePicker, {
       value: d,
       onChange: p,
-      counts: tF
+      counts: tF,
+      partialCounts: paginated
     }), jsxRuntime.jsx("div", {
       role: "group",
       "aria-label": "갤러리 보기 방식",
@@ -1458,7 +1555,7 @@ function GalleryView(t) {
         children: k
       }), jsxRuntime.jsx("button", {
         className: "mt-2 ".concat(buttonClass),
-        onClick: () => _(t => t + 1),
+        onClick: () => paginated ? fetchPage(publicPage, publicPage ? T + GALLERY_PAGE_SIZE : GALLERY_PAGE_SIZE) : _(t => t + 1),
         children: "다시 불러오기"
       })]
     }), tG.map(t => {
@@ -1530,12 +1627,13 @@ function GalleryView(t) {
     }), !f && !k && !tU.length && jsxRuntime.jsx("p", {
       className: "py-12 text-center text-sm text-neutral-400",
       children: a && C ? "숨긴 항목이 없어요." : "이 날짜에는 표시할 기록이 없어요."
-    }), tU.length > T && jsxRuntime.jsx("button", {
-      onClick: () => H(t => t + 48),
+    }), (paginated ? publicPage?.key === pageKey && (publicPage.cursor || tU.length > T) : tU.length > T) && jsxRuntime.jsx("button", {
+      disabled: f,
+      onClick: () => paginated ? fetchPage(publicPage, T + GALLERY_PAGE_SIZE) : H(t => t + 48),
       className: "my-4 w-full ".concat(buttonClass),
-      children: "더 불러오기"
+      children: f ? "불러오는 중…" : "더보기"
     }), I && jsxRuntime.jsx(GalleryLightbox, {
-      photos: tU,
+      photos: paginated ? tU.slice(0, T) : tU,
       selectedKey: I,
       onSelect: tT,
       onClose: () => P(null)
