@@ -388,6 +388,7 @@ async function findArchivePost(t) {
 }
 
 const GALLERY_PAGE_SIZE = 30;
+const GALLERY_METADATA_BATCH_SIZE = 150;
 
 async function readGalleryRecords({ cursor, limit, order = "desc", date = "", signal }) {
   const params = new URLSearchParams({
@@ -1205,7 +1206,7 @@ function galleryPreview(record) {
 }
 
 async function loadGalleryPage({ previous, limit, date, order, type, category, signal }) {
-  const firstPage = previous ? null : readGalleryRecords({ date, order, signal, limit: GALLERY_PAGE_SIZE });
+  const firstPage = previous ? null : readGalleryRecords({ date, order, signal, limit: GALLERY_METADATA_BATCH_SIZE });
   const [hidden, initial] = await Promise.all([
     previous?.hidden || galleryService.hiddenKeys().then(keys => new Set(keys)), firstPage
   ]);
@@ -1217,7 +1218,7 @@ async function loadGalleryPage({ previous, limit, date, order, type, category, s
   while (count < limit && cursor !== null) {
     signal.throwIfAborted();
     const page = pendingPage || await readGalleryRecords({
-      cursor, date, order, signal, limit: Math.min(GALLERY_PAGE_SIZE, limit - count)
+      cursor, date, order, signal, limit: GALLERY_METADATA_BATCH_SIZE
     });
     pendingPage = null;
     records.push(...page.records.map(galleryPreview));
