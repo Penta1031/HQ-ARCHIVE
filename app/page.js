@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   BarChart3,
-  Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart,
+  Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart, Images,
   ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, RefreshCw, Search, Share2, Shuffle, Trash2, Trophy, Video, X
 } from "lucide-react";
 import { adminService, analyticsService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
 import { ARCHIVE_LANGUAGE_OPTIONS, archiveCategoryLabel, archiveKeywordLabel, archiveText } from "../lib/archive-i18n";
+
+import { GalleryView, galleryService, galleryClassifications, applyGalleryClassification } from "../components/GalleryView";
 
 const pad = (n) => String(n).padStart(2, "0");
 const formatDate = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -64,7 +66,8 @@ const uniqueKeywords = (values) => [...new Set((values || []).map((word) => Stri
 const APP_TABS = [
   { key: "home", label: "홈", icon: Home, description: "홈/오늘의 기록/검색" },
   { key: "calendar", label: "캘린더", icon: CalendarDays, description: "날짜별 아카이브" },
-  { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" }
+  { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" },
+  { key: "gallery", label: "갤러리", icon: Images, description: "날짜별 투샷 사진첩" }
 ];
 const DEFAULT_TAB_VISIBILITY = Object.fromEntries(APP_TABS.map((item) => [item.key, true]));
 const normalizeTabVisibility = (rowsOrSettings = []) => {
@@ -81,7 +84,7 @@ const normalizeTabVisibility = (rowsOrSettings = []) => {
   return next;
 };
 const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
-const TAB_LABELS = { home: "홈", calendar: "캘린더", recommended: "추천" };
+const TAB_LABELS = { home: "홈", calendar: "캘린더", recommended: "추천", gallery: "갤러리" };
 const CONTENT_TYPE_LABELS = { hq_archive: "아카이브", recommended_video: "추천 영상" };
 const trackContentView = (item, { tabKey = "home", contentType = "hq_archive", urlKey = "link", titleKey = "title" } = {}) => {
   analyticsService.track({
@@ -132,6 +135,7 @@ export default function Page() {
         <section ref={contentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
           <div key={tab} className="animate-fade-in">
             {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
+            {tab === "gallery" && <GalleryView />}
             {tab === "calendar" && <CalendarView />}
             {tab === "recommended" && <RecommendedView onScrollTop={scrollContentToTop} />}
           </div>
@@ -643,7 +647,15 @@ function AdminHub({ onClose, tabVisibility, onTabVisibilityChange }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [section, setSection] = useState("hub");
-  const sectionTitle = { hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리", stats: "통계" }[section] || "관리자 모드";
+  const [galleryRecord, setGalleryRecord] = useState(null);
+  const editGalleryRecord = async (record) => {
+    const { items } = await archiveService.adminPage({ query: record.link, status: "published", limit: 100 });
+    const item = items.find(entry => String(entry.id) === String(record.id));
+    if (!item) throw new Error("아카이브 기록을 찾지 못했어요.");
+    setGalleryRecord(item);
+    setSection("gallery-edit");
+  };
+  const sectionTitle = { gallery: "갤러리 관리", "gallery-edit": "기록 수정", hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리", stats: "통계" }[section] || "관리자 모드";
   const authenticate = async (event) => {
     event.preventDefault();
     try {
@@ -665,11 +677,12 @@ function AdminHub({ onClose, tabVisibility, onTabVisibilityChange }) {
         {error && <p className="mt-2 text-center text-xs font-bold text-accent">{error}</p>}
         <button className="mt-3 w-full rounded-2xl bg-accent py-4 text-sm font-black">접속하기</button>
       </form> : section === "hub" ? <div className="grid gap-3 py-6">
-        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
+        <AdminPortalCard icon={Images} label="갤러리 관리" description="사진·영상 추가·숨김·복구" active onClick={() => setSection("gallery")}/>
+        <AdminPortalCard icon={Bookmark} label="탭 노출 관리" description="홈·캘린더·추천·갤러리 탭 ON/OFF" active onClick={() => setSection("tabs")}/>
         <AdminPortalCard icon={Archive} label="아카이브" description="Supabase 기록 추가·수정·삭제" active onClick={() => setSection("archive")}/>
         <AdminPortalCard icon={Video} label="추천 영상 관리" description="수집된 추천 영상과 노출 상태 확인" active onClick={() => setSection("recommended")}/>
         <AdminPortalCard icon={BarChart3} label="통계" description="데일리·탭별·데이터별 조회수 확인" active onClick={() => setSection("stats")}/>
-      </div> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : section === "stats" ? <StatsAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
+      </div> : section === "gallery" ? <GalleryView management onBack={() => setSection("hub")} onEdit={editGalleryRecord}/> : section === "gallery-edit" ? <ArchiveAdmin initialItem={galleryRecord} onBack={() => setSection("gallery")}/> : section === "tabs" ? <TabVisibilityAdmin onBack={() => setSection("hub")} tabVisibility={tabVisibility} onChange={onTabVisibilityChange}/> : section === "recommended" ? <RecommendedVideosAdmin onBack={() => setSection("hub")}/> : section === "stats" ? <StatsAdmin onBack={() => setSection("hub")}/> : <ArchiveAdmin onBack={() => setSection("hub")}/>}
     </div>
   </div>;
 }
@@ -1816,7 +1829,7 @@ function WorldcupAdmin({ onBack }) {
   </div>;
 }
 
-function ArchiveAdmin({ onBack }) {
+function ArchiveAdmin({ onBack, initialItem = null }) {
   const adminToday = getKstDate();
   const [adminTodayYear, adminTodayMonth] = adminToday.split("-").map(Number);
   const blank = { title: "", date: adminToday, link: "", account: "", mainCategory: "무대영상", subCategory: "음악방송", rawKeywords: "", thumbnailUrl: "" };
@@ -1827,9 +1840,9 @@ function ArchiveAdmin({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const listRequestRef = useRef(0);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(blank);
-  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState(initialItem);
+  const [form, setForm] = useState(() => initialItem ? { ...initialItem, rawKeywords: initialItem.rawKeywords || initialItem.keywords?.join(", ") || "" } : blank);
+  const [formOpen, setFormOpen] = useState(Boolean(initialItem));
   const [busy, setBusy] = useState(false);
   const [thumbnailBusy, setThumbnailBusy] = useState(false);
   const [thumbnailMessage, setThumbnailMessage] = useState("");
@@ -1958,6 +1971,12 @@ function ArchiveAdmin({ onBack }) {
       if (wasRaw) await archiveService.updateRaw(editing.id, form);
       else if (editing) await archiveService.update(editing.id, form);
       else await archiveService.create(form);
+      if (initialItem) {
+        galleryService.invalidate();
+        window.dispatchEvent(new Event("hq-archive-records-changed"));
+        onBack();
+        return;
+      }
       if (wasRaw) await loadRaw(); else await reloadCurrent();
       setEditing(null); setForm(blank); setThumbnailMessage(""); setFormOpen(false); alert(editing ? "수정했습니다." : "추가했습니다.");
     } catch (error) { alert(error.message); } finally { setBusy(false); }
@@ -2065,7 +2084,7 @@ function ArchiveAdmin({ onBack }) {
         <AdminSelect label="대분류" value={form.mainCategory} onChange={(value)=>setForm((current)=>({...current,mainCategory:value,subCategory:CATEGORY_MAP[value]?.includes(current.subCategory)?current.subCategory:CATEGORY_MAP[value]?.[0]||"기타"}))} options={Object.keys(CATEGORY_MAP)}/>
         <AdminSelect label="소분류" value={form.subCategory} onChange={(v)=>update("subCategory",v)} options={SUB_CATEGORY_OPTIONS}/>
       </div>
-      <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><div><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">트위터 썸네일 링크</span><div className="flex gap-2"><input type="url" value={form.thumbnailUrl || ""} onChange={(event)=>update("thumbnailUrl",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/><button type="button" disabled={busy || thumbnailBusy || !form.link} onClick={loadTweetThumbnail} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{thumbnailBusy ? "불러오는 중…" : "썸네일 불러오기"}</button></div>{thumbnailMessage && <p className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{thumbnailMessage}</p>}</div><ArchiveKeywordSelect selected={formKeywords} options={keywordOptions} value={keywordSelectValue} onChange={(value)=>{setKeywordSelectValue(value);addKeyword(value);}} onRemove={removeKeyword}/></div>
+      <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><div><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">트위터 썸네일 링크</span><div className="flex gap-2"><input type="url" value={form.thumbnailUrl || ""} onChange={(event)=>update("thumbnailUrl",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/><button type="button" disabled={busy || thumbnailBusy || !form.link} onClick={loadTweetThumbnail} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{thumbnailBusy ? "불러오는 중…" : "썸네일 불러오기"}</button></div>{thumbnailMessage && <p className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{thumbnailMessage}</p>}</div><ArchiveKeywordSelect selected={formKeywords} options={keywordOptions} value={keywordSelectValue} onChange={(value)=>{setKeywordSelectValue(value);addKeyword(value);}} onRemove={removeKeyword}/>{initialItem && <label className="block text-xs text-neutral-400">갤러리 분류<select className="mt-1 w-full rounded-xl border border-white/10 bg-black p-2" value={galleryClassifications.find(item => formKeywords.includes(item.keyword))?.key || ""} onChange={event => updateKeywords(applyGalleryClassification(formKeywords, event.target.value))}><option value="">분류 없음</option>{galleryClassifications.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}</div>
       <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Supabase에 저장"}</button>
     </form>}
     {adminTab === "list" && (loading ? <div className="mt-4"><ListSkeleton/></div> : loadError ? <LoadError message={loadError}/> : <>{recordRows(items,false,true)}<div className="mt-4 grid grid-cols-2 gap-2"><button disabled={page<=1||loading} onClick={()=>loadList(page-1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">이전</button><button disabled={page*100>=total||loading} onClick={()=>loadList(page+1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">다음</button></div></>)}
