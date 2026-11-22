@@ -1209,7 +1209,7 @@ function GalleryView(t) {
       }(t) === Y);
     }).sort((t, e) => ("asc" === g ? 1 : -1) * (String(t.date).localeCompare(String(e.date)) || Number(t.id) - Number(e.id))), [tS, d, g, z, Y]),
     tG = React.useMemo(() => {
-      let t = tU.sliceT;
+      let t = tU.slice(0, T);
       if ("gallery" === h) return t.length ? [["gallery", t]] : [];
       let e = new Map();
       return t.forEach(t => {
@@ -1415,7 +1415,7 @@ function GalleryView(t) {
           className: "flex flex-wrap gap-2",
           children: [jsxRuntime.jsx("button", {
             disabled: tw || f,
-            onClick: () => tu(new Set(tU.sliceT.map(t => String(t.id)))),
+            onClick: () => tu(new Set(tU.slice(0, T).map(t => String(t.id)))),
             className: buttonClass,
             children: "현재 화면 전체 선택"
           }), jsxRuntime.jsx("button", {

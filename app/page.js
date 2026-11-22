@@ -132,7 +132,7 @@ export default function Page() {
     <main className="min-h-screen bg-neutral-950 md:bg-[#111]">
       <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden border-x border-white/5 bg-black shadow-2xl">
         <Header onAdmin={openAdmin} showLanguage={tab === "home"} language={archiveLanguage} onLanguage={setArchiveLanguage} />
-        <section ref={contentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
+        <section data-archive-scroll ref={contentRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28 no-scrollbar">
           <div key={tab} className="animate-fade-in">
             {tab === "home" && <HomeView language={archiveLanguage} initialKeyword={selectedKeyword} onKeywordConsumed={() => setSelectedKeyword("")} />}
             {tab === "gallery" && <GalleryView />}
