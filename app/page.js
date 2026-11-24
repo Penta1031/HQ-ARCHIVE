@@ -60,7 +60,6 @@ const CATEGORY_MAP = {
   "기타": ["연말결산", "기타", "백업", "목격담", "모음집"]
 };
 const SUB_CATEGORY_OPTIONS = Object.values(CATEGORY_MAP).flat();
-const mainCategoryFor = (subCategory) => Object.entries(CATEGORY_MAP).find(([, values]) => values.includes(subCategory))?.[0] || "기타";
 const parseKeywordText = (value) => String(value || "").split(/[,#]/).map((word) => word.trim()).filter(Boolean);
 const uniqueKeywords = (values) => [...new Set((values || []).map((word) => String(word || "").trim()).filter(Boolean))];
 const APP_TABS = [
@@ -1864,7 +1863,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   const [dateTo, setDateTo] = useState("");
   const [selectedMain, setSelectedMain] = useState([]);
   const [bulkDate, setBulkDate] = useState("");
-  const [bulkSub, setBulkSub] = useState("");
+  const [bulkSub, setBulkSub] = useState(null);
   const [adminYear, setAdminYear] = useState(adminTodayYear);
   const [adminMonth, setAdminMonth] = useState(adminTodayMonth);
   const [adminDate, setAdminDate] = useState(adminToday);
@@ -1879,7 +1878,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   const [rawFrom, setRawFrom] = useState("");
   const [rawTo, setRawTo] = useState("");
   const [rawBulkDate, setRawBulkDate] = useState("");
-  const [rawBulkSub, setRawBulkSub] = useState("");
+  const [rawBulkSub, setRawBulkSub] = useState(null);
   const [twitterId, setTwitterId] = useState("");
   const [twitterFrom, setTwitterFrom] = useState("");
   const [twitterTo, setTwitterTo] = useState("");
@@ -1946,10 +1945,9 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     return () => { active = false; };
   }, []);
   useEffect(() => { if (adminTab === "calendar") loadCalendar(); }, [adminTab, adminYear, adminMonth]);
-  const filterSubcategories = filterCategories[mainFilter] || [];
   const reloadCurrent = async () => { if (adminTab === "calendar") await loadCalendar(); else await loadList(page); };
   const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setThumbnailMessage(""); setFormOpen(true); };
-  const update = (key, value) => { setThumbnailMessage(""); setForm((current) => key === "subCategory" ? { ...current, subCategory: value, mainCategory: mainCategoryFor(value) } : { ...current, [key]: value }); };
+  const update = (key, value) => { setThumbnailMessage(""); setForm((current) => ({ ...current, [key]: value })); };
   const updateKeywords = (nextKeywords) => {
     const keywords = uniqueKeywords(nextKeywords);
     setKeywordSelectValue("");
@@ -2006,8 +2004,8 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     if (!nextDate && !nextSub) return alert("변경할 날짜 또는 소분류를 선택해주세요.");
     if (!confirm(`선택한 ${targets.length}개 항목을 일괄 수정할까요?`)) return;
     setBusy(true);
-    const result = await runMany(targets, (item) => { const updated = { ...item, date: nextDate || item.date, subCategory: nextSub || item.subCategory, mainCategory: nextSub ? mainCategoryFor(nextSub) : item.mainCategory }; return isRaw ? archiveService.updateRaw(item.id, updated) : archiveService.update(item.id, updated); });
-    if (isRaw) { await loadRaw(); setRawBulkDate(""); setRawBulkSub(""); } else { await reloadCurrent(); setSelectedMain([]); setBulkDate(""); setBulkSub(""); }
+    const result = await runMany(targets, (item) => { const updated = { ...item, date: nextDate || item.date, ...nextSub }; return isRaw ? archiveService.updateRaw(item.id, updated) : archiveService.update(item.id, updated); });
+    if (isRaw) { await loadRaw(); setRawBulkDate(""); setRawBulkSub(null); } else { await reloadCurrent(); setSelectedMain([]); setBulkDate(""); setBulkSub(null); }
     setBusy(false); alert(`완료 ${result.success}건${result.failed ? ` · 실패 ${result.failed}건` : ""}`);
   };
   const refreshSelectedThumbnails = async (source = "main") => {
@@ -2070,7 +2068,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   const toggle = (id, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; setter((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]); };
   const toggleAll = (rows, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; const ids = rows.map((item) => item.id); setter((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]); };
   const recordRows = (rows, raw = false, selectable = false) => <div className="mt-4 space-y-2">{rows.map((item)=><article key={item.id} className={cn("flex items-center gap-2 rounded-2xl border bg-white/[.03] p-3", (raw ? selectedRaw : selectedMain).includes(item.id) ? "border-accent/60" : "border-white/10")}>{selectable && <input aria-label={`${item.title} 선택`} type="checkbox" checked={(raw ? selectedRaw : selectedMain).includes(item.id)} onChange={()=>toggle(item.id,raw)} className="h-4 w-4 shrink-0 accent-[#e50000]"/>}{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-16 shrink-0 rounded-lg object-cover"/> : <div className="h-12 w-16 shrink-0 rounded-lg bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 line-clamp-2 text-xs font-bold">{item.title}</p></div>{raw ? <><button disabled={busy} onClick={()=>publishRaw(item)} className="rounded-lg bg-accent px-2 py-2 text-[10px] font-black">게시</button><button disabled={busy} onClick={()=>openForm({...item,_raw:true})} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>removeRaw(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></> : <><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></>}</article>)}</div>;
-  const bulkPanel = (raw = false) => { const count = raw ? selectedRaw.length : selectedMain.length; const date = raw ? rawBulkDate : bulkDate; const sub = raw ? rawBulkSub : bulkSub; return <div className={cn("mt-3 rounded-2xl border p-3",count ? "border-accent/40 bg-accent/5" : "border-white/10 bg-white/[.02]")}><div className="flex items-center"><p className="text-xs font-black">선택 항목 일괄 수정 <span className="text-accent">{count}개</span></p>{count>0&&<button onClick={()=>raw?setSelectedRaw([]):setSelectedMain([])} className="ml-auto text-[10px] font-bold text-neutral-500">선택 해제</button>}</div><div className="mt-3 grid grid-cols-2 gap-2"><AdminInput label="날짜 변경" type="date" value={date} onChange={raw?setRawBulkDate:setBulkDate}/><AdminSelect label="소분류 변경" value={sub} onChange={raw?setRawBulkSub:setBulkSub} options={["변경 안 함",...SUB_CATEGORY_OPTIONS]} emptyValue/></div>{sub&&<p className="mt-2 text-[10px] font-bold text-neutral-500">대분류는 <span className="text-accent">{mainCategoryFor(sub)}</span>로 자동 설정됩니다.</p>}<div className="mt-3 grid grid-cols-2 gap-2"><button disabled={!count||busy} onClick={()=>applyBulk(raw?"raw":"main")} className="rounded-xl bg-accent py-2.5 text-xs font-black disabled:bg-neutral-800 disabled:text-neutral-600">선택한 {count}개에 적용</button><button disabled={!count||busy} onClick={()=>refreshSelectedThumbnails(raw?"raw":"main")} className="rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 py-2.5 text-xs font-black text-[#55acee] disabled:opacity-40">썸네일 URL 불러오기</button></div></div>; };
+  const bulkPanel = (raw = false) => { const count = raw ? selectedRaw.length : selectedMain.length; const date = raw ? rawBulkDate : bulkDate; const sub = raw ? rawBulkSub : bulkSub; return <div className={cn("mt-3 rounded-2xl border p-3",count ? "border-accent/40 bg-accent/5" : "border-white/10 bg-white/[.02]")}><div className="flex items-center"><p className="text-xs font-black">선택 항목 일괄 수정 <span className="text-accent">{count}개</span></p>{count>0&&<button onClick={()=>raw?setSelectedRaw([]):setSelectedMain([])} className="ml-auto text-[10px] font-bold text-neutral-500">선택 해제</button>}</div><div className="mt-3 grid grid-cols-2 gap-2"><AdminInput label="날짜 변경" type="date" value={date} onChange={raw?setRawBulkDate:setBulkDate}/><ArchiveSubcategorySelect label="소분류 변경" categories={filterCategories} selection={sub} onChange={raw?setRawBulkSub:setBulkSub} placeholder="변경 안 함"/></div>{sub&&<p className="mt-2 text-[10px] font-bold text-neutral-500">대분류는 <span className="text-accent">{sub.mainCategory}</span>로 자동 설정됩니다.</p>}<div className="mt-3 grid grid-cols-2 gap-2"><button disabled={!count||busy} onClick={()=>applyBulk(raw?"raw":"main")} className="rounded-xl bg-accent py-2.5 text-xs font-black disabled:bg-neutral-800 disabled:text-neutral-600">선택한 {count}개에 적용</button><button disabled={!count||busy} onClick={()=>refreshSelectedThumbnails(raw?"raw":"main")} className="rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 py-2.5 text-xs font-black text-[#55acee] disabled:opacity-40">썸네일 URL 불러오기</button></div></div>; };
 
   return <div className="pt-5">
     <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button></div>
@@ -2080,7 +2078,9 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
       <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div>
       <div className="mt-3 space-y-2">
         <AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체", ...Object.keys(filterCategories)]}/>
-        <AdminSelect label="소분류 필터" value={subFilter} onChange={setSubFilter} options={["전체", ...filterSubcategories]} disabled={!filterSubcategories.length}/>
+        <ArchiveSubcategorySelect label="소분류 필터" categories={filterCategories} placeholder="전체"
+          selection={subFilter === "전체" ? null : { mainCategory: mainFilter, subCategory: subFilter }}
+          onChange={(selection) => { if (selection) setMainFilter(selection.mainCategory); setSubFilter(selection?.subCategory || "전체"); }}/>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/>
@@ -2108,8 +2108,9 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
       <div className="grid grid-cols-2 gap-2">
         <AdminInput label="날짜" type="date" value={form.date} onChange={(v)=>update("date",v)} required/>
         <AdminInput label="계정" value={form.account} onChange={(v)=>update("account",v)}/>
-        <AdminSelect label="대분류" value={form.mainCategory} onChange={(value)=>setForm((current)=>({...current,mainCategory:value,subCategory:CATEGORY_MAP[value]?.includes(current.subCategory)?current.subCategory:CATEGORY_MAP[value]?.[0]||"기타"}))} options={Object.keys(CATEGORY_MAP)}/>
-        <AdminSelect label="소분류" value={form.subCategory} onChange={(v)=>update("subCategory",v)} options={SUB_CATEGORY_OPTIONS}/>
+        <AdminSelect label="대분류" value={form.mainCategory} onChange={(value)=>setForm((current)=>({...current,mainCategory:value,subCategory:filterCategories[value]?.includes(current.subCategory)?current.subCategory:filterCategories[value]?.[0]||"기타"}))} options={Object.keys(filterCategories)}/>
+        <ArchiveSubcategorySelect label="소분류" categories={filterCategories} selection={form}
+          onChange={(selection) => { setThumbnailMessage(""); setForm((current) => ({ ...current, ...selection })); }}/>
       </div>
       <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><div><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">트위터 썸네일 링크</span><div className="flex gap-2"><input type="url" value={form.thumbnailUrl || ""} onChange={(event)=>update("thumbnailUrl",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/><button type="button" disabled={busy || thumbnailBusy || !form.link} onClick={loadTweetThumbnail} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{thumbnailBusy ? "불러오는 중…" : "썸네일 불러오기"}</button></div>{thumbnailMessage && <p className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{thumbnailMessage}</p>}</div><ArchiveKeywordSelect selected={formKeywords} options={keywordOptions} value={keywordSelectValue} onChange={(value)=>{setKeywordSelectValue(value);addKeyword(value);}} onRemove={removeKeyword}/>{initialItem && <label className="block text-xs text-neutral-400">갤러리 분류<select className="mt-1 w-full rounded-xl border border-white/10 bg-black p-2" value={galleryClassifications.find(item => formKeywords.includes(item.keyword))?.key || ""} onChange={event => updateKeywords(applyGalleryClassification(formKeywords, event.target.value))}><option value="">분류 없음</option>{galleryClassifications.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}</div>
       <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Supabase에 저장"}</button>
@@ -2126,6 +2127,28 @@ function AdminInput({ label, value, onChange, type = "text", required = false })
 
 function AdminSelect({ label, value, onChange, options, emptyValue = false, disabled = false }) {
   return <label className="block min-w-0"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><select value={value} disabled={disabled} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-2 py-2.5 text-xs outline-none focus:border-accent disabled:opacity-50">{options.map((option,index)=><option key={`${option}-${index}`} value={emptyValue&&index===0?"":option}>{option}</option>)}</select></label>;
+}
+
+function ArchiveSubcategorySelect({ label, categories, selection, onChange, placeholder }) {
+  const optionValue = (main, sub) => JSON.stringify([main, sub]);
+  const { mainCategory, subCategory } = selection || {};
+  const value = mainCategory && subCategory ? optionValue(mainCategory, subCategory) : "";
+  const groups = value && !categories[mainCategory]?.includes(subCategory)
+    ? { ...categories, [mainCategory]: [...(categories[mainCategory] || []), subCategory] }
+    : categories;
+  return <label className="block min-w-0">
+    <span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span>
+    <select value={value} onChange={(event) => {
+      if (!event.target.value) return onChange(null);
+      const [mainCategory, subCategory] = JSON.parse(event.target.value);
+      onChange({ mainCategory, subCategory });
+    }} className="w-full rounded-xl border border-white/10 bg-black px-2 py-2.5 text-xs outline-none focus:border-accent">
+      <option value="" disabled={!placeholder}>{placeholder || "소분류 선택"}</option>
+      {Object.entries(groups).map(([main, subs]) => subs.length > 0 && <optgroup key={main} label={main}>
+        {subs.map((sub) => <option key={sub} value={optionValue(main, sub)}>ㄴ {sub}</option>)}
+      </optgroup>)}
+    </select>
+  </label>;
 }
 
 function ArchiveKeywordSelect({ selected = [], options = [], value = "", onChange, onRemove }) {
