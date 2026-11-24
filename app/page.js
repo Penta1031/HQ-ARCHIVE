@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   BarChart3,
-  Archive, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart, Images,
+  Archive, BookOpen, Bookmark, CalendarDays, ChevronLeft, ChevronRight, Crown, Flame, Heart, Images,
   ArrowUpDown, ExternalLink, Home, Languages, LockKeyhole, Medal, Pencil, Play, Plus, RefreshCw, Search, Share2, Shuffle, Trash2, Trophy, Video, X
 } from "lucide-react";
 import { adminService, analyticsService, appTabService, archiveService, keywordService, recommendedVideoService, tweetMediaService, worldcupService } from "../lib/services";
@@ -66,7 +66,8 @@ const APP_TABS = [
   { key: "home", label: "홈", icon: Home, description: "홈/오늘의 기록/검색" },
   { key: "calendar", label: "캘린더", icon: CalendarDays, description: "날짜별 아카이브" },
   { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" },
-  { key: "gallery", label: "갤러리", icon: Images, description: "날짜별 투샷 사진첩" }
+  { key: "gallery", label: "갤러리", icon: Images, description: "날짜별 투샷 사진첩" },
+  { key: "index", label: "위키", icon: BookOpen, description: "모아보기 링크", href: "https://hyeopkwae-wiki.pentagram1031.chatgpt.site/" }
 ];
 const DEFAULT_TAB_VISIBILITY = Object.fromEntries(APP_TABS.map((item) => [item.key, true]));
 const normalizeTabVisibility = (rowsOrSettings = []) => {
@@ -79,7 +80,7 @@ const normalizeTabVisibility = (rowsOrSettings = []) => {
   } else if (rowsOrSettings && typeof rowsOrSettings === "object") {
     APP_TABS.forEach(({ key }) => { if (key in rowsOrSettings) next[key] = rowsOrSettings[key] !== false; });
   }
-  if (!Object.values(next).some(Boolean)) next.home = true;
+  if (!APP_TABS.some(({ key, href }) => !href && next[key])) next.home = true;
   return next;
 };
 const visibleAppTabs = (settings) => APP_TABS.filter(({ key }) => settings[key] !== false);
@@ -1856,6 +1857,21 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   const [busy, setBusy] = useState(false);
   const [thumbnailBusy, setThumbnailBusy] = useState(false);
   const [thumbnailMessage, setThumbnailMessage] = useState("");
+  const [tweetInfoBusy, setTweetInfoBusy] = useState(false);
+  const [tweetInfoMessage, setTweetInfoMessage] = useState("");
+  const [threadCounts, setThreadCounts] = useState(null);
+  useEffect(() => {
+    let active = true;
+    setThreadCounts(null);
+    if (formOpen && editing?.twitterConversationId) {
+      archiveService.threadInfo(editing.id).then((counts) => {
+        if (active) setThreadCounts({ ...counts, id: editing.id });
+      }).catch(() => {
+        if (active) setThreadCounts({ id: editing.id, error: true });
+      });
+    }
+    return () => { active = false; };
+  }, [formOpen, editing?.id, editing?.twitterConversationId]);
   const [adminKeywordOptions, setAdminKeywordOptions] = useState([]);
   const [keywordSelectValue, setKeywordSelectValue] = useState("");
   const [query, setQuery] = useState("");
@@ -1867,6 +1883,8 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   }));
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [monthDayFilter, setMonthDayFilter] = useState(false);
+  const [monthDayDate, setMonthDayDate] = useState(adminToday);
   const [selectedMain, setSelectedMain] = useState([]);
   const [bulkDate, setBulkDate] = useState("");
   const [bulkSub, setBulkSub] = useState(null);
@@ -1915,7 +1933,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     const requestId = ++listRequestRef.current;
     setLoading(true); setLoadError("");
     try {
-      const result = await archiveService.adminPage({ page: nextPage, limit: 100, query, mainCategory: mainFilter, subCategory: subFilter, dateFrom, dateTo, status: "published" });
+      const result = await archiveService.adminPage({ page: nextPage, limit: 100, query, mainCategory: mainFilter, subCategory: subFilter, dateFrom: monthDayFilter ? "" : dateFrom, dateTo: monthDayFilter ? "" : dateTo, monthDay: monthDayFilter ? monthDayDate.slice(5) : "", status: "published" });
       if (requestId !== listRequestRef.current) return;
       setItems(result.items || []); setTotal(result.total || 0); setPage(nextPage); setSelectedMain([]);
     } catch (error) { if (requestId === listRequestRef.current) setLoadError(error.message || "관리자 기록을 불러오지 못했습니다."); }
@@ -1937,7 +1955,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     if (adminTab !== "list") return undefined;
     const timer = window.setTimeout(() => loadList(1), 250);
     return () => window.clearTimeout(timer);
-  }, [adminTab, query, mainFilter, subFilter, dateFrom, dateTo]);
+  }, [adminTab, query, mainFilter, subFilter, dateFrom, dateTo, monthDayFilter, monthDayDate]);
   useEffect(() => {
     let active = true;
     archiveService.categoryMap().then((categories) => {
@@ -1952,8 +1970,8 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   }, []);
   useEffect(() => { if (adminTab === "calendar") loadCalendar(); }, [adminTab, adminYear, adminMonth]);
   const reloadCurrent = async () => { if (adminTab === "calendar") await loadCalendar(); else await loadList(page); };
-  const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setThumbnailMessage(""); setFormOpen(true); };
-  const update = (key, value) => { setThumbnailMessage(""); setForm((current) => ({ ...current, [key]: value })); };
+  const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setThumbnailMessage(""); setTweetInfoMessage(""); setFormOpen(true); };
+  const update = (key, value) => { setThumbnailMessage(""); if (key === "link") setTweetInfoMessage(""); setForm((current) => ({ ...current, [key]: value })); };
   const updateKeywords = (nextKeywords) => {
     const keywords = uniqueKeywords(nextKeywords);
     setKeywordSelectValue("");
@@ -1961,6 +1979,24 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   };
   const addKeyword = (value) => { if (value) updateKeywords([...formKeywords, value]); };
   const removeKeyword = (value) => updateKeywords(formKeywords.filter((keyword) => keyword !== value));
+  const loadTweetInfo = async () => {
+    const sourceUrl = String(form.link || "").trim();
+    if (!/^https?:\/\/(?:www\.|mobile\.)?(?:x|twitter)\.com\//i.test(sourceUrl)) return setTweetInfoMessage("X/트위터 게시물 링크를 입력해주세요.");
+    setTweetInfoBusy(true); setTweetInfoMessage("");
+    try {
+      const info = await tweetMediaService.lookup(sourceUrl);
+      const title = String(info?.title || "").replace(/\s+/g, " ").trim();
+      const date = String(info?.date || "");
+      const account = String(info?.account || "").replace(/^@/, "").trim();
+      if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !account) throw new Error("본문·날짜·계정을 모두 확인하지 못했습니다. 직접 입력해주세요.");
+      setForm((current) => String(current.link || "").trim() === sourceUrl ? { ...current, title, date, account, thumbnailUrl: info.thumbnailUrl || info.thumbnail_url || current.thumbnailUrl } : current);
+      setTweetInfoMessage("본문·날짜·계정을 불러왔습니다. 저장 전에 확인해주세요.");
+    } catch (error) {
+      setTweetInfoMessage(error.message || "트윗 정보를 불러오지 못했습니다.");
+    } finally {
+      setTweetInfoBusy(false);
+    }
+  };
   const loadTweetThumbnail = async () => {
     const sourceUrl = String(form.link || "").trim();
     if (!sourceUrl) return alert("먼저 트위터/X 랜딩 링크를 입력해주세요.");
@@ -1985,7 +2021,9 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     event.preventDefault(); setBusy(true);
     try {
       const wasRaw = editing?._raw;
-      if (wasRaw) await archiveService.updateRaw(editing.id, form);
+      let threadResult;
+      if (editing && form.applyThread) threadResult = await archiveService.updateThread(editing.id, form);
+      else if (wasRaw) await archiveService.updateRaw(editing.id, form);
       else if (editing) await archiveService.update(editing.id, form);
       else await archiveService.create(form);
       if (initialItem) {
@@ -1995,14 +2033,14 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
         return;
       }
       if (wasRaw) await loadRaw(); else await reloadCurrent();
-      setEditing(null); setForm(blank); setThumbnailMessage(""); setFormOpen(false); alert(editing ? "수정했습니다." : "추가했습니다.");
+      setEditing(null); setForm(blank); setThumbnailMessage(""); setFormOpen(false); alert(threadResult ? `타래 전체 ${threadResult.affectedCount}건의 날짜·분류·키워드를 수정했습니다.` : editing ? "수정했습니다." : "추가했습니다.");
     } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
   const remove = async (item) => {
     if (!confirm(`「${item.title}」 기록을 삭제할까요?`)) return;
     setBusy(true); try { await archiveService.remove(item.id); await reloadCurrent(); } catch (error) { alert(error.message); } finally { setBusy(false); }
   };
-  const loadRaw = async () => { setBusy(true); try { setRawItems(await archiveService.rawList()); setRawLoaded(true); setSelectedRaw([]); } catch (error) { alert(error.message); } finally { setBusy(false); } };
+  const loadRaw = async () => { setBusy(true); try { setRawItems((await archiveService.adminAll({ status: "draft" })).items); setRawLoaded(true); setSelectedRaw([]); } catch (error) { alert(error.message); } finally { setBusy(false); } };
   const runMany = async (targets, action) => { let success = 0; let failed = 0; for (const item of targets) { try { await action(item); success++; } catch { failed++; } } return { success, failed }; };
   const applyBulk = async (source) => {
     const isRaw = source === "raw"; const targets = isRaw ? selectedRawItems : selectedMainItems; const nextDate = isRaw ? rawBulkDate : bulkDate; const nextSub = isRaw ? rawBulkSub : bulkSub;
@@ -2072,8 +2110,18 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     }
   };
   const toggle = (id, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; setter((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]); };
+  const moveMonthDay = (amount) => { const [, month, day] = monthDayDate.split("-").map(Number); const date = new Date(Date.UTC(2000, month - 1, day + amount)); setMonthDayDate(`${adminTodayYear}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`); };
+  const resetArchiveFilters = () => { setQuery(""); setMainFilter("전체"); setSubFilter("전체"); setDateFrom(""); setDateTo(""); setMonthDayFilter(false); setMonthDayDate(adminToday); };
+  const selectTwitterThread = (item, raw = false) => {
+    const conversationId = String(item.twitterConversationId || "");
+    if (!conversationId) return alert("이 기록에는 트윗 스레드 정보가 없습니다. 새로 수집한 트윗부터 스레드 선택을 사용할 수 있습니다.");
+    const rows = raw ? rawFiltered : items;
+    const threadIds = rows.filter((row) => String(row.twitterConversationId || row.twitterStatusId || "") === conversationId).map((row) => row.id);
+    const setter = raw ? setSelectedRaw : setSelectedMain;
+    setter((current) => [...new Set([...current, ...threadIds])]);
+  };
   const toggleAll = (rows, raw = false) => { const setter = raw ? setSelectedRaw : setSelectedMain; const ids = rows.map((item) => item.id); setter((current) => ids.every((id) => current.includes(id)) ? current.filter((id) => !ids.includes(id)) : [...new Set([...current, ...ids])]); };
-  const recordRows = (rows, raw = false, selectable = false) => <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{rows.map((item)=><article key={item.id} className={cn("flex items-center gap-2 rounded-2xl border bg-white/[.03] p-3", (raw ? selectedRaw : selectedMain).includes(item.id) ? "border-accent/60" : "border-white/10")}>{selectable && <input aria-label={`${item.title} 선택`} type="checkbox" checked={(raw ? selectedRaw : selectedMain).includes(item.id)} onChange={()=>toggle(item.id,raw)} className="h-4 w-4 shrink-0 accent-[#e50000]"/>}{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-16 shrink-0 rounded-lg object-cover"/> : <div className="h-12 w-16 shrink-0 rounded-lg bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 line-clamp-2 text-xs font-bold">{item.title}</p></div>{raw ? <><button disabled={busy} onClick={()=>publishRaw(item)} className="rounded-lg bg-accent px-2 py-2 text-[10px] font-black">게시</button><button disabled={busy} onClick={()=>openForm({...item,_raw:true})} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>removeRaw(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></> : <><button disabled={busy} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></>}</article>)}</div>;
+  const recordRows = (rows, raw = false, selectable = false) => <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{rows.map((item)=><article key={item.id} className={cn("flex items-center gap-2 rounded-2xl border bg-white/[.03] p-3", (raw ? selectedRaw : selectedMain).includes(item.id) ? "border-accent/60" : "border-white/10")}>{selectable && <div className="flex shrink-0 flex-col items-center gap-1"><input aria-label={`${item.title} 선택`} type="checkbox" checked={(raw ? selectedRaw : selectedMain).includes(item.id)} onChange={()=>toggle(item.id,raw)} className="h-4 w-4 shrink-0 accent-[#e50000]"/>{item.twitterConversationId && item.twitterStatusId === item.twitterConversationId && <button type="button" disabled={busy} onClick={()=>selectTwitterThread(item,raw)} title="불러온 목록에서 원글과 연결된 답글을 함께 선택" className="rounded bg-[#1DA1F2]/15 px-1.5 py-1 text-[9px] font-bold text-[#55acee]">스레드</button>}</div>}{item.thumbnailUrl ? <img src={item.thumbnailUrl} alt="" className="h-12 w-16 shrink-0 rounded-lg object-cover"/> : <div className="h-12 w-16 shrink-0 rounded-lg bg-neutral-900"/>}<div className="min-w-0 flex-1"><div className="flex text-[9px] font-bold"><span className="text-accent">{item.subCategory}</span><time className="ml-auto text-neutral-600">{item.date}</time></div><p className="mt-1 line-clamp-2 text-xs font-bold">{item.title}</p></div>{raw ? <><button disabled={busy} onClick={()=>publishRaw(item)} className="rounded-lg bg-accent px-2 py-2 text-[10px] font-black">게시</button><button disabled={busy} aria-label={`${item.title} 수정`} onClick={()=>openForm({...item,_raw:true})} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>removeRaw(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></> : <><button disabled={busy} aria-label={`${item.title} 수정`} onClick={()=>openForm(item)} className="rounded-lg bg-white/5 p-2 text-neutral-400"><Pencil size={14}/></button><button disabled={busy} onClick={()=>remove(item)} className="rounded-lg bg-accent/10 p-2 text-accent"><Trash2 size={14}/></button></>}</article>)}</div>;
   const bulkPanel = (raw = false) => { const count = raw ? selectedRaw.length : selectedMain.length; const date = raw ? rawBulkDate : bulkDate; const sub = raw ? rawBulkSub : bulkSub; return <div className={cn("mt-3 rounded-2xl border p-3",count ? "border-accent/40 bg-accent/5" : "border-white/10 bg-white/[.02]")}><div className="flex items-center"><p className="text-xs font-black">선택 항목 일괄 수정 <span className="text-accent">{count}개</span></p>{count>0&&<button onClick={()=>raw?setSelectedRaw([]):setSelectedMain([])} className="ml-auto text-[10px] font-bold text-neutral-500">선택 해제</button>}</div><div className="mt-3 grid grid-cols-2 gap-2"><AdminInput label="날짜 변경" type="date" value={date} onChange={raw?setRawBulkDate:setBulkDate}/><ArchiveSubcategorySelect label="소분류 변경" categories={filterCategories} selection={sub} onChange={raw?setRawBulkSub:setBulkSub} placeholder="변경 안 함"/></div>{sub&&<p className="mt-2 text-[10px] font-bold text-neutral-500">대분류는 <span className="text-accent">{sub.mainCategory}</span>로 자동 설정됩니다.</p>}<div className="mt-3 grid grid-cols-2 gap-2"><button disabled={!count||busy} onClick={()=>applyBulk(raw?"raw":"main")} className="rounded-xl bg-accent py-2.5 text-xs font-black disabled:bg-neutral-800 disabled:text-neutral-600">선택한 {count}개에 적용</button><button disabled={!count||busy} onClick={()=>refreshSelectedThumbnails(raw?"raw":"main")} className="rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 py-2.5 text-xs font-black text-[#55acee] disabled:opacity-40">썸네일 URL 불러오기</button></div></div>; };
 
   return <div className="pt-5">
@@ -2092,11 +2140,23 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
           onChange={(selection) => { if (selection) setMainFilter(selection.mainCategory); setSubFilter(selection?.subCategory || "전체"); }}/>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/>
-        <AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/>
+        <AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom} disabled={monthDayFilter}/>
+        <AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo} disabled={monthDayFilter}/>
       </div>
       </div>
-      <div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>
+      <div className={cn("mt-3 rounded-2xl border p-3",monthDayFilter?"border-accent/40 bg-accent/5":"border-white/10 bg-white/[.02]")}>
+        <div className="flex items-center">
+          <div><p className="text-xs font-black">N년 전 오늘 필터</p><p className="mt-1 text-[9px] font-bold text-neutral-600">모든 연도의 같은 월·일 기록</p></div>
+          <button type="button" onClick={()=>setMonthDayFilter((value)=>!value)} className={cn("ml-auto rounded-full px-3 py-1.5 text-[10px] font-black",monthDayFilter?"bg-accent text-white":"bg-white/5 text-neutral-500")}>{monthDayFilter?"ON":"OFF"}</button>
+        </div>
+        {monthDayFilter&&<div className="mt-3 flex items-center gap-2">
+          <button type="button" onClick={()=>moveMonthDay(-1)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-neutral-400" aria-label="하루 전"><ChevronLeft size={15}/></button>
+          <input aria-label="N년 전 오늘 날짜" type="date" value={monthDayDate} onChange={(event)=>setMonthDayDate(event.target.value||adminToday)} className="h-9 min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-2 text-xs font-bold outline-none"/>
+          <button type="button" onClick={()=>moveMonthDay(1)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/5 text-neutral-400" aria-label="하루 후"><ChevronRight size={15}/></button>
+          <button type="button" onClick={()=>setMonthDayDate(adminToday)} className="h-9 rounded-xl bg-white px-3 text-[10px] font-black text-black">오늘</button>
+        </div>}
+      </div>
+      <div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button type="button" onClick={resetArchiveFilters} className="ml-auto rounded-lg bg-white/5 px-3 py-2 text-[10px] font-black text-neutral-400">필터 초기화</button><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-2 rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>
       {bulkPanel()}
       <p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {total}개 · {page}페이지</p>
     </>}
@@ -2122,8 +2182,16 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
         <ArchiveSubcategorySelect label="소분류" categories={filterCategories} selection={form}
           onChange={(selection) => { setThumbnailMessage(""); setForm((current) => ({ ...current, ...selection })); }}/>
       </div>
-      <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><AdminInput label="랜딩 링크" type="url" value={form.link} onChange={(v)=>update("link",v)} required/><div><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">트위터 썸네일 링크</span><div className="flex gap-2"><input type="url" value={form.thumbnailUrl || ""} onChange={(event)=>update("thumbnailUrl",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/><button type="button" disabled={busy || thumbnailBusy || !form.link} onClick={loadTweetThumbnail} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{thumbnailBusy ? "불러오는 중…" : "썸네일 불러오기"}</button></div>{thumbnailMessage && <p className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{thumbnailMessage}</p>}</div><ArchiveKeywordSelect selected={formKeywords} options={keywordOptions} value={keywordSelectValue} onChange={(value)=>{setKeywordSelectValue(value);addKeyword(value);}} onRemove={removeKeyword}/>{initialItem && <label className="block text-xs text-neutral-400">갤러리 분류<select className="mt-1 w-full rounded-xl border border-white/10 bg-black p-2" value={galleryClassifications.find(item => formKeywords.includes(item.keyword))?.key || ""} onChange={event => updateKeywords(applyGalleryClassification(formKeywords, event.target.value))}><option value="">분류 없음</option>{galleryClassifications.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>}</div>
-      <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : "Supabase에 저장"}</button>
+      <div className="mt-2 space-y-2"><AdminInput label="제목" value={form.title} onChange={(v)=>update("title",v)} required/><div>
+          <label htmlFor="archive-landing-link" className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">랜딩 링크</label>
+          <div className="flex gap-2">
+            <input id="archive-landing-link" required type="url" value={form.link || ""} onChange={(event)=>update("link",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/>
+            <button type="button" disabled={busy || tweetInfoBusy || !form.link} onClick={loadTweetInfo} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-2 text-[10px] font-black text-[#55acee] disabled:opacity-40">{tweetInfoBusy ? "불러오는 중…" : "트윗 불러오기"}</button>
+          </div>
+          {tweetInfoMessage && <p role="status" className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{tweetInfoMessage}</p>}
+        </div><div><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">트위터 썸네일 링크</span><div className="flex gap-2"><input type="url" value={form.thumbnailUrl || ""} onChange={(event)=>update("thumbnailUrl",event.target.value)} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/><button type="button" disabled={busy || thumbnailBusy || !form.link} onClick={loadTweetThumbnail} className="shrink-0 rounded-xl border border-[#1DA1F2]/40 bg-[#1DA1F2]/10 px-3 text-[10px] font-black text-[#55acee] disabled:opacity-40">{thumbnailBusy ? "불러오는 중…" : "썸네일 불러오기"}</button></div>{thumbnailMessage && <p className="mt-1 ml-1 text-[9px] font-bold text-neutral-500">{thumbnailMessage}</p>}</div><ArchiveKeywordSelect selected={formKeywords} options={keywordOptions} value={keywordSelectValue} onChange={(value)=>{setKeywordSelectValue(value);addKeyword(value);}} onRemove={removeKeyword}/><label className="block text-xs text-neutral-400">갤러리 분류<select className="mt-1 w-full rounded-xl border border-white/10 bg-black p-2" value={galleryClassifications.find(item => formKeywords.includes(item.keyword))?.key || ""} onChange={event => updateKeywords(applyGalleryClassification(formKeywords, event.target.value))}><option value="">분류 없음</option>{galleryClassifications.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label></div>
+      {editing && <label className="mt-3 flex items-start gap-2 rounded-xl border border-[#1DA1F2]/30 bg-[#1DA1F2]/10 p-3 text-xs"><input type="checkbox" checked={Boolean(form.applyThread)} disabled={!editing.twitterConversationId || busy || threadCounts?.id !== editing.id || !threadCounts.applicable} onChange={(event)=>setForm((current)=>({...current,applyThread:event.target.checked}))} className="mt-0.5 accent-[#1DA1F2]"/><span>타래 전체 날짜·분류·키워드 적용{editing.twitterConversationId && <span role="status" className="mt-1 block font-bold text-[#55acee]">{threadCounts?.id !== editing.id ? "연결 건수 확인 중…" : threadCounts.error ? "연결 건수를 불러오지 못했습니다. 수정창을 다시 열어주세요." : `총 ${threadCounts.total}건 연결 · 이번 적용 ${threadCounts.applicable}건 (현재 기록 포함)`}</span>}<span className="mt-1 block text-[10px] text-neutral-400">{editing.twitterConversationId ? `현재 페이지 밖의 답글도 포함합니다. ${editing._raw ? "RAW(미게시)" : "게시된"} 기록끼리 적용되며, 답글의 제목·링크·썸네일은 유지됩니다.` : "이 기록에는 타래 연결 정보가 없습니다."}</span></span></label>}
+      <button disabled={busy} className="mt-3 w-full rounded-xl bg-white py-3 text-xs font-black text-black disabled:opacity-50">{busy ? "저장 중…" : form.applyThread ? "타래 전체에 저장" : "Supabase에 저장"}</button>
     </form>}
     {adminTab === "list" && (loading ? <div className="mt-4"><ListSkeleton/></div> : loadError ? <LoadError message={loadError}/> : <>{recordRows(items,false,true)}<div className="mt-4 grid grid-cols-2 gap-2"><button disabled={page<=1||loading} onClick={()=>loadList(page-1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">이전</button><button disabled={page*100>=total||loading} onClick={()=>loadList(page+1)} className="rounded-xl bg-white/5 py-3 text-xs font-bold disabled:opacity-30">다음</button></div></>)}
     {adminTab === "calendar" && (calendarLoading ? <div className="mt-4"><ListSkeleton/></div> : calendarError ? <LoadError message={calendarError}/> : recordRows(calendarItems))}
@@ -2131,8 +2199,8 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   </div>;
 }
 
-function AdminInput({ label, value, onChange, type = "text", required = false }) {
-  return <label className="block"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><input required={required} type={type} value={value || ""} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/></label>;
+function AdminInput({ label, value, onChange, type = "text", required = false, disabled = false }) {
+  return <label className="block"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><input required={required} disabled={disabled} type={type} value={value || ""} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent disabled:opacity-50"/></label>;
 }
 
 function AdminSelect({ label, value, onChange, options, emptyValue = false, disabled = false }) {
@@ -2191,7 +2259,11 @@ function EmptyState({text}) { return <div className="flex flex-col items-center 
 
 function BottomNav({tab,onChange,items = APP_TABS}) {
   const visibleItems = items.length ? items : APP_TABS.filter((item) => item.key === "home");
-  return <nav className="safe-bottom absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/90 px-3 pt-2 backdrop-blur-2xl"><div className="mx-auto grid max-w-3xl" style={{ gridTemplateColumns: `repeat(${visibleItems.length + 1}, minmax(0, 1fr))` }}>{visibleItems.map(({ key, icon: Icon, label })=><button key={key} onClick={()=>onChange(key)} className={cn("relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold transition",tab===key?"text-white":"text-neutral-600")}><span className={cn("rounded-2xl px-4 py-1.5 transition",tab===key&&"bg-accent/15 text-accent")}><Icon size={20} strokeWidth={tab===key?2.6:2}/></span>{label}{tab===key&&<span className="absolute -bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>)}
-    <a href="https://hyeopkwae-wiki.pentagram1031.chatgpt.site/" className="relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold transition text-neutral-600"><span className="rounded-2xl px-4 py-1.5 transition"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M12 5c-3-2-6-2-10-1v14c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1Zm0 0v14"></path></svg></span>위키</a>
-  </div></nav>;
+  return <nav className="safe-bottom absolute inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/90 px-3 pt-2 backdrop-blur-2xl">
+    <div className="mx-auto grid max-w-3xl" style={{ gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))` }}>
+      {visibleItems.map(({ key, icon: Icon, label, href }) => href
+        ? <a key={key} href={href} className="flex flex-col items-center gap-1 py-1 text-[10px] font-bold text-neutral-600"><span className="rounded-2xl px-4 py-1.5"><Icon size={20}/></span>{label}</a>
+        : <button key={key} onClick={()=>onChange(key)} className={cn("relative flex flex-col items-center gap-1 py-1 text-[10px] font-bold transition",tab===key?"text-white":"text-neutral-600")}><span className={cn("rounded-2xl px-4 py-1.5 transition",tab===key&&"bg-accent/15 text-accent")}><Icon size={20} strokeWidth={tab===key?2.6:2}/></span>{label}{tab===key&&<span className="absolute -bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>)}
+    </div>
+  </nav>;
 }
