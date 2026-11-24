@@ -1856,6 +1856,10 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   const [query, setQuery] = useState("");
   const [mainFilter, setMainFilter] = useState("전체");
   const [subFilter, setSubFilter] = useState("전체");
+  const [filterCategories, setFilterCategories] = useState(() => ({
+    ...CATEGORY_MAP,
+    기타: [...CATEGORY_MAP.기타, "미분류"]
+  }));
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedMain, setSelectedMain] = useState([]);
@@ -1931,6 +1935,9 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   }, [adminTab, query, mainFilter, subFilter, dateFrom, dateTo]);
   useEffect(() => {
     let active = true;
+    archiveService.categoryMap().then((categories) => {
+      if (active && Object.keys(categories).length) setFilterCategories(categories);
+    }).catch(() => {});
     keywordService.list().then((result) => {
       if (active) setAdminKeywordOptions(Array.isArray(result.tags) ? result.tags : []);
     }).catch(() => {
@@ -1939,6 +1946,7 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
     return () => { active = false; };
   }, []);
   useEffect(() => { if (adminTab === "calendar") loadCalendar(); }, [adminTab, adminYear, adminMonth]);
+  const filterSubcategories = filterCategories[mainFilter] || [];
   const reloadCurrent = async () => { if (adminTab === "calendar") await loadCalendar(); else await loadList(page); };
   const openForm = (item = null, date = null) => { setEditing(item); setForm(item ? { ...item, rawKeywords: item.rawKeywords || item.keywords?.join(", ") || "" } : { ...blank, date: date || blank.date }); setThumbnailMessage(""); setFormOpen(true); };
   const update = (key, value) => { setThumbnailMessage(""); setForm((current) => key === "subCategory" ? { ...current, subCategory: value, mainCategory: mainCategoryFor(value) } : { ...current, [key]: value }); };
@@ -2067,7 +2075,21 @@ function ArchiveAdmin({ onBack, initialItem = null }) {
   return <div className="pt-5">
     <div className="flex items-center"><button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-neutral-500"><ChevronLeft size={15}/>관리자 선택</button></div>
     <div className="mt-4 grid grid-cols-3 border-b border-white/10">{[["list","목록 관리"],["calendar","캘린더 관리"],["import","불러오기"]].map(([key,label])=><button key={key} onClick={()=>{setAdminTab(key);setFormOpen(false);}} className={cn("border-b-2 py-3 text-[11px] font-black",adminTab===key?"border-accent text-white":"border-transparent text-neutral-600")}>{label}</button>)}</div>
-    {adminTab === "list" && <><button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button><div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div><div className="mt-3 grid grid-cols-2 gap-2"><AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체",...Object.keys(CATEGORY_MAP)]}/><AdminSelect label="소분류 필터" value={subFilter} onChange={(value)=>{setSubFilter(value);if(value!=="전체")setMainFilter(mainCategoryFor(value));}} options={["전체",...SUB_CATEGORY_OPTIONS]}/><AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/><AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/></div><div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>{bulkPanel()}<p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {total}개 · {page}페이지</p></>}
+    {adminTab === "list" && <>
+      <button onClick={() => openForm()} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black"><Plus size={16}/>새 기록 추가</button>
+      <div className="mt-3"><SearchBar value={query} onChange={setQuery} placeholder="관리할 기록 검색"/></div>
+      <div className="mt-3 space-y-2">
+        <AdminSelect label="대분류 필터" value={mainFilter} onChange={(value)=>{setMainFilter(value);setSubFilter("전체");}} options={["전체", ...Object.keys(filterCategories)]}/>
+        <AdminSelect label="소분류 필터" value={subFilter} onChange={setSubFilter} options={["전체", ...filterSubcategories]} disabled={!filterSubcategories.length}/>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <AdminInput label="시작 날짜" type="date" value={dateFrom} onChange={setDateFrom}/>
+        <AdminInput label="종료 날짜" type="date" value={dateTo} onChange={setDateTo}/>
+      </div>
+      <div className="mt-3 flex items-center"><label className="flex items-center gap-2 text-[11px] font-bold text-neutral-400"><input type="checkbox" checked={items.length>0&&items.every((item)=>selectedMain.includes(item.id))} onChange={()=>toggleAll(items)} className="h-4 w-4 accent-[#e50000]"/>현재 페이지 전체 선택</label><button disabled={!selectedMain.length||busy} onClick={removeSelectedMain} className="ml-auto rounded-lg bg-accent/10 px-3 py-2 text-[10px] font-black text-accent disabled:opacity-40">선택 삭제</button></div>
+      {bulkPanel()}
+      <p className="mt-2 text-right text-[10px] font-bold text-neutral-600">검색 결과 {total}개 · {page}페이지</p>
+    </>}
     {adminTab === "calendar" && <div className="mt-4"><div className="rounded-2xl border border-white/10 bg-white/[.03] p-3"><div className="flex items-center justify-center gap-2"><AdminSelect label="년도" value={String(adminYear)} onChange={(value)=>{setAdminYear(+value);setAdminDate(`${value}-${pad(adminMonth)}-01`);}} options={adminYears.map(String)}/><AdminSelect label="월" value={String(adminMonth)} onChange={(value)=>{setAdminMonth(+value);setAdminDate(`${adminYear}-${pad(value)}-01`);}} options={Array.from({length:12},(_,i)=>String(i+1))}/></div><div className="mt-4 grid grid-cols-7 text-center text-[9px] font-bold text-neutral-600">{["일","월","화","수","목","금","토"].map((value)=><span key={value}>{value}</span>)}</div><div className="mt-2 grid grid-cols-7 gap-y-1">{Array.from({length:new Date(adminYear,adminMonth-1,1).getDay()}).map((_,i)=><span key={`admin-empty-${i}`}/>)}{Array.from({length:new Date(adminYear,adminMonth,0).getDate()},(_,i)=>i+1).map((value)=>{const date=`${calendarMonthKey}-${pad(value)}`;const has=calendarMonthItems.some((item)=>item.date===date);return <button key={value} onClick={()=>setAdminDate(date)} className={cn("relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold",adminDate===date?"bg-accent text-white":"text-neutral-400")}>{value}{has&&adminDate!==date&&<span className="absolute bottom-1 h-1 w-1 rounded-full bg-accent"/>}</button>})}</div></div><div className="mt-4 flex items-center"><p className="text-xs font-black">{adminDate} <span className="text-neutral-500">{calendarItems.length}개</span></p><button onClick={()=>openForm(null,adminDate)} className="ml-auto rounded-lg bg-accent px-3 py-2 text-[10px] font-black">+ 추가</button></div></div>}
     {adminTab === "import" && <div className="mt-4"><div className="rounded-2xl border border-[#1DA1F2]/30 bg-[#1DA1F2]/5 p-4"><h3 className="text-sm font-black text-[#55acee]">트위터 데이터 수집</h3>
       <p className="mt-2 text-xs leading-5 text-neutral-400">클릭당 최대 100건 · 최대 31일. 하루 수집 횟수 제한은 없습니다. 다음 페이지와 재시도는 자동으로 호출하지 않습니다.</p>
@@ -2102,8 +2124,8 @@ function AdminInput({ label, value, onChange, type = "text", required = false })
   return <label className="block"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><input required={required} type={type} value={value || ""} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-3 py-2.5 text-xs outline-none focus:border-accent"/></label>;
 }
 
-function AdminSelect({ label, value, onChange, options, emptyValue = false }) {
-  return <label className="block min-w-0"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><select value={value} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-2 py-2.5 text-xs outline-none focus:border-accent">{options.map((option,index)=><option key={`${option}-${index}`} value={emptyValue&&index===0?"":option}>{option}</option>)}</select></label>;
+function AdminSelect({ label, value, onChange, options, emptyValue = false, disabled = false }) {
+  return <label className="block min-w-0"><span className="mb-1 ml-1 block text-[9px] font-bold text-neutral-600">{label}</span><select value={value} disabled={disabled} onChange={(event)=>onChange(event.target.value)} className="w-full rounded-xl border border-white/10 bg-black px-2 py-2.5 text-xs outline-none focus:border-accent disabled:opacity-50">{options.map((option,index)=><option key={`${option}-${index}`} value={emptyValue&&index===0?"":option}>{option}</option>)}</select></label>;
 }
 
 function ArchiveKeywordSelect({ selected = [], options = [], value = "", onChange, onRemove }) {
