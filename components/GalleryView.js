@@ -1696,7 +1696,7 @@ function GalleryView(t) {
             children: e ? e.replace(/-/g, ".") : "날짜 미등록"
           })
         }), jsxRuntime.jsx("div", {
-          className: "gallery" === h ? "grid grid-cols-3 gap-px lg:grid-cols-5 xl:grid-cols-6 lg:gap-2" : "grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-5 lg:gap-3",
+          className: "gallery" === h ? "grid grid-cols-3 gap-px lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 lg:gap-2" : "grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 lg:gap-3",
           children: s.map(t => jsxRuntime.jsxs("article", {
             className: "min-w-0 overflow-hidden bg-neutral-900 ".concat("date" === h ? "rounded-xl border border-white/10" : ""),
             children: [jsxRuntime.jsxs("button", {
