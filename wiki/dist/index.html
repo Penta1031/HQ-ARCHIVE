@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09090b">
+  <script src="./theme.js"></script>
+  <meta name="description" content="혚쾌 원본 콘텐츠와 날짜별 공연·방송 기록 모아보기">
+  <meta name="wiki-updated-at" content="2026-11-22T15:43:50.013Z">
+  <title>혚쾌위키</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./wiki.css">
+  <link rel="stylesheet" href="./wiki-skin.css">
+  <link rel="stylesheet" href="./wiki-admin.css">
+  <link rel="stylesheet" href="./wiki-calendar.css">
+</head>
+<body class="wiki-skin">
+  <a class="skip-link" href="#content">본문으로 바로가기</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="mobile-menu" id="menuButton" aria-label="메뉴 열기" aria-expanded="false" aria-controls="sidebar">☰</button>
+      <a class="brand" href="#/" aria-label="혚쾌위키 대문">
+        <span>혚쾌위키</span>
+      </a>
+      <a class="archive-return" href="https://hq-archive.vercel.app/" aria-label="아카이브로 돌아가기" title="아카이브로 돌아가기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5-7 7 7 7M2 12h20"/></svg><span>아카이브</span></a>
+    </div>
+  </header>
+
+  <div class="wiki-searchbar">      <form class="search" id="searchForm" role="search">
+        <input id="searchInput" type="search" placeholder="제목/키워드/날짜로 검색" autocomplete="off" aria-label="콘텐츠 검색">
+        <button type="submit" aria-label="검색"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></button>
+      </form>
+      <button class="random-button" id="randomButton" type="button" aria-label="랜덤 떡밥" title="랜덤 떡밥"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h3c5 0 7 12 12 12h3M18 15l3 3-3 3M3 18h3c2 0 3.5-2 5-5m2-2c1.5-3 3-5 5-5h3m-3-3 3 3-3 3"/></svg></button>
+</div>
+
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="주요 메뉴" inert>
+      <div class="menu-heading"><strong>전체 메뉴</strong><button id="menuClose" type="button" aria-label="메뉴 닫기"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+      <nav>
+        <p class="nav-label">WIKI</p>
+        <a href="#/" data-nav="home"><span>⌂</span> HOME</a>
+        <a href="#/wiki/이용 안내">이용 안내</a>
+        <a href="#/calendar" data-nav="calendar"><span>▦</span> 캘린더</a>
+        <button id="sideRandom"><span>⤨</span> 랜덤 떡밥</button>
+        <a href="https://hq-archive.vercel.app/"><span>←</span> 아카이브로 돌아가기</a>
+        <p class="nav-label">분류</p>
+        <div id="categoryNav" class="category-nav">
+          <span class="nav-loading">불러오는 중…</span>
+        </div>
+        <a class="menu-contact" href="#/guestbook" data-nav="guestbook">문의</a>
+      </nav>
+    </aside>
+
+    <main id="content" class="content" tabindex="-1">
+      <div class="page-loading">
+        <span class="loader"></span>
+        <p>불러오는 중</p>
+      </div>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <button id="backToTop" class="back-to-top" aria-label="맨 위로" hidden>↑</button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./documents.js"></script>
+  <script src="./event-series.js"></script>
+  <script src="./taxonomy.js"></script>
+  <script src="./wiki-data.js"></script>
+  <script src="./video-matching.js"></script>
+  <script src="./wiki-videos.js"></script>
+  <script src="./wiki-community.js"></script>
+  <script src="./wiki-analytics.js"></script>
+  <script src="./wiki-enhancements.js"></script>
+  <script src="./wiki-page-catalog.js"></script>
+  <script src="./wiki-admin.js"></script>
+  <script src="./wiki-calendar.js"></script>
+  <script src="./wiki.js"></script>
+</body>
+</html>
+
