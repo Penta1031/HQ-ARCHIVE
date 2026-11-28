@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useBackHandler } from "../lib/back-navigation";
 import { createPortal } from "react-dom";
 import {
   BarChart3,
@@ -132,6 +133,8 @@ export default function Page() {
   useEffect(() => {
     analyticsService.track({ eventType: "tab", tabKey: tab });
   }, [tab]);
+  useBackHandler(tab !== "home" && tab, () => setTab("home"));
+  useBackHandler(adminOpen, closeAdmin);
 
   return (
     <main className="min-h-screen bg-neutral-950 md:bg-[#111] lg:px-3">
@@ -268,6 +271,8 @@ function HomeView({ language = "ko", initialKeyword, onKeywordConsumed }) {
     }
   };
 
+  useBackHandler(subTab !== "archive" && subTab, () => setSubTab("archive"));
+  useBackHandler(Boolean(randomItem), () => setRandomItem(null));
   const pickKeyword = (tag) => { setQuery(`#${tag}`); setSubTab("archive"); onKeywordConsumed(); };
   return (
     <div>
@@ -387,6 +392,8 @@ function CalendarView() {
   const [monthTotal, setMonthTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useBackHandler(day, () => { setDay(null); setDisplayLimit(30); setSelectedSchedule(null); setOfficialLimit(1); });
+  useBackHandler(selectedSchedule?.key, () => { setSelectedSchedule(null); setDisplayLimit(30); });
   useEffect(() => { if (selectedSchedule) document.getElementById("calendarArchiveRecords")?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [selectedSchedule]);
   const monthKey = `${year}-${pad(month)}`;
   const [todayYear, todayMonth, todayDay] = (liveToday || getKstDate()).split("-").map(Number);
@@ -666,6 +673,7 @@ function AdminHub({ onClose, tabVisibility, onTabVisibilityChange }) {
     setGalleryRecord(item);
     setSection("gallery-edit");
   };
+  useBackHandler(section !== "hub" && section, () => setSection(section === "gallery-edit" ? "gallery" : "hub"));
   const sectionTitle = { gallery: "갤러리 관리", "gallery-edit": "기록 수정", hub: "관리자 모드", tabs: "탭 노출 관리", archive: "아카이브 관리", recommended: "추천 영상 관리", stats: "통계" }[section] || "관리자 모드";
   const authenticate = async (event) => {
     event.preventDefault();
@@ -1047,6 +1055,7 @@ function RecommendedView({ onScrollTop }) {
   const pickTouchStartX = useRef(null);
   const featuredTransitionTimer = useRef(null);
   const featuredIndexRef = useRef(0);
+  useBackHandler(selectedCategory, () => setSelectedCategory(""));
 
   useEffect(() => {
     let active = true;

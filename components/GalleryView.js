@@ -9,6 +9,7 @@ import {
   Play as PlayIcon, ChevronUp as UpIcon, ArrowUpDown as SortIcon
 } from "lucide-react";
 import { adminRequest, analyticsService, supabaseRequest, tweetMediaService } from "../lib/archive-supabase";
+import { useBackHandler } from "../lib/back-navigation";
 import snapshot from "../data/gallery-records.json";
 import duplicateGroups from "../data/gallery-duplicate-groups.json";
 
@@ -58,6 +59,7 @@ function GalleryDatePicker(t) {
       var e;
       a(t), m(!1), null === (e = p.current) || void 0 === e || e.focus();
     };
+  useBackHandler(o, () => m(!1));
   return React.useEffect(() => {
     if (!o) return;
     let t = t => {
@@ -1340,6 +1342,7 @@ function GalleryView(t) {
     [tw, tA] = React.useState(!1),
     [tN, t_] = React.useState("");
   const paginated = !a && !n;
+  useBackHandler(Boolean(I), () => P(null));
   const [publicPage, setPublicPage] = React.useState(null);
   const pageRequest = React.useRef(null);
   const pageKey = JSON.stringify([d, g, z, Y, N, m]);
