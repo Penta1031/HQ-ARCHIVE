@@ -1,12 +1,12 @@
 // Build the archive calendar snapshot from the wiki's reviewed official schedule links.
-// Usage: node scripts/sync-official-calendar.cjs [wikiDistDir] [--live]
+// Usage: node scripts/sync-official-calendar.cjs [wikiDistDir, default wiki/dist] [--live]
 //   --live  refresh archive records from https://hq-index.vercel.app/api/archive first,
 //           so records added after the wiki snapshot are linked too.
 // Months already in public/official-calendar.json that were checked more recently than
 // the wiki's calendar-schedules.json are kept, so a newer FNC scrape is never lost.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const args=process.argv.slice(2),live=args.includes('--live');
-const wiki=path.resolve(args.find(arg=>!arg.startsWith('--'))||'../hq-wiki/.sites-checkout/dist');
+const wiki=path.resolve(args.find(arg=>!arg.startsWith('--'))||path.join(__dirname,'../wiki/dist'));
 const LIVE_API='https://hq-index.vercel.app/api/archive';
 const localFetch=async file=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(path.join(wiki,file),'utf8'))});
 const context=vm.createContext({window:{},Map,Set,URL,URLSearchParams,AbortSignal,Date,fetch:(url,options)=>/^https?:/.test(url)?fetch(url,options):localFetch(url)});

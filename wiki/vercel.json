@@ -1,0 +1,1 @@
+{"version":2,"outputDirectory":"dist","buildCommand":"","installCommand":"npm ci --omit=dev","framework":null}

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "calendar:fnc": "NODE_USE_ENV_PROXY=1 node scripts/update-fnc-calendar.cjs",
+    "calendar:sync": "NODE_USE_ENV_PROXY=1 node scripts/sync-official-calendar.cjs --live"
   },
   "dependencies": {
     "clsx": "^2.1.1",
