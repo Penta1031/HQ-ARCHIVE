@@ -67,7 +67,7 @@ const APP_TABS = [
   { key: "calendar", label: "캘린더", icon: CalendarDays, description: "날짜별 아카이브" },
   { key: "recommended", label: "추천", icon: Video, description: "추천 영상 탭" },
   { key: "gallery", label: "갤러리", icon: Images, description: "날짜별 투샷 사진첩" },
-  { key: "index", label: "위키", icon: BookOpen, description: "모아보기 링크", href: "https://hyeopkwae-wiki.pentagram1031.chatgpt.site/" }
+  { key: "index", label: "위키", icon: BookOpen, description: "모아보기 링크", href: "https://hq-index.vercel.app/" }
 ];
 const DEFAULT_TAB_VISIBILITY = Object.fromEntries(APP_TABS.map((item) => [item.key, true]));
 const normalizeTabVisibility = (rowsOrSettings = []) => {
